@@ -1,0 +1,603 @@
+<UserControl x:Class="PsiphonUI.Views.IpScannerPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:conv="clr-namespace:PsiphonUI.Converters"
+             xmlns:vm="clr-namespace:PsiphonUI.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:IpScannerViewModel}">
+    <UserControl.Resources>
+        <conv:IpStatusToBrushConverter x:Key="IpStatusBrush" />
+        <conv:IpStatusToTextConverter x:Key="IpStatusText" />
+        <conv:NullableIntMsConverter x:Key="MsConverter" />
+        <conv:NullableIntConverter x:Key="IntConverter" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </UserControl.Resources>
+
+    <Grid Margin="18,12,18,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+
+            <RowDefinition Height="Auto" />
+
+            <RowDefinition Height="Auto" />
+
+            <RowDefinition Height="Auto" />
+
+            <RowDefinition Height="*" />
+
+            <RowDefinition Height="Auto" />
+
+        </Grid.RowDefinitions>
+
+<Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Style="{StaticResource UI.Title}" Text="IP Scanner" Margin="0" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Style="{StaticResource UI.StatusBadge.Info}" Margin="0,0,6,0">
+                    <TextBlock Style="{StaticResource UI.StatusBadge.Text}" Foreground="#06B6D4"
+                               Text="{Binding TotalCount, StringFormat='TOTAL {0}'}" />
+                </Border>
+                <Border Style="{StaticResource UI.StatusBadge.Info}" Margin="0,0,6,0">
+                    <TextBlock Style="{StaticResource UI.StatusBadge.Text}" Foreground="#06B6D4"
+                               Text="{Binding ScannedCount, StringFormat='SCANNED {0}'}" />
+                </Border>
+                <Border Style="{StaticResource UI.StatusBadge.Good}" Margin="0,0,6,0">
+                    <TextBlock Style="{StaticResource UI.StatusBadge.Text}" Foreground="#10B981"
+                               Text="{Binding HealthyCount, StringFormat='OK {0}'}" />
+                </Border>
+                <Border Style="{StaticResource UI.StatusBadge.Bad}">
+                    <TextBlock Style="{StaticResource UI.StatusBadge.Text}" Foreground="#EF4444"
+                               Text="{Binding FailedCount, StringFormat='FAIL {0}'}" />
+                </Border>
+            </StackPanel>
+        </Grid>
+
+<Border Grid.Row="1" Style="{StaticResource UI.SectionCard}" Margin="0,0,0,8" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.6*" />
+
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="1*" />
+
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="90" />
+
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="110" />
+
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="CDN PRESET" />
+                    <ComboBox ItemsSource="{Binding Presets}"
+                              SelectedItem="{Binding SelectedPreset}"
+                              DisplayMemberPath="Name" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="CHECK METHOD" />
+                    <ComboBox ItemsSource="{Binding CheckMethods}" SelectedItem="{Binding SelectedCheckMethod}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="4">
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="CONCURRENCY" />
+                    <TextBox Text="{Binding Concurrency, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="1..200" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="6">
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="TIMEOUT (MS)" />
+                    <TextBox Text="{Binding TimeoutMs, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="500..30000" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+<StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Style="{StaticResource UI.PrimaryButton}"
+                    Content="Start scan"
+                    Command="{Binding StartCommand}"
+                    MinWidth="130"
+                    IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}" />
+
+            <Button Margin="8,0,0,0"
+                    Style="{StaticResource UI.GhostButton}"
+                    Command="{Binding PauseCommand}"
+                    Visibility="{Binding IsRunningAndNotPaused, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Pause" Width="14" Height="14" Margin="0,0,6,0" />
+                    <TextBlock Text="Pause" />
+                </StackPanel>
+            </Button>
+
+            <Button Margin="8,0,0,0"
+                    Style="{StaticResource UI.SuccessButton}"
+                    Command="{Binding ResumeCommand}"
+                    Visibility="{Binding IsPaused, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Play" Width="14" Height="14" Margin="0,0,6,0" />
+                    <TextBlock Text="Resume" />
+                </StackPanel>
+            </Button>
+
+            <Button Margin="8,0,0,0"
+                    Style="{StaticResource UI.DangerButton}"
+                    Content="Stop"
+                    Command="{Binding StopCommand}"
+                    IsEnabled="{Binding IsRunning}" />
+
+            <Button Margin="8,0,0,0"
+                    Style="{StaticResource UI.GhostButton}"
+                    Content="Clear"
+                    Command="{Binding ClearCommand}"
+                    IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}" />
+        </StackPanel>
+
+<StackPanel Grid.Row="3" Margin="0,0,0,8">
+            <TextBlock Text="{Binding StatusText}"
+                       FontSize="11" Opacity="0.7"
+                       TextWrapping="Wrap"
+                       TextTrimming="CharacterEllipsis"
+                       MaxHeight="34"
+                       FontFamily="Cascadia Mono, Consolas, Courier New, monospace" />
+            <ProgressBar Margin="0,5,0,0" Height="3"
+                         Minimum="0"
+                         Maximum="{Binding TotalCount}"
+                         Value="{Binding ScannedCount, Mode=OneWay}"
+                         Foreground="{StaticResource Brand.AccentBrush}"
+                         Background="{DynamicResource Surface.SubtleBg}" />
+        </StackPanel>
+
+<Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="1*" MinWidth="300" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="1*" MinWidth="300" />
+            </Grid.ColumnDefinitions>
+
+<Border Grid.Column="0" Style="{StaticResource UI.SectionCard}" Padding="0">
+                <DockPanel LastChildFill="True">
+
+                    <StackPanel DockPanel.Dock="Top" Margin="14,12,14,8">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="FormatListChecks" Width="16" Height="16"
+                                                      Foreground="{StaticResource Brand.AccentBrush}" />
+                            <TextBlock Text="Ranges" Style="{StaticResource UI.SectionTitle}"
+                                       Margin="6,0,0,0" />
+                        </StackPanel>
+                        <Border Style="{StaticResource UI.StatusBadge.Info}"
+                                HorizontalAlignment="Left" Margin="0,6,0,0">
+                            <TextBlock Style="{StaticResource UI.StatusBadge.Text}" Foreground="#06B6D4"
+                                       Text="{Binding AvailableRangesSummary}" />
+                        </Border>
+                    </StackPanel>
+
+<Grid DockPanel.Dock="Top" Margin="14,0,14,10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="2*" />
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    Style="{StaticResource UI.GhostButton}"
+                                    Padding="0,4"
+                                    Command="{Binding SelectAllRangesCommand}"
+                                    ToolTip="Tick every CIDR in the list">
+                                <TextBlock Text="All" FontSize="11" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource UI.GhostButton}"
+                                    Padding="0,4"
+                                    Command="{Binding ClearRangeSelectionCommand}"
+                                    ToolTip="Untick every CIDR">
+                                <TextBlock Text="None" FontSize="11" HorizontalAlignment="Center" />
+                            </Button>
+                            <Button Grid.Column="4"
+                                    Style="{StaticResource UI.PrimaryButton}"
+                                    Padding="0,4"
+                                    Command="{Binding ImportSelectedRangesCommand}"
+                                    IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}"
+                                    ToolTip="Expand the ticked CIDRs (plus any custom IPs below) into the scan queue">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="Refresh" Width="13" Height="13" Margin="0,0,5,0" />
+                                    <TextBlock Text="Generate" FontSize="11" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <Button Grid.Row="1"
+                                Style="{StaticResource UI.GhostButton}"
+                                Padding="0,5"
+                                Margin="0,6,0,0"
+                                BorderBrush="{StaticResource Brand.ErrorBrush}"
+                                Foreground="{StaticResource Brand.ErrorBrush}"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding ClearCustomInputCommand}"
+                                IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}"
+                                ToolTip="Empty the IPs textbox and clear the scan queue">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <materialDesign:PackIcon Kind="Eraser" Width="13" Height="13" Margin="0,0,5,0" />
+                                <TextBlock Text="Clear queue and custom IPs" FontSize="11" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+<TextBox DockPanel.Dock="Top"
+                             Margin="14,0,14,6"
+                             Padding="8,4"
+                             FontFamily="{StaticResource UI.FontFamily}"
+                             FontSize="12"
+                             Text="{Binding RangesFilter, UpdateSourceTrigger=PropertyChanged, Delay=120}"
+                             materialDesign:HintAssist.Hint="Filter ranges (e.g. 23.215  ·  EU  ·  Global)" />
+
+<Border DockPanel.Dock="Top"
+                            BorderBrush="{DynamicResource Surface.BorderBrush}"
+                            BorderThickness="0,1,0,1"
+                            Background="{DynamicResource Surface.SubtleBg}"
+                            Margin="0,0,0,0">
+                        <ListBox ItemsSource="{Binding AvailableRanges}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 MaxHeight="220"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 VirtualizingPanel.IsVirtualizing="True">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="6,2" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="BorderThickness" Value="0" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,8,0" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Cidr}"
+                                                   FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center" />
+                                        <Border Grid.Column="2" Background="#1E293B"
+                                                Padding="6,1" CornerRadius="3"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Label}"
+                                                       FontSize="10" Foreground="#94A3B8" />
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+<Border DockPanel.Dock="Bottom"
+                            Margin="0,0,0,0"
+                            Padding="14,8,14,10"
+                            Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.BorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Visibility="{Binding IsTlsMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <materialDesign:PackIcon Kind="LockOutline" Width="13" Height="13" Margin="0,0,4,0"
+                                                          Foreground="{StaticResource Brand.AccentBrush}"
+                                                          VerticalAlignment="Center" />
+                                <TextBlock Text="TLS SNI HOSTNAME"
+                                           Style="{StaticResource UI.FieldLabel}"
+                                           VerticalAlignment="Center" Margin="0" />
+                            </StackPanel>
+
+                            <ListBox ItemsSource="{Binding AvailableSnis}"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     MaxHeight="150"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ScrollViewer.CanContentScroll="True"
+                                     VirtualizingPanel.IsVirtualizing="True">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="2,1" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton
+                                                GroupName="SniHostRadios"
+                                                IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,6,0" />
+                                            <TextBlock Text="{Binding Hostname}"
+                                                       FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBox Margin="0,6,0,0"
+                                     Text="{Binding SniHost, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="custom SNI override" />
+                        </StackPanel>
+                    </Border>
+
+<DockPanel LastChildFill="True" Margin="0">
+                        <TextBlock DockPanel.Dock="Top" Text="CUSTOM IPS"
+                                   Style="{StaticResource UI.FieldLabel}"
+                                   Margin="14,8,14,4" />
+                        <Button DockPanel.Dock="Bottom"
+                                Style="{StaticResource UI.GhostButton}"
+                                Margin="14,4,14,10"
+                                Padding="10,6"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding LoadFromFileCommand}"
+                                IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <materialDesign:PackIcon Kind="FolderOpenOutline" Width="13" Height="13" Margin="0,0,6,0" />
+                                <TextBlock Text="Load from .txt file…" FontSize="11" />
+                            </StackPanel>
+                        </Button>
+                        <TextBox Text="{Binding CustomInput, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 Margin="14,0,14,6"
+                                 FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                 FontSize="12"
+                                 materialDesign:HintAssist.Hint="1.2.3.4  ·  10.0.0.0/24  ·  1.2.3.0-100" />
+                    </DockPanel>
+                </DockPanel>
+            </Border>
+
+<Border Grid.Column="2" Style="{StaticResource UI.SectionCard}" Padding="0">
+                <DockPanel LastChildFill="True">
+                    <Grid DockPanel.Dock="Top" Margin="16,14,16,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="MagnifyScan" Width="18" Height="18"
+                                                      Foreground="{StaticResource Brand.AccentBrush}" />
+                            <TextBlock Text="Queue / Failed" Style="{StaticResource UI.SectionTitle}"
+                                       Margin="8,0,0,0" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Style="{StaticResource UI.StatusBadge.Info}">
+                            <TextBlock Style="{StaticResource UI.StatusBadge.Text}" Foreground="#06B6D4"
+                                       Text="{Binding Candidates.Count, StringFormat='{}{0} items'}" />
+                        </Border>
+                    </Grid>
+
+                    <DataGrid ItemsSource="{Binding Candidates}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserReorderColumns="False"
+                              CanUserResizeRows="False"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Margin="8,0,8,8"
+                              RowBackground="Transparent"
+                              AlternatingRowBackground="{DynamicResource Surface.SubtleBg}"
+                              RowHeight="28"
+                              IsReadOnly="True"
+                              SelectionMode="Extended"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              ScrollViewer.CanContentScroll="True"
+                              ScrollViewer.IsDeferredScrollingEnabled="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              VirtualizingPanel.ScrollUnit="Pixel"
+                              FontFamily="{StaticResource UI.FontFamily}"
+                              FontSize="12">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="22">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                                 HorizontalAlignment="Center"
+                                                 Fill="{Binding Status, Converter={StaticResource IpStatusBrush}}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="IP" Width="*" MinWidth="150">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Ip}"
+                                                   FontFamily="Consolas, Cascadia Mono, Courier New, monospace"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center"
+                                                   Padding="4,0,0,0"
+                                                   TextTrimming="None" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Latency"
+                                                Binding="{Binding LatencyMs, Converter={StaticResource MsConverter}}"
+                                                Width="96"
+                                                ElementStyle="{StaticResource UI.DataGridCellRight}" />
+
+                            <DataGridTemplateColumn Header="Detail" Width="*" MinWidth="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Message}"
+                                                   FontFamily="{StaticResource UI.FontFamily}"
+                                                   FontSize="11"
+                                                   Opacity="0.85"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="{Binding Message}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+<Border Grid.Column="4" Style="{StaticResource UI.SectionCard}" Padding="0">
+                <DockPanel LastChildFill="True">
+                    <Grid DockPanel.Dock="Top" Margin="16,14,16,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="CheckDecagram" Width="18" Height="18"
+                                                      Foreground="{StaticResource Brand.SuccessBrush}" />
+                            <TextBlock Text="Healthy (sorted by latency)" Style="{StaticResource UI.SectionTitle}"
+                                       Margin="8,0,0,0" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Style="{StaticResource UI.StatusBadge.Good}">
+                            <TextBlock Style="{StaticResource UI.StatusBadge.Text}" Foreground="#10B981"
+                                       Text="{Binding Healthy.Count, StringFormat='{}{0} alive'}" />
+                        </Border>
+                    </Grid>
+
+                    <DataGrid ItemsSource="{Binding Healthy}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserReorderColumns="False"
+                              CanUserResizeRows="False"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Margin="8,0,8,8"
+                              RowBackground="Transparent"
+                              AlternatingRowBackground="{DynamicResource Surface.SubtleBg}"
+                              RowHeight="28"
+                              IsReadOnly="True"
+                              SelectionMode="Extended"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              ScrollViewer.CanContentScroll="True"
+                              ScrollViewer.IsDeferredScrollingEnabled="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              VirtualizingPanel.ScrollUnit="Pixel"
+                              FontFamily="{StaticResource UI.FontFamily}"
+                              FontSize="12">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="22">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                                 HorizontalAlignment="Center"
+                                                 Fill="{StaticResource Brand.SuccessBrush}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="IP" Width="*" MinWidth="150">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Ip}"
+                                                   FontFamily="Consolas, Cascadia Mono, Courier New, monospace"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center"
+                                                   Padding="4,0,0,0"
+                                                   TextTrimming="None" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Latency"
+                                                Binding="{Binding LatencyMs, Converter={StaticResource MsConverter}}"
+                                                Width="96"
+                                                ElementStyle="{StaticResource UI.DataGridCellRight}" />
+                            <DataGridTemplateColumn Header="Detail" Width="*" MinWidth="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Message}"
+                                                   FontFamily="{StaticResource UI.FontFamily}"
+                                                   FontSize="11"
+                                                   Opacity="0.85"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="{Binding Message}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+<Grid Grid.Row="5" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Style="{StaticResource UI.GhostButton}" Margin="0,0,8,0"
+                    Command="{Binding CopyHealthyNewlineCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="ContentCopy" Width="14" Height="14" Margin="0,0,6,0" />
+                    <TextBlock Text="Copy IPs (newline)" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="1" Style="{StaticResource UI.GhostButton}" Margin="0,0,8,0"
+                    Command="{Binding CopyHealthyCsvCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="TableLarge" Width="14" Height="14" Margin="0,0,6,0" />
+                    <TextBlock Text="Copy as CSV" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Style="{StaticResource UI.GhostButton}"
+                    Command="{Binding ExportHealthyCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="ContentSaveOutline" Width="14" Height="14" Margin="0,0,6,0" />
+                    <TextBlock Text="Save to file…" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="4" Style="{StaticResource UI.SuccessButton}"
+                    Command="{Binding ApplyToCdnFrontingCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="ArrowTopRightBoldOutline" Width="14" Height="14" Margin="0,0,6,0" />
+                    <TextBlock Text="Apply to CDN Fronting…" />
+                </StackPanel>
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>

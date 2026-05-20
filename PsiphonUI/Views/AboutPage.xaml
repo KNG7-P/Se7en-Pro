@@ -1,0 +1,63 @@
+<UserControl x:Class="PsiphonUI.Views.AboutPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:vm="clr-namespace:PsiphonUI.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:AboutViewModel}">
+
+<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel HorizontalAlignment="Stretch"
+                    MaxWidth="780"
+                    Margin="32,24,32,32">
+            <TextBlock Style="{StaticResource UI.Title}" Text="{Binding Title}" />
+            <TextBlock Style="{StaticResource UI.Subtitle}"
+                       Text="PsiphonUI — a modern, lightweight Windows client."
+                       Margin="0,0,0,20" />
+
+            <Border Style="{StaticResource UI.Card}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <materialDesign:PackIcon Kind="ShieldLockOutline" Width="40" Height="40"
+                                                 Foreground="{StaticResource Brand.PrimaryBrush}"
+                                                 VerticalAlignment="Center" />
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AppName}" FontSize="22" FontWeight="SemiBold" />
+                            <TextBlock Opacity="0.7" Margin="0,2,0,0">
+                                <Run Text="Version " />
+                                <Run Text="{Binding Version, Mode=OneWay}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Copyright}" Opacity="0.6" TextWrapping="Wrap" FontSize="13" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <materialDesign:PackIcon Kind="LinkVariant" Width="22" Height="22"
+                                                  Foreground="{StaticResource Brand.AccentBrush}"
+                                                  VerticalAlignment="Center" />
+                        <TextBlock Text="Links" FontSize="16" FontWeight="SemiBold"
+                                   Margin="10,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Style="{StaticResource MaterialDesignFlatButton}"
+                            Content="Visit psiphon.ca"
+                            HorizontalAlignment="Left"
+                            Command="{Binding OpenInfoLinkCommand}" />
+                    <Button Style="{StaticResource MaterialDesignFlatButton}"
+                            Content="FAQ"
+                            HorizontalAlignment="Left"
+                            Command="{Binding OpenFaqCommand}" />
+                    <Button Style="{StaticResource MaterialDesignFlatButton}"
+                            Content="Privacy policy"
+                            HorizontalAlignment="Left"
+                            Command="{Binding OpenPrivacyCommand}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

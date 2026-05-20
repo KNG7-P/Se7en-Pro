@@ -1,0 +1,184 @@
+<Window x:Class="PsiphonUI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:PsiphonUI.ViewModels"
+        xmlns:views="clr-namespace:PsiphonUI.Views"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="PsiphonUI"
+        Icon="pack://application:,,,/Assets/app.ico"
+        Height="820" Width="1220"
+        SizeToContent="Manual"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="CanMinimize"
+        AllowsTransparency="False"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{StaticResource UI.FontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        UseLayoutRounding="True"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+
+<WindowChrome.WindowChrome>
+        <WindowChrome
+            CaptionHeight="40"
+            ResizeBorderThickness="0"
+            CornerRadius="0"
+            GlassFrameThickness="0"
+            UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:HomeViewModel}">
+            <views:HomePage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+            <views:SettingsPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:IpScannerViewModel}">
+            <views:IpScannerPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:LogsViewModel}">
+            <views:LogsPage />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AboutViewModel}">
+            <views:AboutPage />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border BorderThickness="1" BorderBrush="#33FFFFFF">
+        <DockPanel LastChildFill="True">
+
+<Grid DockPanel.Dock="Top" Height="40"
+                  Background="{DynamicResource MaterialDesignPaper}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" Grid.Column="0"
+                            Margin="14,0,0,0" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="ShieldLockOutline"
+                                              Width="20" Height="20"
+                                              Foreground="{StaticResource Brand.PrimaryBrush}" />
+                    <TextBlock Text="PsiphonUI" Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="14" FontWeight="SemiBold" />
+                </StackPanel>
+
+<Border Grid.Column="1" Background="Transparent" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+
+                    <Button Style="{StaticResource UI.TitleBarButton}"
+                            ToolTip="Toggle theme"
+                            Command="{Binding ToggleThemeCommand}">
+                        <materialDesign:PackIcon Kind="ThemeLightDark" Width="16" Height="16" />
+                    </Button>
+                    <Button Style="{StaticResource UI.TitleBarButton}"
+                            ToolTip="Minimize"
+                            Command="{Binding MinimizeWindowCommand}">
+                        <materialDesign:PackIcon Kind="WindowMinimize" Width="14" Height="14" />
+                    </Button>
+                    <Button Style="{StaticResource UI.TitleBarCloseButton}"
+                            ToolTip="Close"
+                            Command="{Binding CloseWindowCommand}">
+                        <materialDesign:PackIcon Kind="WindowClose" Width="14" Height="14" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+<Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+<Border Grid.Column="0"
+                        Background="{DynamicResource MaterialDesignDarkBackground}"
+                        BorderBrush="#22FFFFFF" BorderThickness="0,0,1,0">
+                    <DockPanel LastChildFill="True">
+
+                        <Border DockPanel.Dock="Bottom" Padding="14,8" Opacity="0.55">
+                            <TextBlock Text="v1.0.0" FontSize="11" HorizontalAlignment="Center" />
+                        </Border>
+
+<Button DockPanel.Dock="Bottom"
+                                Style="{StaticResource UI.TelegramButton}"
+                                Margin="12,4,12,6"
+                                ToolTip="Open the King Network Telegram channel in your browser"
+                                Command="{Binding OpenTelegramChannelCommand}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Width="30" Height="30" CornerRadius="8"
+                                        Background="#33FFFFFF"
+                                        VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="Send" Width="16" Height="16"
+                                                              Foreground="White"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            Margin="10,0,0,0"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Join our Telegram"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="White" />
+                                    <TextBlock Text="@King_Network7"
+                                               FontSize="10" Opacity="0.85"
+                                               Foreground="White"
+                                               FontFamily="Cascadia Mono, Consolas, monospace" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2"
+                                                          Kind="OpenInNew" Width="12" Height="12"
+                                                          Opacity="0.85"
+                                                          Foreground="White"
+                                                          VerticalAlignment="Center" />
+                            </Grid>
+                        </Button>
+
+                        <ListBox ItemsSource="{Binding Pages}"
+                                 SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Margin="0,14,0,0"
+                                 ItemContainerStyle="{StaticResource UI.NavItem}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="{Binding Icon}"
+                                                                  Width="20" Height="20"
+                                                                  VerticalAlignment="Center"
+                                                                  Margin="4,0,12,0" />
+                                        <TextBlock Text="{Binding Title}"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="14" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+<Border Grid.Column="1"
+                        Background="{DynamicResource MaterialDesignPaper}"
+                        ClipToBounds="True">
+                    <ContentControl Content="{Binding CurrentPage}" />
+                </Border>
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>

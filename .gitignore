@@ -1,0 +1,35 @@
+## .NET / Visual Studio build artefacts
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.suo
+.vs/
+.idea/
+.vscode/
+
+## Rider / ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+## NuGet
+packages/
+*.nupkg
+*.snupkg
+
+## Logs
+*.log
+
+## OS junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+## Server list is not in source control (it's bundled with the official Psiphon
+## installer, not part of this MIT-licensed source repo). The build will still
+## succeed without it; tunnel-core just relies on fronted remote-server-list
+## fetch in that case.
+PsiphonUI/Resources/server_entries.txt

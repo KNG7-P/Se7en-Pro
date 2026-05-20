@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+<Color x:Key="Brand.PrimaryColor">#7C3AED</Color>
+    <Color x:Key="Brand.PrimaryDarkColor">#5B21B6</Color>
+    <Color x:Key="Brand.AccentColor">#06B6D4</Color>
+    <Color x:Key="Brand.SuccessColor">#10B981</Color>
+    <Color x:Key="Brand.WarningColor">#F59E0B</Color>
+    <Color x:Key="Brand.ErrorColor">#EF4444</Color>
+
+    <SolidColorBrush x:Key="Brand.PrimaryBrush" Color="{StaticResource Brand.PrimaryColor}" />
+    <SolidColorBrush x:Key="Brand.PrimaryDarkBrush" Color="{StaticResource Brand.PrimaryDarkColor}" />
+    <SolidColorBrush x:Key="Brand.AccentBrush" Color="{StaticResource Brand.AccentColor}" />
+    <SolidColorBrush x:Key="Brand.SuccessBrush" Color="{StaticResource Brand.SuccessColor}" />
+    <SolidColorBrush x:Key="Brand.WarningBrush" Color="{StaticResource Brand.WarningColor}" />
+    <SolidColorBrush x:Key="Brand.ErrorBrush" Color="{StaticResource Brand.ErrorColor}" />
+
+    <LinearGradientBrush x:Key="Brand.PrimaryGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.PrimaryColor}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.AccentColor}" Offset="1" />
+    </LinearGradientBrush>
+
+<Color x:Key="Brand.TelegramColor">#229ED9</Color>
+    <Color x:Key="Brand.TelegramDarkColor">#1B7AB3</Color>
+    <SolidColorBrush x:Key="Brand.TelegramBrush" Color="{StaticResource Brand.TelegramColor}" />
+    <LinearGradientBrush x:Key="Brand.TelegramGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.TelegramColor}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.TelegramDarkColor}" Offset="1" />
+    </LinearGradientBrush>
+
+<SolidColorBrush x:Key="Surface.SubtleBg" Color="#14FFFFFF" />
+    <SolidColorBrush x:Key="Surface.SubtleBorder" Color="#22FFFFFF" />
+    <SolidColorBrush x:Key="Surface.HoverBg" Color="#14FFFFFF" />
+    <SolidColorBrush x:Key="Surface.SelectedBg" Color="#1FFFFFFF" />
+
+</ResourceDictionary>
