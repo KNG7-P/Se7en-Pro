@@ -23,7 +23,8 @@ build their own Windows UI around `psiphon-tunnel-core.exe`.
 - Pages: Home, Settings, Logs, About, IP Scanner
 - Optional system-wide tunneling via [Xray-core](https://github.com/XTLS/Xray-core)
   + [wintun](https://www.wintun.net/)
-- Optional CDN-fronting helpers (Akamai / Cloudflare / Fastly / Bunny)
+- Optional CDN-fronting helpers for Fastly overrides and Akamai-style custom
+  edge IP / SNI overrides
 - Start with Windows, minimize to tray, allow LAN connections, etc.
 
 ---
