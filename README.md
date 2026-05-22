@@ -138,10 +138,10 @@ cd PsiphonUI\bin\Release\net8.0-windows10.0.19041.0\win-x64
 .\PsiphonUI.exe
 ```
 
-On first run the app creates `%LOCALAPPDATA%\PsiphonUI\` for settings and
-uses `%LOCALAPPDATA%\Psiphon\tunnel-core\` as the data directory for the
-underlying tunnel-core process (same path the official Psiphon Windows
-client uses, so logs and server state are interchangeable).
+On first run the app stores user settings under `%LOCALAPPDATA%\Psiphon\`.
+Runtime copies of tunnel-core/Xray assets are isolated under
+`%LOCALAPPDATA%\PsiphonUI\runtime\` for normal launches, and under
+`%PROGRAMDATA%\PsiphonUI\runtime\` when system-wide tunneling runs elevated.
 
 ---
 
