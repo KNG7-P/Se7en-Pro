@@ -176,11 +176,9 @@ public sealed class XrayTunManager : IXrayTunManager
         }
         _excludeAdapterLuid = 0;
 
-        _workDir = Path.Combine(
-            Path.GetTempPath(),
-            "Psiphon",
-            "xray-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_workDir);
+        _workDir = RuntimePathSecurity.GetRuntimeDirectory(
+            "xray-" + Guid.NewGuid().ToString("N"),
+            preferMachineSecure: true);
 
         var diagDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -216,7 +214,7 @@ public sealed class XrayTunManager : IXrayTunManager
                 SetError($"Bundled xray resource missing: {name}");
                 return;
             }
-            File.Copy(src, Path.Combine(_workDir, name), overwrite: true);
+            CopyFileWithHashVerification(src, Path.Combine(_workDir, name));
         }
 
         var configPath = Path.Combine(_workDir, "config.json");
@@ -231,14 +229,14 @@ public sealed class XrayTunManager : IXrayTunManager
         var psi = new ProcessStartInfo
         {
             FileName = Path.Combine(_workDir, "xray.exe"),
-
-            Arguments = $"-config \"{configPath}\"",
             WorkingDirectory = _workDir,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+        psi.ArgumentList.Add("-config");
+        psi.ArgumentList.Add(configPath);
 
         psi.Environment["XRAY_LOCATION_ASSET"] = _workDir;
         psi.Environment["V2RAY_LOCATION_ASSET"] = _workDir;
@@ -550,6 +548,11 @@ public sealed class XrayTunManager : IXrayTunManager
             SetError($"xray.exe exited unexpectedly (code={code}). "
                    + $"Last output: {DescribeRecentOutput()}. "
                    + $"Full log: {_xrayLogPath}");
+            _ = Task.Run(async () =>
+            {
+                try { await StopAsync(); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Cleanup after unexpected xray exit failed"); }
+            });
         }
     }
 
@@ -720,26 +723,31 @@ public sealed class XrayTunManager : IXrayTunManager
 
     private void RunTool(string fileName, string args, bool acceptFailure, int timeoutMs = 5000)
     {
+        var toolPath = Path.IsPathRooted(fileName)
+            ? fileName
+            : RuntimePathSecurity.ResolveSystem32Tool(fileName);
+
         var psi = new ProcessStartInfo
         {
-            FileName = fileName,
+            FileName = toolPath,
             Arguments = args,
+            WorkingDirectory = Path.GetDirectoryName(toolPath) ?? AppContext.BaseDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
         using var p = Process.Start(psi)
-            ?? throw new InvalidOperationException($"Couldn't launch {fileName}");
+            ?? throw new InvalidOperationException($"Couldn't launch {toolPath}");
         if (!p.WaitForExit(timeoutMs))
         {
-            throw new InvalidOperationException($"{fileName} timed out");
+            throw new InvalidOperationException($"{toolPath} timed out");
         }
         if (p.ExitCode != 0)
         {
             var stderr = p.StandardError.ReadToEnd();
             var stdout = p.StandardOutput.ReadToEnd();
-            var msg = $"{fileName} {args} failed (exit={p.ExitCode}): {stderr}{stdout}";
+            var msg = $"{toolPath} {args} failed (exit={p.ExitCode}): {stderr}{stdout}";
             try { _xrayLogWriter?.WriteLine("[net] " + msg); } catch {  }
             if (!acceptFailure)
             {
@@ -747,6 +755,26 @@ public sealed class XrayTunManager : IXrayTunManager
             }
             _logger.LogDebug("{Tool} returned non-zero (continuing): {Message}", fileName, msg);
         }
+    }
+
+    private static void CopyFileWithHashVerification(string source, string destination)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.Copy(source, destination, overwrite: true);
+
+        var sourceHash = ComputeSha256(source);
+        var copiedHash = ComputeSha256(destination);
+        if (!sourceHash.AsSpan().SequenceEqual(copiedHash))
+        {
+            throw new IOException($"Runtime copy verification failed for {Path.GetFileName(destination)}");
+        }
+    }
+
+    private static byte[] ComputeSha256(string path)
+    {
+        using var sha = SHA256.Create();
+        using var stream = File.OpenRead(path);
+        return sha.ComputeHash(stream);
     }
 
     internal static string BuildConfigJson(int psiphonSocksPort, UserSettings settings)

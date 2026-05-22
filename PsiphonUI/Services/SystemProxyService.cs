@@ -38,6 +38,7 @@ public sealed class SystemProxyService : ISystemProxyService
                 return;
             }
 
+            var appProxyServer = BuildAppProxyServer(httpProxyPort);
             if (!File.Exists(BackupPath))
             {
                 var backup = new ProxyBackup
@@ -45,12 +46,22 @@ public sealed class SystemProxyService : ISystemProxyService
                     ProxyEnable = key.GetValue("ProxyEnable") as int? ?? 0,
                     ProxyServer = key.GetValue("ProxyServer") as string ?? "",
                     ProxyOverride = key.GetValue("ProxyOverride") as string ?? "",
+                    OwnedProxyServer = appProxyServer,
                 };
                 WriteBackup(backup);
             }
+            else
+            {
+                var backup = ReadBackup();
+                if (backup is not null)
+                {
+                    backup.OwnedProxyServer = appProxyServer;
+                    WriteBackup(backup);
+                }
+            }
 
             key.SetValue("ProxyEnable", 1, RegistryValueKind.DWord);
-            key.SetValue("ProxyServer", $"127.0.0.1:{httpProxyPort}", RegistryValueKind.String);
+            key.SetValue("ProxyServer", appProxyServer, RegistryValueKind.String);
 
             key.SetValue("ProxyOverride", "<local>", RegistryValueKind.String);
 
@@ -71,8 +82,18 @@ public sealed class SystemProxyService : ISystemProxyService
             if (key is null) return;
 
             var backup = ReadBackup();
+            var currentProxyServer = key.GetValue("ProxyServer") as string ?? "";
             if (backup is not null)
             {
+                if (!IsAppOwnedProxy(currentProxyServer, backup))
+                {
+                    _logger.LogWarning(
+                        "Current system proxy no longer points at PsiphonUI ({ProxyServer}); leaving user settings unchanged",
+                        currentProxyServer);
+                    TryDeleteBackup();
+                    return;
+                }
+
                 key.SetValue("ProxyEnable", backup.ProxyEnable, RegistryValueKind.DWord);
                 if (string.IsNullOrEmpty(backup.ProxyServer))
                 {
@@ -94,7 +115,8 @@ public sealed class SystemProxyService : ISystemProxyService
             }
             else
             {
-                key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
+                _logger.LogDebug("No PsiphonUI proxy backup exists; leaving current proxy settings unchanged");
+                return;
             }
 
             NotifyWinINet();
@@ -141,6 +163,24 @@ public sealed class SystemProxyService : ISystemProxyService
         [JsonPropertyName("proxyEnable")] public int ProxyEnable { get; set; }
         [JsonPropertyName("proxyServer")] public string ProxyServer { get; set; } = "";
         [JsonPropertyName("proxyOverride")] public string ProxyOverride { get; set; } = "";
+        [JsonPropertyName("ownedProxyServer")] public string OwnedProxyServer { get; set; } = "";
+    }
+
+    private static string BuildAppProxyServer(int httpProxyPort) => $"127.0.0.1:{httpProxyPort}";
+
+    private static bool IsAppOwnedProxy(string proxyServer, ProxyBackup backup)
+    {
+        if (string.IsNullOrWhiteSpace(proxyServer)) return false;
+
+        var value = proxyServer.Trim();
+        if (!string.IsNullOrWhiteSpace(backup.OwnedProxyServer))
+        {
+            return string.Equals(value, backup.OwnedProxyServer.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        return value.StartsWith("127.0.0.1:", StringComparison.OrdinalIgnoreCase)
+               || value.StartsWith("http=127.0.0.1:", StringComparison.OrdinalIgnoreCase)
+               || value.Contains(";http=127.0.0.1:", StringComparison.OrdinalIgnoreCase);
     }
 
     private void WriteBackup(ProxyBackup backup)

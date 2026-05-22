@@ -14,13 +14,10 @@ public sealed class StartupReaper : IStartupReaper
     public void ReapStaleProcesses()
     {
 
-        var tunnelCoreRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Psiphon",
-            "tunnel-core");
-        var xrayRoot = Path.Combine(Path.GetTempPath(), "Psiphon");
+        var localRuntimeRoot = RuntimePathSecurity.GetRuntimeRoot(machineSecure: false);
+        var machineRuntimeRoot = RuntimePathSecurity.GetRuntimeRoot(machineSecure: true);
 
-        var roots = new[] { tunnelCoreRoot, xrayRoot };
+        var roots = new[] { localRuntimeRoot, machineRuntimeRoot };
 
         Process[] processes;
         try
@@ -88,7 +85,8 @@ public sealed class StartupReaper : IStartupReaper
             }
         }
 
-        TryRemoveStaleLocks(tunnelCoreRoot);
+        TryRemoveStaleLocks(localRuntimeRoot);
+        TryRemoveStaleLocks(machineRuntimeRoot);
 
         if (killed > 0)
         {

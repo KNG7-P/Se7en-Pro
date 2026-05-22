@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -89,11 +90,9 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IDisposable
 
         try
         {
-            _workDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Psiphon",
-                "tunnel-core");
-            Directory.CreateDirectory(_workDir);
+            _workDir = RuntimePathSecurity.GetRuntimeDirectory(
+                "tunnel-core",
+                preferMachineSecure: AdminElevation.IsAdministrator());
 
             var exePath = ResolveTunnelCoreExe();
             var configPath = Path.Combine(_workDir, "config.json");
@@ -203,10 +202,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IDisposable
             _cts?.Cancel();
             _process = null;
 
-            if (_settings.Settings.SetSystemProxy)
-            {
-                _systemProxy.Clear();
-            }
+            _systemProxy.Clear();
 
             ConnectedServerRegion = "";
             BytesSent = 0;
@@ -527,16 +523,29 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IDisposable
             }
         }
 
-        var randomName = Path.GetRandomFileName().Replace(".", "") + ".exe";
-        var copyTo = Path.Combine(_workDir!, randomName);
-
-        foreach (var stale in Directory.EnumerateFiles(_workDir!, "*.exe"))
-        {
-            try { File.Delete(stale); } catch {  }
-        }
-
-        File.Copy(bundled, copyTo, overwrite: true);
+        var copyTo = Path.Combine(_workDir!, "psiphon-tunnel-core.exe");
+        CopyFileWithHashVerification(bundled, copyTo);
         return copyTo;
+    }
+
+    private static void CopyFileWithHashVerification(string source, string destination)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.Copy(source, destination, overwrite: true);
+
+        var sourceHash = ComputeSha256(source);
+        var copiedHash = ComputeSha256(destination);
+        if (!sourceHash.AsSpan().SequenceEqual(copiedHash))
+        {
+            throw new IOException($"Runtime copy verification failed for {Path.GetFileName(destination)}");
+        }
+    }
+
+    private static byte[] ComputeSha256(string path)
+    {
+        using var sha = SHA256.Create();
+        using var stream = File.OpenRead(path);
+        return sha.ComputeHash(stream);
     }
 
     private string? WriteEmbeddedServerList()
