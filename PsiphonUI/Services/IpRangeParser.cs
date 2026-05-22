@@ -12,6 +12,10 @@ public static class IpRangeParser
 
     public const int CidrMaxHosts = 262_144;
 
+    private static readonly Regex IPv4LiteralRegex = new(
+        @"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?![\d.])",
+        RegexOptions.Compiled);
+
     private static readonly Regex RangeRegex = new(
         @"^\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*-\s*(\d{1,3}(?:\.\d{1,3}\.\d{1,3}\.\d{1,3})?)\s*$",
         RegexOptions.Compiled);
@@ -46,6 +50,11 @@ public static class IpRangeParser
                     return new ExpansionResult(ips, warnings, hitCap);
                 }
                 ExpandToken(token, ips, seen, warnings);
+                if (ips.Count >= MaxEntries)
+                {
+                    hitCap = true;
+                    return new ExpansionResult(ips, warnings, hitCap);
+                }
             }
         }
         return new ExpansionResult(ips, warnings, hitCap);
@@ -60,9 +69,27 @@ public static class IpRangeParser
     {
         var idx = line.IndexOf('#');
         if (idx >= 0) line = line[..idx];
-        idx = line.IndexOf("//", StringComparison.Ordinal);
+
+        idx = FindLineCommentStart(line);
         if (idx >= 0) line = line[..idx];
+
         return line;
+    }
+
+    private static int FindLineCommentStart(string line)
+    {
+        var idx = line.IndexOf("//", StringComparison.Ordinal);
+        while (idx >= 0)
+        {
+            if (idx == 0 || char.IsWhiteSpace(line[idx - 1]))
+            {
+                return idx;
+            }
+
+            idx = line.IndexOf("//", idx + 2, StringComparison.Ordinal);
+        }
+
+        return -1;
     }
 
     private static void ExpandToken(
@@ -89,7 +116,35 @@ public static class IpRangeParser
             return;
         }
 
+        var extracted = ExtractIPv4Literals(token);
+        if (extracted.Count > 0)
+        {
+            foreach (var literal in extracted)
+            {
+                AddUnique(result, seen, literal);
+                if (result.Count >= MaxEntries) break;
+            }
+            return;
+        }
+
         warnings.Add($"'{token}': not a valid IPv4 / CIDR / dash range");
+    }
+
+    private static IReadOnlyList<string> ExtractIPv4Literals(string token)
+    {
+        var matches = IPv4LiteralRegex.Matches(token);
+        if (matches.Count == 0) return Array.Empty<string>();
+
+        var result = new List<string>(matches.Count);
+        foreach (Match match in matches)
+        {
+            if (TryParseIPv4(match.Value, out var ip))
+            {
+                result.Add(ip.ToString());
+            }
+        }
+
+        return result;
     }
 
     private static void ExpandCidr(
@@ -119,7 +174,7 @@ public static class IpRangeParser
                        ((uint)ipBytes[2] << 8) | (uint)ipBytes[3];
 
         var hostBits = 32 - prefix;
-        var size = hostBits == 32 ? uint.MaxValue : ((1u << hostBits));
+        var size = hostBits == 32 ? 1UL << 32 : 1UL << hostBits;
         if (size > CidrMaxHosts)
         {
             warnings.Add($"'{token}': /{prefix} has {size:N0} hosts, exceeds the per-range cap of {CidrMaxHosts:N0}");
@@ -129,9 +184,9 @@ public static class IpRangeParser
         var mask = hostBits == 32 ? 0u : ~((1u << hostBits) - 1u);
         baseAddr &= mask;
 
-        for (uint i = 0; i < size && result.Count < MaxEntries; i++)
+        for (ulong i = 0; i < size && result.Count < MaxEntries; i++)
         {
-            var addr = baseAddr + i;
+            var addr = baseAddr + (uint)i;
             AddUnique(result, seen, FormatIPv4(addr));
         }
     }
@@ -200,9 +255,26 @@ public static class IpRangeParser
     {
         addr = IPAddress.None;
         if (string.IsNullOrEmpty(s)) return false;
-        if (!IPAddress.TryParse(s, out var parsed)) return false;
-        if (parsed.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
-        addr = parsed;
+        var parts = s.Split('.');
+        if (parts.Length != 4) return false;
+
+        Span<byte> bytes = stackalloc byte[4];
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            if (part.Length is < 1 or > 3) return false;
+            foreach (var c in part)
+            {
+                if (c < '0' || c > '9') return false;
+            }
+
+            if (!byte.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out bytes[i]))
+            {
+                return false;
+            }
+        }
+
+        addr = new IPAddress(bytes);
         return true;
     }
 
