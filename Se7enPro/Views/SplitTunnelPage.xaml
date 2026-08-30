@@ -1,0 +1,501 @@
+<UserControl x:Class="Se7enPro.Views.SplitTunnelPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:conv="clr-namespace:Se7enPro.Converters"
+             xmlns:vm="clr-namespace:Se7enPro.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SplitTunnelViewModel}">
+    <UserControl.Resources>
+        <conv:StringEqualsConverter x:Key="StringEquals" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel HorizontalAlignment="Stretch"
+                    Margin="24,10,24,18">
+
+            <TextBlock Style="{StaticResource UI.Title}" Text="{Binding Title}"
+                       Margin="0,0,0,12" />
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10">
+                <StackPanel HorizontalAlignment="Stretch">
+
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="CallSplit" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Split Tunnel" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Choose which sites, IPs and apps use the VPN — and which bypass it." />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Width="30" Height="30" CornerRadius="8"
+                                        Background="#1800D4FF" BorderBrush="#3300D4FF" BorderThickness="1"
+                                        Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="CallSplit" Width="16" Height="16"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Split Tunneling" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Enable custom bypass and routing rules"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                </StackPanel>
+
+                                <ToggleButton Grid.Column="2"
+                                              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                              IsChecked="{Binding SplitTunnelEnabled, Mode=TwoWay}"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Enable or disable split tunneling rules" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="2"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Width="30" Height="30" CornerRadius="8"
+                                        Background="#18A78BFA" BorderBrush="#33A78BFA" BorderThickness="1"
+                                        Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="ShieldLockOutline" Width="16" Height="16"
+                                                             Foreground="{StaticResource Brand.PrimaryBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="System Tunnel (TUN)" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Required for split rules to intercept traffic"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                </StackPanel>
+
+                                <ToggleButton Grid.Column="2"
+                                              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                              IsChecked="{Binding SystemWideEnabled, Mode=TwoWay}"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Route all system traffic through Se7en Pro (requires Administrator)" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <Border Background="#153B82F6"
+                            BorderBrush="#403B82F6"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10"
+                            Margin="0,0,0,10"
+                            Visibility="{Binding ShowSystemWideWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0"
+                                                     Kind="InformationOutline"
+                                                     Width="18" Height="18"
+                                                     Margin="0,1,10,0"
+                                                     VerticalAlignment="Top"
+                                                     Foreground="#3B82F6" />
+                            <TextBlock Grid.Column="1"
+                                       Text="Split tunnelling works only in system-wide (TUN) mode, which runs as Administrator. Turn on system-wide tunnelling for these rules to take effect."
+                                       FontSize="12" Foreground="#93C5FD" TextWrapping="Wrap"
+                                       VerticalAlignment="Center" />
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource UI.PrimaryButton}"
+                                    Content="Turn on"
+                                    MinWidth="84" Height="32" Padding="14,0"
+                                    Margin="12,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding EnableSystemWideCommand}" />
+                        </Grid>
+                    </Border>
+
+                    <Border Background="#15F59E0B"
+                            BorderBrush="#40F59E0B"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,9">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0"
+                                                     Kind="ShieldCheckOutline"
+                                                     Width="16" Height="16"
+                                                     Margin="0,0,10,0"
+                                                     VerticalAlignment="Center"
+                                                     Foreground="#FBBF24" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding StatusText}"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="#FBBF24"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10"
+                    IsEnabled="{Binding SplitTunnelEnabled}">
+                <StackPanel HorizontalAlignment="Stretch">
+
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="SwapHorizontal" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Mode" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="How the rules below are routed." />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="14,11"
+                            Margin="0,0,0,8">
+                        <RadioButton GroupName="SplitMode"
+                                     IsChecked="{Binding SplitTunnelMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=exclude}">
+                            <StackPanel Margin="2,0,0,0">
+                                <TextBlock Text="Bypass VPN for list (Exclude mode)"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Addresses and apps in the list bypass the VPN entirely and connect directly. Everything else is protected."
+                                           FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0" />
+                            </StackPanel>
+                        </RadioButton>
+                    </Border>
+
+                    <Border Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="14,11"
+                            Margin="0,0,0,10">
+                        <RadioButton GroupName="SplitMode"
+                                     IsChecked="{Binding SplitTunnelMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=include}">
+                            <StackPanel Margin="2,0,0,0">
+                                <TextBlock Text="Route only the list via VPN (Include mode)"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Only the sites, IPs, and apps listed below will go through the VPN. All other traffic uses your normal connection."
+                                           FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0" />
+                            </StackPanel>
+                        </RadioButton>
+                    </Border>
+
+                    <Border Padding="12,9" CornerRadius="8"
+                            Background="#15F59E0B"
+                            BorderBrush="#40F59E0B"
+                            BorderThickness="1">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0"
+                                                     Kind="InformationOutline" Width="16" Height="16"
+                                                     Margin="0,0,8,0"
+                                                     VerticalAlignment="Center"
+                                                     Foreground="#FBBF24" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding ModeSummary}"
+                                       TextWrapping="Wrap" FontSize="12"
+                                       Foreground="#FBBF24"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <Border Margin="0,8,0,0" Padding="12,9" CornerRadius="8"
+                            Background="#20EF4444" BorderBrush="#50EF4444" BorderThickness="1"
+                            Visibility="{Binding ShowIncludeWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0"
+                                                     Kind="AlertOutline" Width="16" Height="16"
+                                                     Margin="0,0,8,0"
+                                                     VerticalAlignment="Center"
+                                                     Foreground="#EF4444" />
+                            <TextBlock Grid.Column="1" TextWrapping="Wrap" FontSize="12"
+                                       Foreground="#FCA5A5"
+                                       Text="This mode takes the rest of the internet out of the VPN. If you added a site here because it would not open while connected, choose the first option instead." />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,0"
+                    IsEnabled="{Binding SplitTunnelEnabled}">
+                <StackPanel HorizontalAlignment="Stretch">
+
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="FormatListBulleted" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Rules" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Sites, IP ranges and applications." />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+
+                            <Button Style="{StaticResource UI.GhostButton}"
+                                    Background="{DynamicResource Surface.SubtleBg}"
+                                    BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                    BorderThickness="1"
+                                    Padding="14,7" Margin="0,0,8,0"
+                                    ToolTip="Browse and select installed Windows applications"
+                                    Command="{Binding PickAppsCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="ApplicationOutline" Width="15" Height="15"
+                                                             VerticalAlignment="Center" Margin="0,0,7,0"
+                                                             Foreground="{StaticResource Brand.AccentBrush}" />
+                                    <TextBlock Text="Choose applications…" VerticalAlignment="Center" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Style="{StaticResource UI.GhostButton}"
+                                    Background="{DynamicResource Surface.SubtleBg}"
+                                    BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                    BorderThickness="1"
+                                    Padding="14,7"
+                                    ToolTip="Remove every rule"
+                                    Command="{Binding ClearSplitEntriesCommand}"
+                                    Visibility="{Binding HasSplitTunnelEntries, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="DeleteSweepOutline" Width="15" Height="15"
+                                                             Foreground="#EF4444"
+                                                             VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <TextBlock Text="Clear all" Foreground="#EF4444" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="ADD DOMAIN / IP / APP" Margin="0,2,0,6" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0"
+                                  Style="{StaticResource UI.CustomComboBox}"
+                                  ItemsSource="{Binding SplitTunnelKinds}"
+                                  SelectedValue="{Binding NewSplitKind}"
+                                  SelectedValuePath="Key"
+                                  DisplayMemberPath="Display"
+                                  Height="38"
+                                  VerticalAlignment="Center" />
+                        <TextBox Grid.Column="2"
+                                 Style="{StaticResource UI.CustomTextBox}"
+                                 Text="{Binding NewSplitValue, UpdateSourceTrigger=PropertyChanged}"
+                                 Height="38"
+                                 VerticalAlignment="Center"
+                                 materialDesign:HintAssist.Hint="example.com  ·  1.2.3.4/24  ·  app.exe">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Return" Command="{Binding AddSplitEntryCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+                        <Button Grid.Column="4"
+                                Style="{StaticResource UI.PrimaryButton}"
+                                Content="Add"
+                                MinWidth="88"
+                                Height="38"
+                                VerticalAlignment="Center"
+                                Command="{Binding AddSplitEntryCommand}" />
+                    </Grid>
+
+                    <TextBlock TextWrapping="Wrap" Margin="0,6,0,0"
+                               Text="{Binding SplitTunnelError}"
+                               Foreground="{StaticResource Brand.WarningBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource UI.FieldHelper}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SplitTunnelError}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <ItemsControl ItemsSource="{Binding SplitTunnelEntries}" Margin="0,12,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,6" Padding="12,9" CornerRadius="8"
+                                        Background="#FF14141E"
+                                        BorderBrush="{StaticResource BorderBrushDefault}"
+                                        BorderThickness="1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <materialDesign:PackIcon Grid.Column="0"
+                                                                 Kind="{Binding Icon}"
+                                                                 Width="18" Height="18"
+                                                                 Margin="0,0,10,0"
+                                                                 VerticalAlignment="Center"
+                                                                 Foreground="{StaticResource Brand.AccentBrush}" />
+
+                                        <Border Grid.Column="1"
+                                                Margin="0,0,10,0" Padding="8,3" CornerRadius="5"
+                                                VerticalAlignment="Center"
+                                                Background="#FF1F1F2F"
+                                                BorderBrush="#FF2E2E44"
+                                                BorderThickness="1">
+                                            <TextBlock Text="{Binding KindLabel}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="#FF818CF8" />
+                                        </Border>
+
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding Value}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Value}"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                                   FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                                   FontSize="12.5" FontWeight="SemiBold" />
+
+                                        <Border Grid.Column="3"
+                                                Margin="10,0,10,0" Padding="8,3" CornerRadius="5"
+                                                Background="{DynamicResource Surface.SubtleBg}"
+                                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                                BorderThickness="1"
+                                                VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="{Binding DirectionIcon}"
+                                                                         Width="14" Height="14"
+                                                                         VerticalAlignment="Center"
+                                                                         Margin="0,0,5,0"
+                                                                         Foreground="{Binding DirectionBrush}" />
+                                                <TextBlock Text="{Binding DirectionLabel}"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{Binding DirectionBrush}" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Button Grid.Column="4"
+                                                Style="{StaticResource UI.IconButton}"
+                                                Width="28" Height="28"
+                                                VerticalAlignment="Center"
+                                                ToolTip="Remove rule"
+                                                Command="{Binding DataContext.RemoveSplitEntryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}">
+                                            <materialDesign:PackIcon Kind="Close" Width="15" Height="15"
+                                                                     Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Style="{StaticResource UI.FieldHelper}"
+                               Text="No entries yet. Add a site, IP or app above to start splitting traffic."
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Visibility="{Binding NoSplitTunnelEntries, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                    <Border Style="{StaticResource UI.Divider}" Margin="0,14,0,12" />
+
+                    <TextBlock Style="{StaticResource UI.FieldHelper}"
+                               TextWrapping="Wrap"
+                               Text="Sites are matched by domain suffix (e.g. example.com covers www.example.com, and .ir covers every Iranian address). DNS follows the split too: bypassed sites resolve directly through your ISP DNS, allowing geo-blocked local banking and governmental sites to work smoothly." />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

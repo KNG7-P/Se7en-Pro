@@ -1,0 +1,432 @@
+<UserControl x:Class="Se7enPro.Views.AboutPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:vm="clr-namespace:Se7enPro.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:AboutViewModel}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel HorizontalAlignment="Stretch"
+                    Margin="24,10,24,40">
+
+            <TextBlock Style="{StaticResource UI.Title}" Text="{Binding Title}" Margin="0,0,0,2" />
+            <TextBlock Style="{StaticResource UI.Subtitle}"
+                       Text="Se7en Pro — high performance, multi-protocol Windows tunneling client."
+                       Margin="0,0,0,14" />
+
+            <Border Style="{StaticResource UI.Card}" Padding="20,16" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Width="54" Height="54" CornerRadius="14"
+                            Background="#1800D4FF"
+                            BorderBrush="#3300D4FF"
+                            BorderThickness="1"
+                            VerticalAlignment="Center"
+                            Margin="0,0,16,0">
+                        <materialDesign:PackIcon Kind="ShieldLockOutline" Width="28" Height="28"
+                                                 Foreground="{StaticResource Brand.AccentBrush}"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AppName}" FontSize="20" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <Border Background="#1800D4FF"
+                                    BorderBrush="#3300D4FF"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,2"
+                                    Margin="10,0,0,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Version, StringFormat='v{0}'}"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Brand.AccentBrush}" />
+                            </Border>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding Copyright}"
+                                   FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="20,16" Margin="0,0,0,12">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="Github" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Community &amp; Source Code" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Open-source repositories, release channels, and updates." />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="10" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Grid.Column="0"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Cursor="Hand">
+                            <Border.InputBindings>
+                                <MouseBinding Gesture="LeftClick" Command="{Binding OpenGitHubCommand}" />
+                            </Border.InputBindings>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                            <Setter Property="BorderBrush" Value="#4400D4FF" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="8"
+                                        Background="#1800D4FF"
+                                        Margin="0,0,12,0">
+                                    <materialDesign:PackIcon Kind="Github" Width="18" Height="18"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Se7en Pro Repository"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="GitHub Releases &amp; Source"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2"
+                                                         Kind="OpenInNew" Width="16" Height="16"
+                                                         Foreground="#64748B"
+                                                         VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="0" Grid.Column="2"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Cursor="Hand">
+                            <Border.InputBindings>
+                                <MouseBinding Gesture="LeftClick" Command="{Binding OpenTelegramCommand}" />
+                            </Border.InputBindings>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                            <Setter Property="BorderBrush" Value="#4400D4FF" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="8"
+                                        Background="#1800D4FF"
+                                        Margin="0,0,12,0">
+                                    <materialDesign:PackIcon Kind="Send" Width="17" Height="17"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Telegram Channel"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="News, Configs &amp; Community"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2"
+                                                         Kind="OpenInNew" Width="16" Height="16"
+                                                         Foreground="#64748B"
+                                                         VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="2" Grid.Column="0"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Cursor="Hand">
+                            <Border.InputBindings>
+                                <MouseBinding Gesture="LeftClick" Command="{Binding OpenPsiphonCoreGitHubCommand}" />
+                            </Border.InputBindings>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                            <Setter Property="BorderBrush" Value="#4400D4FF" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="8"
+                                        Background="#1800D4FF"
+                                        Margin="0,0,12,0">
+                                    <materialDesign:PackIcon Kind="CodeTags" Width="18" Height="18"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Psiphon Tunnel Core"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Upstream Go Engine (GPLv3)"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2"
+                                                         Kind="OpenInNew" Width="16" Height="16"
+                                                         Foreground="#64748B"
+                                                         VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="2" Grid.Column="2"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Cursor="Hand">
+                            <Border.InputBindings>
+                                <MouseBinding Gesture="LeftClick" Command="{Binding OpenInfoLinkCommand}" />
+                            </Border.InputBindings>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                            <Setter Property="BorderBrush" Value="#4400D4FF" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="8"
+                                        Background="#1800D4FF"
+                                        Margin="0,0,12,0">
+                                    <materialDesign:PackIcon Kind="Web" Width="18" Height="18"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Psiphon Official Website"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Visit psiphon.ca"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2"
+                                                         Kind="OpenInNew" Width="16" Height="16"
+                                                         Foreground="#64748B"
+                                                         VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="20,16" Margin="0,0,0,12">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="HelpCircleOutline" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="FAQ &amp; Privacy Policies" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Troubleshooting guide, data privacy and security terms." />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Cursor="Hand">
+                            <Border.InputBindings>
+                                <MouseBinding Gesture="LeftClick" Command="{Binding OpenFaqCommand}" />
+                            </Border.InputBindings>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                            <Setter Property="BorderBrush" Value="#4400D4FF" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="8"
+                                        Background="#1800D4FF"
+                                        Margin="0,0,12,0">
+                                    <materialDesign:PackIcon Kind="CommentQuestionOutline" Width="18" Height="18"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Frequently Asked Questions"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Troubleshooting &amp; usage FAQ"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2"
+                                                         Kind="OpenInNew" Width="16" Height="16"
+                                                         Foreground="#64748B"
+                                                         VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="2"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Cursor="Hand">
+                            <Border.InputBindings>
+                                <MouseBinding Gesture="LeftClick" Command="{Binding OpenPrivacyCommand}" />
+                            </Border.InputBindings>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                            <Setter Property="BorderBrush" Value="#4400D4FF" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="8"
+                                        Background="#1800D4FF"
+                                        Margin="0,0,12,0">
+                                    <materialDesign:PackIcon Kind="FileDocumentOutline" Width="18" Height="18"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Privacy Policy &amp; Security"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Information collected &amp; terms"
+                                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2"
+                                                         Kind="OpenInNew" Width="16" Height="16"
+                                                         Foreground="#64748B"
+                                                         VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,252 @@
+<Window x:Class="Se7enPro.Views.AppPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Choose applications"
+        Width="620" Height="620"
+        MinWidth="520" MinHeight="440"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        FontFamily="{StaticResource UI.FontFamily}"
+        TextElement.Foreground="{DynamicResource TextPrimaryBrush}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        UseLayoutRounding="True">
+
+    <Border Background="#FF14141E"
+            BorderBrush="{DynamicResource Surface.CardBorder}"
+            BorderThickness="1"
+            CornerRadius="14"
+            Padding="22,20,22,18"
+            Margin="14">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="32" ShadowDepth="0" Opacity="0.65" Color="Black" />
+        </Border.Effect>
+
+        <DockPanel LastChildFill="True">
+
+            <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0"
+                        Width="40" Height="40" CornerRadius="10"
+                        Background="{DynamicResource Surface.SubtleBg}"
+                        BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                        BorderThickness="1"
+                        Margin="0,0,12,0">
+                    <materialDesign:PackIcon Kind="ApplicationOutline" Width="22" Height="22"
+                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Choose applications"
+                               FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock x:Name="SubtitleText"
+                               Text="Loading installed apps…"
+                               FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                </StackPanel>
+                <Button Grid.Column="2"
+                        Style="{StaticResource UI.TitleBarCloseButton}"
+                        VerticalAlignment="Top"
+                        ToolTip="Close"
+                        Click="OnCancelClicked">
+                    <materialDesign:PackIcon Kind="WindowClose" Width="14" Height="14" />
+                </Button>
+            </Grid>
+
+            <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         x:Name="SearchBox"
+                         Style="{StaticResource UI.CustomTextBox}"
+                         Height="38"
+                         VerticalAlignment="Center"
+                         TextChanged="OnSearchTextChanged"
+                         materialDesign:HintAssist.Hint="Search by app name or executable (e.g. chrome, telegram)" />
+                <Button Grid.Column="2"
+                        Style="{StaticResource UI.GhostButton}"
+                        Background="{DynamicResource Surface.SubtleBg}"
+                        BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                        BorderThickness="1"
+                        Height="38"
+                        VerticalAlignment="Center"
+                        Padding="14,0"
+                        ToolTip="Pick an .exe file from disk"
+                        Click="OnBrowseClicked">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="FolderOpenOutline" Width="16" Height="16"
+                                                 Foreground="{StaticResource Brand.AccentBrush}"
+                                                 VerticalAlignment="Center" Margin="0,0,7,0" />
+                        <TextBlock Text="Browse…" VerticalAlignment="Center" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <Grid DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <CheckBox x:Name="MatchByPathCheckBox"
+                              Style="{StaticResource UI.DarkCheckBox}"
+                              Content="Match the exact file path (stricter)"
+                              FontSize="12"
+                              Foreground="{DynamicResource TextPrimaryBrush}"
+                              ToolTip="Off: matches the executable name, so the rule keeps working after an update moves the install folder." />
+                    <TextBlock x:Name="SelectionText"
+                               Text="Nothing selected"
+                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Style="{StaticResource UI.GhostButton}"
+                        Background="{DynamicResource Surface.SubtleBg}"
+                        BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                        BorderThickness="1"
+                        Content="Cancel"
+                        Height="36"
+                        Padding="18,0" MinWidth="88"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Bottom"
+                        Click="OnCancelClicked"
+                        IsCancel="True" />
+                <Button Grid.Column="2"
+                        x:Name="AddButton"
+                        Style="{StaticResource UI.PrimaryButton}"
+                        Content="Add selected"
+                        Height="36"
+                        Padding="18,0" MinWidth="118"
+                        VerticalAlignment="Bottom"
+                        IsEnabled="False"
+                        Click="OnAddClicked"
+                        IsDefault="True" />
+            </Grid>
+
+            <Grid>
+                <Border BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                        BorderThickness="1" CornerRadius="10"
+                        Background="#FF11111A">
+                    <ListBox x:Name="AppList"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="6"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,2" Padding="10,8" CornerRadius="8"
+                                        Background="#FF161622"
+                                        BorderBrush="{StaticResource BorderBrushDefault}"
+                                        BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#FF1E1E2C" />
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentCyanBrush}" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <CheckBox Style="{StaticResource UI.DarkCheckBox}"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              VerticalContentAlignment="Center">
+                                        <Grid Margin="6,0,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Image Grid.Column="0"
+                                                   Source="{Binding Icon}"
+                                                   Width="24" Height="24"
+                                                   Margin="0,0,10,0"
+                                                   VerticalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding ExePath}"
+                                                           FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           Margin="0,2,0,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           FontFamily="Cascadia Mono, Consolas, monospace" />
+                                            </StackPanel>
+                                            <Border Grid.Column="2"
+                                                    Padding="7,2.5" CornerRadius="5"
+                                                    Margin="8,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Background="#FF1F1F2F"
+                                                    BorderBrush="#FF2E2E44"
+                                                    BorderThickness="1"
+                                                    Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="running" FontSize="10.5" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource Brand.AccentBrush}" />
+                                            </Border>
+                                        </Grid>
+                                    </CheckBox>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+
+                <materialDesign:PackIcon x:Name="BusyIcon"
+                                         Kind="Loading" Width="34" Height="34"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                                         Opacity="0.85"
+                                         Foreground="{StaticResource Brand.AccentBrush}"
+                                         RenderTransformOrigin="0.5,0.5">
+                    <materialDesign:PackIcon.RenderTransform>
+                        <RotateTransform x:Name="BusySpin" />
+                    </materialDesign:PackIcon.RenderTransform>
+                    <materialDesign:PackIcon.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever">
+                                    <DoubleAnimation Storyboard.TargetName="BusySpin"
+                                                     Storyboard.TargetProperty="Angle"
+                                                     From="0" To="360" Duration="0:0:1.1" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </materialDesign:PackIcon.Triggers>
+                </materialDesign:PackIcon>
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>

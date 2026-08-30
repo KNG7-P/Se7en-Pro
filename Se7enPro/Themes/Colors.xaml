@@ -1,0 +1,159 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Color x:Key="Brand.Bg">#FF0B0B11</Color>
+    <Color x:Key="Brand.Sidebar">#FF13131D</Color>
+    <Color x:Key="Brand.Card">#FF1A1A26</Color>
+    <Color x:Key="Brand.CardElevated">#FF20202E</Color>
+    <Color x:Key="Brand.Input">#FF0F0F18</Color>
+    <Color x:Key="Brand.Border">#FF252533</Color>
+    <Color x:Key="Brand.BorderHover">#FF36364A</Color>
+    <Color x:Key="Brand.TextPrimary">#FFF2F2F7</Color>
+    <Color x:Key="Brand.TextSecondary">#FF9B9BA8</Color>
+    <Color x:Key="Brand.TextMuted">#FF6B6B78</Color>
+    <Color x:Key="Brand.AccentCyan">#FF00D4FF</Color>
+    <Color x:Key="Brand.AccentPurple">#FFA78BFA</Color>
+    <Color x:Key="Brand.PrimaryColor">#FF7C3AED</Color>
+    <Color x:Key="Brand.PrimaryDarkColor">#FF5B21B6</Color>
+    <Color x:Key="Brand.Success">#FF10B981</Color>
+    <Color x:Key="Brand.Danger">#FFEF4444</Color>
+    <Color x:Key="Brand.Warning">#FFF59E0B</Color>
+    <Color x:Key="Brand.Info">#FF60A5FA</Color>
+
+    <Color x:Key="Brand.AccentColor">#FF00D4FF</Color>
+    <Color x:Key="Brand.SuccessColor">#FF10B981</Color>
+    <Color x:Key="Brand.WarningColor">#FFF59E0B</Color>
+    <Color x:Key="Brand.ErrorColor">#FFEF4444</Color>
+
+    <SolidColorBrush x:Key="BgMain"             Color="{StaticResource Brand.Bg}" />
+    <SolidColorBrush x:Key="BgSidebar"          Color="{StaticResource Brand.Sidebar}" />
+    <SolidColorBrush x:Key="BgCard"             Color="{StaticResource Brand.Card}" />
+    <SolidColorBrush x:Key="BgCardElevated"     Color="{StaticResource Brand.CardElevated}" />
+    <SolidColorBrush x:Key="BgInput"            Color="{StaticResource Brand.Input}" />
+    <SolidColorBrush x:Key="BorderBrushDefault" Color="{StaticResource Brand.Border}" />
+    <SolidColorBrush x:Key="BorderBrushHover"   Color="{StaticResource Brand.BorderHover}" />
+    <SolidColorBrush x:Key="TextPrimary"        Color="{StaticResource Brand.TextPrimary}" />
+    <SolidColorBrush x:Key="TextSecondary"      Color="{StaticResource Brand.TextSecondary}" />
+    <SolidColorBrush x:Key="TextMuted"          Color="{StaticResource Brand.TextMuted}" />
+    <SolidColorBrush x:Key="AccentCyanBrush"    Color="{StaticResource Brand.AccentCyan}" />
+    <SolidColorBrush x:Key="AccentPurpleBrush"  Color="{StaticResource Brand.AccentPurple}" />
+    <SolidColorBrush x:Key="SuccessBrush"       Color="{StaticResource Brand.Success}" />
+    <SolidColorBrush x:Key="DangerBrush"        Color="{StaticResource Brand.Danger}" />
+    <SolidColorBrush x:Key="WarningBrush"       Color="{StaticResource Brand.Warning}" />
+    <SolidColorBrush x:Key="InfoBrush"          Color="{StaticResource Brand.Info}" />
+
+    <SolidColorBrush x:Key="Brand.PrimaryBrush" Color="{StaticResource Brand.PrimaryColor}" />
+    <SolidColorBrush x:Key="Brand.PrimaryDarkBrush" Color="{StaticResource Brand.PrimaryDarkColor}" />
+    <SolidColorBrush x:Key="Brand.AccentBrush" Color="{StaticResource Brand.AccentCyan}" />
+    <SolidColorBrush x:Key="Brand.SuccessBrush" Color="{StaticResource Brand.Success}" />
+    <SolidColorBrush x:Key="Brand.WarningBrush" Color="{StaticResource Brand.Warning}" />
+    <SolidColorBrush x:Key="Brand.ErrorBrush" Color="{StaticResource Brand.Danger}" />
+
+    <SolidColorBrush x:Key="Brand.PrimarySoftBrush" Color="{StaticResource Brand.PrimaryColor}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.AccentSoftBrush" Color="{StaticResource Brand.AccentCyan}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.AccentOutlineBrush" Color="{StaticResource Brand.AccentCyan}" Opacity="0.50" />
+    <SolidColorBrush x:Key="Brand.SuccessSoftBrush" Color="{StaticResource Brand.Success}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.WarningSoftBrush" Color="{StaticResource Brand.Warning}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.ErrorSoftBrush" Color="{StaticResource Brand.Danger}" Opacity="0.16" />
+
+    <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.AccentPurple}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.PrimaryGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.AccentPurple}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.ConnectedGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FF059669" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.Success}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.HeroGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FF5B21B6" Offset="0" />
+        <GradientStop Color="#FF7C3AED" Offset="0.6" />
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.RotatingRingGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FF7C3AED" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="0.5" />
+        <GradientStop Color="{StaticResource Brand.Success}" Offset="1" />
+    </LinearGradientBrush>
+
+    <Color x:Key="Brand.TelegramColor">#229ED9</Color>
+    <Color x:Key="Brand.TelegramDarkColor">#1B7AB3</Color>
+    <SolidColorBrush x:Key="Brand.TelegramBrush" Color="{StaticResource Brand.TelegramColor}" />
+    <LinearGradientBrush x:Key="Brand.TelegramGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.TelegramColor}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.TelegramDarkColor}" Offset="1" />
+    </LinearGradientBrush>
+
+    <Color x:Key="Surface.AppBgColor">#FF0B0B11</Color>
+    <SolidColorBrush x:Key="Surface.AppBg" Color="{StaticResource Brand.Bg}" />
+    <SolidColorBrush x:Key="Surface.SidebarBg" Color="{StaticResource Brand.Sidebar}" />
+    <SolidColorBrush x:Key="Surface.TitleBarBg" Color="{StaticResource Brand.Sidebar}" />
+
+    <SolidColorBrush x:Key="Surface.CardBg" Color="{StaticResource Brand.Card}" />
+    <SolidColorBrush x:Key="Surface.CardSecondaryBg" Color="{StaticResource Brand.CardElevated}" />
+    <SolidColorBrush x:Key="Surface.CardBorder" Color="{StaticResource Brand.Border}" />
+    <SolidColorBrush x:Key="Surface.CardBorderStrong" Color="{StaticResource Brand.BorderHover}" />
+
+    <SolidColorBrush x:Key="Surface.SubtleBg" Color="#FF14141F" />
+    <SolidColorBrush x:Key="Surface.SubtleBorder" Color="{StaticResource Brand.Border}" />
+    <SolidColorBrush x:Key="Surface.HoverBg" Color="#FF1E1E2C" />
+    <SolidColorBrush x:Key="Surface.SelectedBg" Color="#FF22223A" />
+    <SolidColorBrush x:Key="Surface.BorderBrush" Color="{StaticResource Brand.Border}" />
+
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource Brand.TextPrimary}" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource Brand.TextSecondary}" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource Brand.TextMuted}" />
+    <SolidColorBrush x:Key="TextOnAccentBrush" Color="#FFFFFFFF" />
+
+    <SolidColorBrush x:Key="WindowBackdrop" Color="#FF0E0E16" />
+
+    <SolidColorBrush x:Key="MaterialDesignPaper" Color="#FF14141E" />
+    <SolidColorBrush x:Key="MaterialDesignCardBackground" Color="#FF1A1A26" />
+    <SolidColorBrush x:Key="MaterialDesignBody" Color="#FFF2F2F7" />
+    <SolidColorBrush x:Key="MaterialDesignBodyLight" Color="#FF9B9BA8" />
+    <SolidColorBrush x:Key="MaterialDesignColumnHeader" Color="#FF9B9BA8" />
+    <SolidColorBrush x:Key="MaterialDesignSelection" Color="#FF22223A" />
+    <SolidColorBrush x:Key="MaterialDesignTextBoxBorder" Color="#FF252533" />
+    <SolidColorBrush x:Key="MaterialDesignDivider" Color="#FF252533" />
+
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Background" Color="#FF0B0B11" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Surface" Color="#FF14141E" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceDim" Color="#FF0E0E16" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceBright" Color="#FF1E1E2C" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerLowest" Color="#FF0B0B11" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerLow" Color="#FF101018" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainer" Color="#FF14141E" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerHigh" Color="#FF1A1A26" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerHighest" Color="#FF20202E" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSurface" Color="#FFF2F2F7" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSurfaceVariant" Color="#FF9B9BA8" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.InverseSurface" Color="#FFF2F2F7" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.InverseOnSurface" Color="#FF0B0B11" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary" Color="#FF00D4FF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnPrimary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.PrimaryContainer" Color="#FF22223A" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnPrimaryContainer" Color="#FF00D4FF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Secondary" Color="#FFA78BFA" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSecondary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SecondaryContainer" Color="#FF22223A" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSecondaryContainer" Color="#FF00D4FF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Tertiary" Color="#FF10B981" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnTertiary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.TertiaryContainer" Color="#FF1A3326" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnTertiaryContainer" Color="#FF10B981" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Error" Color="#FFEF4444" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnError" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.ErrorContainer" Color="#FF381818" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnErrorContainer" Color="#FFEF4444" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Outline" Color="#FF252533" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OutlineVariant" Color="#FF36364A" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Scrim" Color="#CC000000" />
+
+</ResourceDictionary>

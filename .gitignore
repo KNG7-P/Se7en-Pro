@@ -1,35 +1,48 @@
-## .NET / Visual Studio build artefacts
-[Dd]ebug/
-[Rr]elease/
+# =====================================================================
+#  Se7en Pro — .gitignore
+#  The repo tracks the WPF C# client (Se7enPro/) and everything it
+#  needs to build & run, including the bundled engine binaries under
+#  Se7enPro/Resources. Build output and local tooling state stay out.
+# =====================================================================
+
+# ---- Build output ----
 [Bb]in/
 [Oo]bj/
-*.user
-*.userosscache
-*.suo
+artifacts/
+publish/
+*.binlog
+*.exe.config
+
+# ---- Visual Studio / Rider / VS Code ----
 .vs/
 .idea/
 .vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+UpgradeLog*.htm
 
-## Rider / ReSharper
-_ReSharper*/
-*.[Rr]e[Ss]harper
+# ---- Local agent / tooling state ----
+.claude/
 
-## NuGet
-packages/
-*.nupkg
-*.snupkg
-
-## Logs
+# ---- Logs & runtime state ----
 *.log
 
-## OS junk
+# ---- OS noise ----
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-.DS_Store
+$RECYCLE.BIN/
 
-## Server list is not in source control (it's bundled with the official Psiphon
-## installer, not part of this MIT-licensed source repo). The build will still
-## succeed without it; tunnel-core just relies on fronted remote-server-list
-## fetch in that case.
-PsiphonUI/Resources/server_entries.txt
+# ---- Temp / test output ----
+*.tmp
+TestResults/
+*.bak
+# ---- Secrets & Server Lists ----
+Se7enPro/Resources/server_entries.txt
+Se7enPro/Resources/server_entries.bin
+Se7enPro/Resources/aether/*.toml
+Se7enPro/Services/EmbeddedValues.plaintext.json
+*.toml

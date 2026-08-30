@@ -1,0 +1,1196 @@
+<UserControl x:Class="Se7enPro.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:conv="clr-namespace:Se7enPro.Converters"
+             xmlns:svc="clr-namespace:Se7enPro.Services"
+             xmlns:vm="clr-namespace:Se7enPro.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+    <UserControl.Resources>
+        <conv:CountryCodeToFlagSourceConverter x:Key="CountryCodeToFlag" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+        <conv:StringEqualsConverter x:Key="StringEquals" />
+
+        <DataTemplate x:Key="CountryItemTemplate" DataType="{x:Type svc:Country}">
+            <StackPanel Orientation="Horizontal">
+                <Image Width="20" Height="15" Margin="0,0,8,0"
+                       VerticalAlignment="Center"
+                       SnapsToDevicePixels="True"
+                       RenderOptions.BitmapScalingMode="Linear"
+                       Source="{Binding Code, Converter={StaticResource CountryCodeToFlag}}" />
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel HorizontalAlignment="Stretch"
+                    Margin="24,10,24,40">
+
+            <TextBlock Style="{StaticResource UI.Title}" Text="{Binding Title}"
+                       Margin="0,0,0,12" />
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="SwapHorizontal" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Connection Method" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Choose which tunnelling engine carries your traffic." />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="METHOD" Margin="0,0,0,6" />
+                    <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                              ItemsSource="{Binding ConnectionMethods}"
+                              SelectedValue="{Binding SelectedConnectionMethod}"
+                              SelectedValuePath="Key"
+                              DisplayMemberPath="Display"
+                              IsEnabled="{Binding CanChangeMethod}"
+                              Height="38"
+                              HorizontalAlignment="Stretch" />
+
+                    <Border Background="#15F59E0B"
+                            BorderBrush="#40F59E0B"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10"
+                            Margin="0,10,0,0">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0"
+                                                     Kind="InformationOutline" Width="16" Height="16"
+                                                     Margin="0,0,10,0"
+                                                     VerticalAlignment="Center"
+                                                     Foreground="#FBBF24" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding ActiveMethodDescription}"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="#FBBF24"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10"
+                    Visibility="{Binding IsChainedMethod, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="LayersOutline" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Outer Transport" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Which WARP tunnel carries Psiphon/Tor in chained multi-hop mode." />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="WARP TUNNEL TRANSPORT" Margin="0,0,0,6" />
+                    <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                              ItemsSource="{Binding ChainedOuterTransports}"
+                              SelectedValue="{Binding SelectedChainedOuterTransport}"
+                              SelectedValuePath="Key"
+                              DisplayMemberPath="Display"
+                              Height="38"
+                              HorizontalAlignment="Stretch" />
+
+                    <Border Margin="0,10,0,0"
+                            Padding="12,10"
+                            CornerRadius="8"
+                            Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="Transport Details:"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                            <TextBlock Text="• Auto: Try MASQUE, then WireGuard, then WoW — remembers what works"
+                                       FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                            <TextBlock Text="• MASQUE: HTTP/3, falling back to HTTP/2 with TLS fragmentation"
+                                       FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                            <TextBlock Text="• WireGuard: Single WARP WireGuard tunnel (blocked on some carriers)"
+                                       FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                            <TextBlock Text="• WoW: WARP on WARP — multi-layer WARP for heavily filtered networks"
+                                       FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10"
+                    Visibility="{Binding IsStandalonePsiphon, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="Tune" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Advanced — Tunneling" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Protocol, Beast Mode and CDN Fronting overrides." />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="PROTOCOL" Margin="0,0,0,8" />
+                    <Grid HorizontalAlignment="Stretch">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <RadioButton Grid.Column="0"
+                                     GroupName="ProtocolMode"
+                                     Style="{StaticResource UI.SegmentedPill}"
+                                     Content="Auto"
+                                     ToolTip="Let Se7en Pro pick the best protocol for current network conditions"
+                                     IsChecked="{Binding SelectedProtocolMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=auto}" />
+                        <RadioButton Grid.Column="2"
+                                     GroupName="ProtocolMode"
+                                     Style="{StaticResource UI.SegmentedPill}"
+                                     Content="Direct"
+                                     ToolTip="Force the standard direct-egress path"
+                                     IsChecked="{Binding SelectedProtocolMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=direct}" />
+                        <RadioButton Grid.Column="4"
+                                     GroupName="ProtocolMode"
+                                     Style="{StaticResource UI.SegmentedPill}"
+                                     Content="CDN Fronting"
+                                     ToolTip="Front the dial through a CDN edge IP / SNI override"
+                                     IsChecked="{Binding SelectedProtocolMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=cdn_fronting}" />
+                        <RadioButton Grid.Column="6"
+                                     GroupName="ProtocolMode"
+                                     Style="{StaticResource UI.SegmentedPill}"
+                                     Content="Conduit"
+                                     ToolTip="Tunnel through decentralized WebRTC relay stations (Inproxy)"
+                                     IsChecked="{Binding SelectedProtocolMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=conduit}" />
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource UI.FieldHelper}"
+                               Foreground="#F59E0B"
+                               Text="Picking ‘CDN Fronting’ will clear the upstream proxy fields below."
+                               Margin="0,8,0,0"
+                               Visibility="{Binding HasUpstreamProxy, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                    <Border Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="14,12"
+                            Margin="0,14,0,0"
+                            Visibility="{Binding IsDirectMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0"
+                                    Width="34" Height="34" CornerRadius="9"
+                                    Background="#1800D4FF"
+                                    BorderBrush="#3300D4FF"
+                                    BorderThickness="1"
+                                    VerticalAlignment="Center">
+                                <materialDesign:PackIcon Kind="Rocket"
+                                                         Width="19" Height="19"
+                                                         Foreground="{StaticResource Brand.AccentBrush}"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1"
+                                        Margin="12,0,12,0"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="Beast Mode"
+                                           FontSize="13.5" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Aggressive parallel tunnel establishment — faster connect but heavier on the network."
+                                           FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,3,0,0"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="2"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                          IsChecked="{Binding BeastMode, Mode=TwoWay}"
+                                          VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Visibility="{Binding IsCdnFrontingMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                        <Border Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Margin="0,14,0,10">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="9"
+                                        Background="#1800D4FF"
+                                        BorderBrush="#3300D4FF"
+                                        BorderThickness="1"
+                                        VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="Rocket"
+                                                             Width="19" Height="19"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            Margin="12,0,12,0"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Beast Mode"
+                                               FontSize="13.5" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Aggressive parallel tunnel establishment — faster connect but heavier on the network."
+                                               FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,3,0,0"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="2"
+                                              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                              IsChecked="{Binding BeastMode, Mode=TwoWay}"
+                                              VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Background="{DynamicResource Surface.SubtleBg}"
+                                    BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="14,12">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0"
+                                            Width="34" Height="34" CornerRadius="9"
+                                            Background="#1800D4FF"
+                                            BorderBrush="#3300D4FF"
+                                            BorderThickness="1"
+                                            VerticalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="Radar"
+                                                                 Width="19" Height="19"
+                                                                 Foreground="{StaticResource Brand.AccentBrush}"
+                                                                 HorizontalAlignment="Center"
+                                                                 VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1"
+                                                Margin="12,0,10,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="Auto-find IP &amp; SNI"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                                        <TextBlock Text="Scan list for working CDN route"
+                                                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="2"
+                                                  Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                                  IsChecked="{Binding AutoFindIpAndSni, Mode=TwoWay}"
+                                                  VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Background="{DynamicResource Surface.SubtleBg}"
+                                    BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="14,12">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0"
+                                            Width="34" Height="34" CornerRadius="9"
+                                            Background="#1800D4FF"
+                                            BorderBrush="#3300D4FF"
+                                            BorderThickness="1"
+                                            VerticalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="EyeOutline"
+                                                                 Width="19" Height="19"
+                                                                 Foreground="{StaticResource Brand.AccentBrush}"
+                                                                 HorizontalAlignment="Center"
+                                                                 VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1"
+                                                Margin="12,0,10,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="Show IP Scanner"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                                        <TextBlock Text="Show scanner tab in sidebar"
+                                                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="2"
+                                                  Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                                  IsChecked="{Binding IpScannerEnabled, Mode=TwoWay}"
+                                                  VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <Border Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12,10"
+                                Margin="0,0,0,10"
+                                IsEnabled="{Binding CanUseAutoFind}">
+                            <StackPanel>
+                                <CheckBox Style="{StaticResource UI.DarkCheckBox}"
+                                          Content="Save found IPs &amp; SNIs into the fields below"
+                                          IsChecked="{Binding SaveFoundIpsAndSni, Mode=TwoWay}"
+                                          IsEnabled="{Binding AutoFindIpAndSni}" />
+                                <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                           Text="When enabled and a CDN scan finds a working route, the IP and SNI are automatically appended to your custom lists below for future instant connects."
+                                           TextWrapping="Wrap"
+                                           Margin="28,3,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource UI.Divider}" Margin="0,4,0,12" />
+
+                        <TextBlock Style="{StaticResource UI.FieldLabel}"
+                                   Text="CDN FRONTING OVERRIDES"
+                                   Margin="0,0,0,8" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="260" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                           Text="Custom Edge IPs (up to 128, one per line)"
+                                           Margin="0,0,0,4" />
+                                <TextBox Text="{Binding CdnFrontingCustomIpList, UpdateSourceTrigger=LostFocus}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="NoWrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Height="110"
+                                         Background="#FF14141E"
+                                         BorderBrush="{StaticResource BorderBrushDefault}"
+                                         BorderThickness="1"
+                                         Padding="10,8"
+                                         FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                         FontSize="12"
+                                         materialDesign:HintAssist.Hint="one per line, e.g. 23.215.0.206" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                           Text="SNI overrides (one per line)"
+                                           Margin="0,0,0,4" />
+                                <TextBox Text="{Binding CdnFrontingCustomSni, UpdateSourceTrigger=LostFocus}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="NoWrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Height="110"
+                                         Background="#FF14141E"
+                                         BorderBrush="{StaticResource BorderBrushDefault}"
+                                         BorderThickness="1"
+                                         Padding="10,8"
+                                         FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                         FontSize="12"
+                                         materialDesign:HintAssist.Hint="one per line, e.g. pypi.org" />
+                                <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                           Text="Tip: pick healthy IPs in the IP Scanner tab and tap Apply."
+                                           TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Visibility="{Binding IsConduitMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Margin="0,14,0,0">
+
+                        <Border Background="#1000D4FF"
+                                BorderBrush="#3300D4FF"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12,10"
+                                Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <materialDesign:PackIcon Grid.Column="0"
+                                                         Kind="LanConnect"
+                                                         Width="18" Height="18"
+                                                         Foreground="{StaticResource Brand.AccentBrush}"
+                                                         VerticalAlignment="Center"
+                                                         Margin="0,0,10,0" />
+                                <TextBlock Grid.Column="1"
+                                           Style="{StaticResource UI.FieldHelper}"
+                                           Foreground="#80E0FF"
+                                           Text="Conduit routes encrypted tunnel traffic through decentralized WebRTC peer-to-peer relay stations operated by volunteers and private nodes worldwide."
+                                           TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+
+                        <Border Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Margin="0,0,0,10">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="9"
+                                        Background="#1800D4FF"
+                                        BorderBrush="#3300D4FF"
+                                        BorderThickness="1"
+                                        VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="ShieldCheck"
+                                                             Width="19" Height="19"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            Margin="12,0,10,0"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Filter Censored Relays"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Reject relay stations located in censored countries (IR, CN, RU, BY, TM, KP) for optimal security and reliability."
+                                               FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="2"
+                                              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                              IsChecked="{Binding ConduitRejectCensoredCountries, Mode=TwoWay}"
+                                              VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Style="{StaticResource UI.FieldLabel}" Text="CONDUIT STATION SELECTION" Margin="0,4,0,8" />
+                        <Grid HorizontalAlignment="Stretch" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <RadioButton Grid.Column="0"
+                                         GroupName="ConduitMode"
+                                         Style="{StaticResource UI.SegmentedPill}"
+                                         Content="Auto Relay"
+                                         ToolTip="Connect to all available stations with automatic failover"
+                                         IsChecked="{Binding ConduitMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=auto}" />
+                            <RadioButton Grid.Column="2"
+                                         GroupName="ConduitMode"
+                                         Style="{StaticResource UI.SegmentedPill}"
+                                         Content="Public Network"
+                                         ToolTip="Only connect to public volunteer stations"
+                                         IsChecked="{Binding ConduitMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=public}" />
+                            <RadioButton Grid.Column="4"
+                                         GroupName="ConduitMode"
+                                         Style="{StaticResource UI.SegmentedPill}"
+                                         Content="Personal Pairing"
+                                         ToolTip="Connect via a private/dedicated station compartment ID"
+                                         IsChecked="{Binding ConduitMode, Mode=TwoWay, Converter={StaticResource StringEquals}, ConverterParameter=custom}" />
+                        </Grid>
+
+                        <Border Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Visibility="{Binding IsConduitCustomMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource UI.FieldLabel}"
+                                           Text="PERSONAL COMPARTMENT / PAIRING ID"
+                                           Margin="0,0,0,4" />
+                                <TextBox Text="{Binding ConduitCompartmentId, UpdateSourceTrigger=PropertyChanged}"
+                                         Background="#FF14141E"
+                                         BorderBrush="{StaticResource BorderBrushDefault}"
+                                         BorderThickness="1"
+                                         Padding="10,8"
+                                         FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                         FontSize="12"
+                                         materialDesign:HintAssist.Hint="e.g. your-private-pairing-id" />
+                                <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                           Text="Enter the pairing compartment ID generated from your personal Conduit station abroad."
+                                           TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="Connection" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Connection Options" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="System proxy behavior and connection reliability." />
+                        </StackPanel>
+                    </Grid>
+
+                    <CheckBox Style="{StaticResource UI.DarkCheckBox}"
+                              Content="Set Windows system proxy automatically when connected"
+                              IsChecked="{Binding SetSystemProxy}" Margin="0,4" />
+                    <CheckBox Style="{StaticResource UI.DarkCheckBox}"
+                              Content="Disable timeouts (better for slow/unstable networks)"
+                              IsChecked="{Binding DisableTimeouts}" Margin="0,4" />
+
+                    <Border Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="14,12"
+                            Margin="0,10,0,2">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0"
+                                    Width="36" Height="36" CornerRadius="9"
+                                    Background="#20EF4444"
+                                    BorderBrush="#40EF4444"
+                                    BorderThickness="1"
+                                    VerticalAlignment="Center">
+                                <materialDesign:PackIcon Kind="ShieldAlert"
+                                                         Width="19" Height="19"
+                                                         Foreground="#EF4444"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1"
+                                        Margin="12,0,12,0"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="Kill Switch (Block Internet on Drop)"
+                                           FontSize="13.5" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Instantly cuts all non-VPN internet traffic via Windows Firewall if the connection drops unexpectedly, preventing real IP leaks."
+                                           FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,3,0,0"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="2"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                          IsChecked="{Binding KillSwitchEnabled, Mode=TwoWay}"
+                                          VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10"
+                    Visibility="{Binding IsAetherMethod, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="Cloud" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Cloudflare WARP Options" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Endpoint scanning &amp; obfuscation for the Aether engine." />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Style="{StaticResource UI.FieldLabel}" Text="ENDPOINT SCAN STRATEGY" Margin="0,0,0,6" />
+                            <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                                      ItemsSource="{Binding AetherScanModes}"
+                                      SelectedValue="{Binding AetherScanMode}"
+                                      SelectedValuePath="Key"
+                                      DisplayMemberPath="Display"
+                                      Height="38"
+                                      HorizontalAlignment="Stretch" />
+                            <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                       Text="How hard Aether searches for a reachable WARP endpoint before connecting."
+                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource UI.FieldLabel}" Text="OBFUSCATION (NOIZE)" Margin="0,0,0,6" />
+                            <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                                      ItemsSource="{Binding AetherNoizeModes}"
+                                      SelectedValue="{Binding AetherNoize}"
+                                      SelectedValuePath="Key"
+                                      DisplayMemberPath="Display"
+                                      Height="38"
+                                      HorizontalAlignment="Stretch" />
+                            <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                       Text="Adds cover traffic / packet shaping to slip past DPI filters."
+                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="IP VERSION" Margin="0,6,0,6" />
+                    <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                              ItemsSource="{Binding AetherIpVersions}"
+                              SelectedValue="{Binding AetherIpVersion}"
+                              SelectedValuePath="Key"
+                              DisplayMemberPath="Display"
+                              Height="38"
+                              HorizontalAlignment="Stretch" />
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="MANUAL CLEAN IP / PEER (OPTIONAL)" Margin="0,12,0,6" />
+                    <TextBox Style="{StaticResource UI.CustomTextBox}"
+                             Text="{Binding AetherManualPeer, UpdateSourceTrigger=LostFocus}"
+                             materialDesign:HintAssist.Hint="e.g. 162.159.198.2:443 (leave blank for auto scan)"
+                             FontFamily="Cascadia Mono, Consolas, monospace"
+                             Height="38"
+                             FontSize="12.5" />
+                    <TextBlock Style="{StaticResource UI.FieldHelper}"
+                               Text="Bypasses endpoint scanning entirely and connects directly to this Cloudflare clean IP endpoint."
+                               TextWrapping="Wrap" Margin="0,4,0,0" />
+
+                    <StackPanel Visibility="{Binding IsMasqueMethod, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Margin="0,12,0,0">
+                        <Border Style="{StaticResource UI.Divider}" Margin="0,0,0,12" />
+                        <TextBlock Style="{StaticResource UI.SectionTitle}" Text="MASQUE Advanced" FontSize="14" Margin="0,0,0,8" />
+
+                        <TextBlock Style="{StaticResource UI.FieldLabel}" Text="TRANSPORT" Margin="0,0,0,6" />
+                        <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                                  ItemsSource="{Binding AetherMasqueTransports}"
+                                  SelectedValue="{Binding AetherMasqueTransport}"
+                                  SelectedValuePath="Key"
+                                  DisplayMemberPath="Display"
+                                  Height="38"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Style="{StaticResource UI.FieldHelper}"
+                                   Text="Which protocol carries the MASQUE session. HTTP/3 over QUIC is fastest; switch to HTTP/2 over TCP where UDP is blocked."
+                                   TextWrapping="Wrap" Margin="0,4,0,10" />
+
+                        <Border Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                IsEnabled="{Binding CanUseFragment}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34" CornerRadius="9"
+                                        Background="#1800D4FF"
+                                        BorderBrush="#3300D4FF"
+                                        BorderThickness="1"
+                                        VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="CallSplit"
+                                                             Width="18" Height="18"
+                                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            Margin="12,0,12,0"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Fragment ClientHello"
+                                               FontSize="13.5" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{Binding FragmentHint}"
+                                               FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,3,0,0"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="2"
+                                              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                              IsChecked="{Binding AetherFragment, Mode=TwoWay}"
+                                              VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10"
+                    Visibility="{Binding IsTorMethod, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="Incognito" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Tor Options" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Bridges and circumvention relays for the Tor engine." />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="BRIDGES PRESETS (OPTIONAL)" Margin="0,0,0,6" />
+                    <WrapPanel Margin="0,0,0,8">
+                        <Button Content="Meek CDN77"
+                                Command="{Binding ApplyMeekCdn77Command}"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Height="30" Padding="12,0" Margin="0,0,8,6" FontSize="11.5" />
+                        <Button Content="Snowflake CDN77"
+                                Command="{Binding ApplySnowflakeCdn77Command}"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Height="30" Padding="12,0" Margin="0,0,8,6" FontSize="11.5" />
+                        <Button Content="obfs4 (Anti-timing)"
+                                Command="{Binding ApplyObfs4IatCommand}"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Height="30" Padding="12,0" Margin="0,0,8,6" FontSize="11.5" />
+                        <Button Content="obfs4 (Public)"
+                                Command="{Binding ApplyObfs4PublicCommand}"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Height="30" Padding="12,0" Margin="0,0,8,6" FontSize="11.5" />
+                        <Button Content="Clear"
+                                Command="{Binding ClearTorBridgesCommand}"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Foreground="#EF4444"
+                                Height="30" Padding="12,0" Margin="0,0,8,6" FontSize="11.5" />
+                    </WrapPanel>
+
+                    <TextBox Text="{Binding TorBridges, UpdateSourceTrigger=LostFocus}"
+                             AcceptsReturn="True"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Height="110"
+                             Background="#FF14141E"
+                             BorderBrush="{StaticResource BorderBrushDefault}"
+                             BorderThickness="1"
+                             Padding="10,8"
+                             FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                             FontSize="12"
+                             materialDesign:HintAssist.Hint="one bridge line per row — e.g. obfs4 1.2.3.4:443 FINGERPRINT cert=... iat-mode=0" />
+                    <TextBlock Style="{StaticResource UI.FieldHelper}"
+                               Text="Paste obfs4 / meek_lite / webtunnel / conjure bridge lines to reach Tor on censored networks. Leave empty to connect directly."
+                               TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="Lan" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Local Proxy Ports" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Blank = auto-pick random open ports on next connect." />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Style="{StaticResource UI.FieldLabel}" Text="SOCKS5 PORT" Margin="0,0,0,6" />
+                            <TextBox Style="{StaticResource UI.CustomTextBox}"
+                                     Text="{Binding SocksPort, UpdateSourceTrigger=PropertyChanged}"
+                                     Height="38"
+                                     materialDesign:HintAssist.Hint="auto" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource UI.FieldLabel}" Text="HTTP PORT" Margin="0,0,0,6" />
+                            <TextBox Style="{StaticResource UI.CustomTextBox}"
+                                     Text="{Binding HttpPort, UpdateSourceTrigger=PropertyChanged}"
+                                     Height="38"
+                                     materialDesign:HintAssist.Hint="auto" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Style="{StaticResource UI.Divider}" Margin="0,12,0,10" />
+
+                    <CheckBox Style="{StaticResource UI.DarkCheckBox}"
+                              Content="Allow connections from LAN (listen on all interfaces)"
+                              IsChecked="{Binding AllowLanConnections}" Margin="0,4" />
+                    <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                               TextWrapping="Wrap"
+                               Text="Other devices on your network can use this PC as a proxy. Make sure to allow inbound traffic to the SOCKS/HTTP ports in Windows Firewall." />
+
+                    <Border Margin="0,10,0,0"
+                            Padding="12"
+                            CornerRadius="8"
+                            Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                            BorderThickness="1"
+                            Visibility="{Binding AllowLanConnections, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding LanProxyInfo}"
+                                       TextWrapping="Wrap"
+                                       FontFamily="Consolas, Cascadia Mono, monospace"
+                                       FontSize="12"
+                                       LineHeight="18" />
+                            <TextBlock Text="Authentication (optional):"
+                                       FontSize="11" FontWeight="SemiBold" Opacity="0.8"
+                                       Margin="0,10,0,4" />
+                            <Grid Margin="0,2,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Style="{StaticResource UI.CustomTextBox}"
+                                         Height="36"
+                                         materialDesign:HintAssist.Hint="Username"
+                                         Text="{Binding LanProxyUsername, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Column="2"
+                                         Style="{StaticResource UI.CustomTextBox}"
+                                         Height="36"
+                                         materialDesign:HintAssist.Hint="Password"
+                                         Text="{Binding LanProxyPassword, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <TextBlock Text="If set, LAN clients must authenticate with these credentials."
+                                       FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10"
+                    Visibility="{Binding IsStandalonePsiphon, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="ServerNetwork" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Upstream Proxy" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Turn on to route Psiphon through a proxy. HTTP / SOCKS5 / SOCKS4a." />
+                        </StackPanel>
+
+                        <Button Grid.Column="2"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Content="Clear"
+                                Margin="0,0,10,0"
+                                Padding="12,0" Height="32"
+                                VerticalAlignment="Center"
+                                ToolTip="Erase the address, port and credentials"
+                                Command="{Binding ClearUpstreamProxyCommand}" />
+                        <ToggleButton Grid.Column="3"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                      IsChecked="{Binding UpstreamProxyEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center"
+                                      ToolTip="Enable to use the proxy below; off means Se7en Pro dials directly" />
+                    </Grid>
+
+                    <StackPanel IsEnabled="{Binding UpstreamProxyEnabled}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="TYPE" Margin="0,0,0,6" />
+                                <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                                          Height="38"
+                                          ItemsSource="{Binding ProxySchemes}"
+                                          SelectedItem="{Binding SelectedProxyScheme}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="HOST / IP" Margin="0,0,0,6" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}"
+                                         Height="38"
+                                         Text="{Binding ProxyHost, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="e.g. 192.168.1.1 or proxy.corp" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="PORT" Margin="0,0,0,6" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}"
+                                         Height="38"
+                                         Text="{Binding ProxyPort, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="e.g. 8080" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="USERNAME (OPTIONAL)" Margin="0,0,0,6" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}"
+                                         Height="38"
+                                         Text="{Binding ProxyUsername, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="leave empty if none" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="PASSWORD (OPTIONAL)" Margin="0,0,0,6" />
+                                <PasswordBox materialDesign:HintAssist.Hint="leave empty if none"
+                                             IsEnabled="{Binding SupportsProxyPassword}"
+                                             IsHitTestVisible="{Binding SupportsProxyPassword}"
+                                             Height="38"
+                                             Padding="12,8"
+                                             Background="#FF14141E"
+                                             BorderBrush="{StaticResource BorderBrushDefault}"
+                                             BorderThickness="1"
+                                             Foreground="{DynamicResource TextPrimaryBrush}"
+                                             x:Name="ProxyPasswordBox" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <Border Background="#15F59E0B"
+                            BorderBrush="#40F59E0B"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10"
+                            Margin="0,14,0,0"
+                            Visibility="{Binding HasUpstreamProxyWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0"
+                                                     Kind="AlertOutline"
+                                                     Width="18" Height="18"
+                                                     Margin="0,1,10,0"
+                                                     VerticalAlignment="Top"
+                                                     Foreground="#FBBF24" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding UpstreamProxyWarning}"
+                                       FontSize="12"
+                                       Foreground="#FBBF24"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="Application" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="App Behavior" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Startup preferences and window close behavior." />
+                        </StackPanel>
+                    </Grid>
+                    <CheckBox Style="{StaticResource UI.DarkCheckBox}"
+                              Content="Auto-connect on startup" IsChecked="{Binding AutoConnect}" Margin="0,4" />
+                    <CheckBox Style="{StaticResource UI.DarkCheckBox}"
+                              Content="Start with Windows" IsChecked="{Binding StartWithWindows}" Margin="0,4" />
+
+                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="WHEN CLOSING THE WINDOW" Margin="0,12,0,6" />
+                    <ComboBox Style="{StaticResource UI.CustomComboBox}"
+                              Height="38"
+                              ItemsSource="{Binding CloseActions}"
+                              SelectedItem="{Binding SelectedCloseAction}"
+                              DisplayMemberPath="Display"
+                              HorizontalAlignment="Stretch"
+                              ToolTip="What should happen when you press the window's X button" />
+                    <TextBlock Style="{StaticResource UI.FieldHelper}"
+                               Text="Pick a default action or let Se7en Pro ask each time."
+                               Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="16,14" Margin="0,0,0,20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0"
+                            Style="{StaticResource UI.PrimaryButton}"
+                            Content="{Binding SaveButtonText}"
+                            Command="{Binding SaveCommand}"
+                            MinWidth="170" Height="40"
+                            FontSize="13.5" FontWeight="SemiBold" />
+                    <Button Grid.Column="2"
+                            Style="{StaticResource UI.GhostButton}"
+                            Background="{DynamicResource Surface.SubtleBg}"
+                            BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                            BorderThickness="1"
+                            Content="Reset advanced to defaults"
+                            Height="40" Padding="18,0"
+                            Command="{Binding ResetAdvancedCommand}" />
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
