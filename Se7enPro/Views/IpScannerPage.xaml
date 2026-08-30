@@ -22,11 +22,14 @@
     <materialDesign:DialogHost
         IsOpen="{Binding IsSettingsOpen, Mode=TwoWay}"
         CloseOnClickAway="False"
-        OverlayBackground="#B3000000"
+        OverlayBackground="#99000000"
+        DialogBackground="Transparent"
         DialogTheme="Inherit">
 
         <materialDesign:DialogHost.DialogContent>
-            <Border Width="840" MaxHeight="660"
+            <Border MaxWidth="780" MaxHeight="660"
+                    HorizontalAlignment="Center"
+                    Margin="16"
                     CornerRadius="14"
                     Background="#FF14141E"
                     BorderBrush="#FF2A2A3E"
@@ -74,6 +77,7 @@
                             Background="#FF101018"
                             BorderBrush="#FF202030"
                             BorderThickness="0,1,0,0"
+                            CornerRadius="0,0,14,14"
                             Padding="20,12">
                         <Grid>
                             <Grid.ColumnDefinitions>

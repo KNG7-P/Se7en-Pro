@@ -9,8 +9,8 @@
         mc:Ignorable="d"
         Title="Se7en Pro"
         Icon="pack://application:,,,/Assets/app.ico"
-        Width="1120" Height="740"
-        MinWidth="940" MinHeight="620"
+        Width="1120" Height="800"
+        MinWidth="940" MinHeight="770"
         SizeToContent="Manual"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
@@ -159,7 +159,7 @@
                     <DockPanel LastChildFill="True">
 
                         <Border DockPanel.Dock="Bottom" Padding="14,10" Opacity="0.6">
-                            <TextBlock Text="v1.0.2  •  Windows Client"
+                            <TextBlock Text="v1.0.3  •  Windows Client"
                                        FontSize="10.5"
                                        HorizontalAlignment="Center"
                                        Foreground="{DynamicResource TextMutedBrush}" />

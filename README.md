@@ -6,9 +6,9 @@
 
 **Modern Multi-Engine Windows Client & Anti-Censorship Suite**
 
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-blue.svg?style=flat-square)](https://microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x86%20%7C%20x64)-blue.svg?style=flat-square)](https://microsoft.com/windows)
 [![Framework](https://img.shields.io/badge/Framework-.NET%208.0%20%7C%20WPF-purple.svg?style=flat-square)](https://dotnet.microsoft.com/)
-[![Version](https://img.shields.io/badge/Version-v1.0.2-orange.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/releases)
+[![Version](https://img.shields.io/badge/Version-v1.0.3-orange.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/releases)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
 [🇬🇧 English](#-english) | [🇮🇷 فارسی](#-فارسی)
@@ -53,19 +53,6 @@ Se7en Pro integrates four distinct tunneling cores and supports flexible chainin
 
 ---
 
-### 🚀 What's New in v1.0.2
-
-| Feature Area | Improvements in v1.0.2 |
-| :--- | :--- |
-| **Engine Overhaul** | Replaced legacy TUN with modern **Wintun + tun2socks** kernel routing engine. |
-| **New Protocols** | Integrated **Aether (MASQUE/WARP)**, **Tor Expert Bundle (Lyrebird/Conjure)**, and **Conduit**. |
-| **Chained Modes** | Added **Psiphon-over-WARP** and **Tor-over-WARP** chained transport modes. |
-| **Split Tunneling** | Full per-application app picker + domain-level bypass with split-aware DNS forwarder. |
-| **Obsidian UI** | Complete visual redesign with animated controls, dark modals, and responsive hero dashboard. |
-| **Performance** | Offloaded background networking, instant startup pipeline, and zero CPU idle footprint. |
-
----
-
 ### 💡 Acknowledgements & Credits
 
 * **Chained Tunneling Architecture (Psiphon/Tor over WARP)**: Inspired by and credited to the Android [MSN-GUARD](https://github.com/mbm110/MSN-GUARD) project by **[mbm110](https://github.com/mbm110)**.
@@ -94,7 +81,7 @@ public const string SponsorId           = "YOUR_SPONSOR_ID";
 ### 🛠️ Build
 
 **Requirements**:
-* Windows 10 / 11 (x64)
+* Windows 10 / 11 (x86 / x64)
 * [.NET SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 ```powershell
@@ -158,19 +145,6 @@ Redistributable third-party binaries bundled under `Se7enPro/Resources/` remain 
 
 ---
 
-### 🚀 تغییرات نسخه 1.0.2
-
-| بخش | تغییرات در نسخه 1.0.2 |
-| :--- | :--- |
-| **موتور تانل** | جایگزینی کامل با درایور پرسرعت **Wintun + tun2socks** در سطح کرنل ویندوز. |
-| **پروتکل‌های جدید** | اضافه شدن هسته‌های **Aether (MASQUE/WARP)**، **Tor (Lyrebird/Conjure)** و **Conduit**. |
-| **اتصالات زنجیره‌ای** | پیاده‌سازی متدهای ترکیبی **Psiphon-over-WARP** و **Tor-over-WARP**. |
-| **اسپلیت تانل** | تفکیک ترافیک بر اساس نرم‌افزارها (App Picker) و دامنه‌ها با DNS اختصاصی. |
-| **رابط کاربری** | بازطراحی کامل با تم Obsidian، کنترل‌های مدرن، دیالوگ‌های تیره و کارت‌های واکنش‌گرا. |
-| **بهینه‌سازی** | کاهش چشمگیر مصرف CPU، لود آنی برنامه و پردازش چندنخی لاگ‌ها و اسکنر. |
-
----
-
 ### 💡 قدردانی و کردیت‌ها (Credits)
 
 * **ایده و متد اتصال زنجیره‌ای (سایفون/تور روی وارپ)**: برگرفته و الهام‌گرفته‌شده از پروژه اندرویدی ارزشمند [MSN-GUARD](https://github.com/mbm110/MSN-GUARD) توسعه‌داده‌شده توسط **[mbm110](https://github.com/mbm110)**.
@@ -198,7 +172,7 @@ public const string SponsorId           = "YOUR_SPONSOR_ID";
 ### 🛠️ نحوه بیلد و کامپایل
 
 **پیش‌نیازها**:
-* ویندوز 10 یا 11 (نسخه 64 بیتی)
+* ویندوز 10 یا 11 (نسخه‌های 32 و 64 بیتی)
 * [.NET SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 ```powershell

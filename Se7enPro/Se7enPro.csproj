@@ -18,9 +18,9 @@
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
     <UseAppHost>true</UseAppHost>
-    <Version>1.0.2</Version>
-    <AssemblyVersion>1.0.2.0</AssemblyVersion>
-    <FileVersion>1.0.2.0</FileVersion>
+    <Version>1.0.3</Version>
+    <AssemblyVersion>1.0.3.0</AssemblyVersion>
+    <FileVersion>1.0.3.0</FileVersion>
     <Product>Se7en Pro</Product>
     <Company>Se7en Pro</Company>
     <Description>Se7en Pro — modern Windows client</Description>

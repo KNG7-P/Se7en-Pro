@@ -63,8 +63,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private CancellationTokenSource? _statsCts;
     private NetworkInterface? _cachedTunNic;
 
-    public long BytesSent => _cachedBytesSent > 0 ? _cachedBytesSent : _active.BytesSent;
-    public long BytesReceived => _cachedBytesReceived > 0 ? _cachedBytesReceived : _active.BytesReceived;
+    public long BytesSent => Math.Max(_cachedBytesSent, _active.BytesSent);
+    public long BytesReceived => Math.Max(_cachedBytesReceived, _active.BytesReceived);
 
     private void StartStatsMonitor()
     {
@@ -107,9 +107,10 @@ public sealed class ConnectionManager : ITunnelCoreManager
             var nic = _cachedTunNic;
             if (nic is null || nic.OperationalStatus != OperationalStatus.Up)
             {
+
                 _cachedTunNic = NetworkInterface.GetAllNetworkInterfaces()
                     .FirstOrDefault(n => n.OperationalStatus == OperationalStatus.Up &&
-                        (n.Name == "se7en_tun" || (n.Description != null && n.Description.Contains("Wintun", StringComparison.OrdinalIgnoreCase))));
+                        n.Name == "se7en_tun");
                 nic = _cachedTunNic;
             }
 
@@ -118,17 +119,16 @@ public sealed class ConnectionManager : ITunnelCoreManager
                 var stats = nic.GetIPStatistics();
                 var rx = stats.BytesReceived;
                 var tx = stats.BytesSent;
-                if (rx > 0 || tx > 0)
-                {
-                    _cachedBytesReceived = rx;
-                    _cachedBytesSent = tx;
-                    BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
+                if (rx > _cachedBytesReceived) _cachedBytesReceived = rx;
+                if (tx > _cachedBytesSent) _cachedBytesSent = tx;
+                BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
+                return;
             }
 
-            _cachedBytesSent = _active.BytesSent;
-            _cachedBytesReceived = _active.BytesReceived;
+            var activeSent = _active.BytesSent;
+            var activeRecv = _active.BytesReceived;
+            if (activeSent > _cachedBytesSent) _cachedBytesSent = activeSent;
+            if (activeRecv > _cachedBytesReceived) _cachedBytesReceived = activeRecv;
             BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
         }
         catch { }
@@ -182,7 +182,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
         await _lifecycleGate.WaitAsync();
         try
         {
-            await SafeStopAsync(_active);
+            await StopAllEnginesAsync();
             ClearSystemProxyIfApplied();
         }
         finally
@@ -205,24 +205,36 @@ public sealed class ConnectionManager : ITunnelCoreManager
                 return;
             }
 
-            if (!ReferenceEquals(_active, desired))
-            {
-                _logger.LogInformation("Switching engine {From} -> {To}",
-                    _active.Method, desired.Method);
-                await SafeStopAsync(_active);
-                SwitchActiveTo(desired);
-                await _active.StartAsync();
-            }
-            else
-            {
-                await SafeStopAsync(_active);
-                await _active.StartAsync();
-            }
+            _logger.LogInformation("Switching engine {From} -> {To}",
+                _active.Method, desired.Method);
+
+            await StopAllEnginesAsync();
+            SwitchActiveTo(desired);
+            await _active.StartAsync();
         }
         finally
         {
             _lifecycleGate.Release();
         }
+    }
+
+    private async Task StopAllEnginesAsync()
+    {
+        TunnelCoreManager.UpstreamProxyUrlOverride = null;
+        TorEngine.Socks5ProxyOverride = null;
+        AetherEngine.SocksPortOverride = null;
+        AetherEngine.MethodOverride = null;
+
+        var tasks = new List<Task>
+        {
+            SafeStopAsync(_psiphon),
+            SafeStopAsync(_aether),
+            SafeStopAsync(_tor)
+        };
+        if (_psiphonOverWarp is not null) tasks.Add(SafeStopAsync(_psiphonOverWarp));
+        if (_torOverWarp is not null) tasks.Add(SafeStopAsync(_torOverWarp));
+
+        await Task.WhenAll(tasks);
     }
 
     private static async Task SafeStopAsync(IConnectionEngine engine)
@@ -234,7 +246,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
     {
         try
         {
-            if (!_settings.Settings.SetSystemProxy || _settings.Settings.SystemWideTunneling)
+            var isTunActive = _settings.Settings.SystemWideTunneling && AdminElevation.IsAdministrator();
+            if (!_settings.Settings.SetSystemProxy || isTunActive)
             {
                 ClearSystemProxyIfApplied();
                 return;

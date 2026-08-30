@@ -29,6 +29,8 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
     private bool _suppressRegionSideEffects;
     private int _bytesUpdateQueued;
+    private int _progressUpdateQueued;
+    private int _routeUpdateQueued;
 
     public override string Title => "Home";
     public override string Route => "home";
@@ -49,11 +51,16 @@ public sealed partial class HomeViewModel : PageViewModelBase
         _selectedEgressRegion = ReadRegionFromSettings();
 
         _tunnel.StateChanged += (_, s) => Post(() => ApplyState(s));
-        _tunnel.ConnectProgressChanged += (_, _) => Post(() =>
+        _tunnel.ConnectProgressChanged += (_, _) =>
         {
-            OnPropertyChanged(nameof(ConnectingProgress));
-            OnPropertyChanged(nameof(ConnectingProgressText));
-        });
+            if (Interlocked.Exchange(ref _progressUpdateQueued, 1) == 1) return;
+            Post(() =>
+            {
+                Interlocked.Exchange(ref _progressUpdateQueued, 0);
+                OnPropertyChanged(nameof(ConnectingProgress));
+                OnPropertyChanged(nameof(ConnectingProgressText));
+            });
+        };
         _tunnel.BytesTransferredChanged += (_, _) =>
         {
 
@@ -64,20 +71,25 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 ApplyBytes();
             });
         };
-        _tunnel.RouteChanged += (_, _) => Post(() =>
+        _tunnel.RouteChanged += (_, _) =>
         {
-            OnPropertyChanged(nameof(CurrentRouteIp));
-            OnPropertyChanged(nameof(CurrentRouteSni));
-            OnPropertyChanged(nameof(HasCurrentRoute));
-            OnPropertyChanged(nameof(HasRouteIp));
-            OnPropertyChanged(nameof(HasRouteSni));
-            OnPropertyChanged(nameof(ServerRegionCode));
-            OnPropertyChanged(nameof(ServerRegionName));
-            OnPropertyChanged(nameof(HasRegion));
-            OnPropertyChanged(nameof(HasServerRegion));
-            CopyCurrentIpCommand.NotifyCanExecuteChanged();
-            CopyCurrentSniCommand.NotifyCanExecuteChanged();
-        });
+            if (Interlocked.Exchange(ref _routeUpdateQueued, 1) == 1) return;
+            Post(() =>
+            {
+                Interlocked.Exchange(ref _routeUpdateQueued, 0);
+                OnPropertyChanged(nameof(CurrentRouteIp));
+                OnPropertyChanged(nameof(CurrentRouteSni));
+                OnPropertyChanged(nameof(HasCurrentRoute));
+                OnPropertyChanged(nameof(HasRouteIp));
+                OnPropertyChanged(nameof(HasRouteSni));
+                OnPropertyChanged(nameof(ServerRegionCode));
+                OnPropertyChanged(nameof(ServerRegionName));
+                OnPropertyChanged(nameof(HasRegion));
+                OnPropertyChanged(nameof(HasServerRegion));
+                CopyCurrentIpCommand.NotifyCanExecuteChanged();
+                CopyCurrentSniCommand.NotifyCanExecuteChanged();
+            });
+        };
         _tunnel.NoticeReceived += (_, n) =>
         {
 
@@ -112,10 +124,11 @@ public sealed partial class HomeViewModel : PageViewModelBase
             OnPropertyChanged(nameof(ActiveMethodName));
             RaiseMethodDependentProperties();
 
-            if (_settings.Settings.SystemWideTunneling != TunModeEnabled)
+            var expectedTun = AdminElevation.IsAdministrator() && _settings.Settings.SystemWideTunneling;
+            if (expectedTun != TunModeEnabled)
             {
                 _suppressTunSideEffects = true;
-                try { TunModeEnabled = _settings.Settings.SystemWideTunneling; }
+                try { TunModeEnabled = expectedTun; }
                 finally { _suppressTunSideEffects = false; }
             }
 

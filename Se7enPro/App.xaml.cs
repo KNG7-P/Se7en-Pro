@@ -246,6 +246,7 @@ public partial class App : Application
         services.AddSingleton<IKillSwitchService, KillSwitchService>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IIpHealthChecker, IpHealthChecker>();
+        services.AddSingleton<ICoreUpdateService, CoreUpdateService>();
 
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<HomeViewModel>();

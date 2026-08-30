@@ -10,8 +10,10 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
     <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <conv:CountryCodeToFlagSourceConverter x:Key="CountryCodeToFlag" />
         <conv:InverseBoolConverter x:Key="InverseBool" />
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
         <conv:StringEqualsConverter x:Key="StringEquals" />
 
         <DataTemplate x:Key="CountryItemTemplate" DataType="{x:Type svc:Country}">
@@ -26,12 +28,78 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel HorizontalAlignment="Stretch"
-                    Margin="24,10,24,40">
+    <materialDesign:DialogHost
+        IsOpen="{Binding IsCoreUpdateSuccessDialogOpen, Mode=TwoWay}"
+        CloseOnClickAway="False"
+        OverlayBackground="#99000000"
+        DialogBackground="Transparent"
+        DialogTheme="Inherit">
 
-            <TextBlock Style="{StaticResource UI.Title}" Text="{Binding Title}"
-                       Margin="0,0,0,12" />
+        <materialDesign:DialogHost.DialogContent>
+            <Border MaxWidth="440" HorizontalAlignment="Center"
+                    CornerRadius="16"
+                    Background="#FF161622"
+                    BorderBrush="#FF2E2E44"
+                    BorderThickness="1"
+                    Padding="26,24">
+                <StackPanel HorizontalAlignment="Stretch">
+
+                    <Border Width="52" Height="52" CornerRadius="26"
+                            Background="#1800E5FF"
+                            BorderBrush="#3300E5FF"
+                            BorderThickness="1"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,16">
+                        <materialDesign:PackIcon Kind="CheckCircleOutline" Width="28" Height="28"
+                                                 Foreground="{StaticResource Brand.AccentBrush}"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <TextBlock Text="{Binding CoreUpdateSuccessTitle}"
+                               FontSize="16" FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               Margin="0,0,0,8" />
+
+                    <TextBlock Text="{Binding CoreUpdateSuccessMessage}"
+                               FontSize="13" LineHeight="20"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="0,0,0,22" />
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                Height="38"
+                                Content="Close"
+                                Command="{Binding CloseCoreUpdateSuccessDialogCommand}" />
+
+                        <Button Grid.Column="2"
+                                Style="{StaticResource UI.PrimaryButton}"
+                                Height="38"
+                                Content="Restart Now"
+                                Command="{Binding RestartApplicationCommand}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </materialDesign:DialogHost.DialogContent>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel HorizontalAlignment="Stretch"
+                        Margin="24,10,24,40">
+
+                <TextBlock Style="{StaticResource UI.Title}" Text="{Binding Title}"
+                           Margin="0,0,0,12" />
 
             <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10">
                 <StackPanel HorizontalAlignment="Stretch">
@@ -916,13 +984,13 @@
                                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Local Proxy Ports" />
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Local Proxy Ports &amp; LAN Sharing" />
                             <TextBlock Style="{StaticResource UI.SectionSubtitle}"
-                                       Text="Blank = auto-pick random open ports on next connect." />
+                                       Text="{Binding ProxyPortsSubtitle}" />
                         </StackPanel>
                     </Grid>
 
-                    <Grid>
+                    <Grid IsEnabled="{Binding SupportsCustomProxyPorts}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="14" />
@@ -931,14 +999,14 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Style="{StaticResource UI.FieldLabel}" Text="SOCKS5 PORT" Margin="0,0,0,6" />
                             <TextBox Style="{StaticResource UI.CustomTextBox}"
-                                     Text="{Binding SocksPort, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding DisplaySocksPort, UpdateSourceTrigger=PropertyChanged}"
                                      Height="38"
                                      materialDesign:HintAssist.Hint="auto" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock Style="{StaticResource UI.FieldLabel}" Text="HTTP PORT" Margin="0,0,0,6" />
                             <TextBox Style="{StaticResource UI.CustomTextBox}"
-                                     Text="{Binding HttpPort, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding DisplayHttpPort, UpdateSourceTrigger=PropertyChanged}"
                                      Height="38"
                                      materialDesign:HintAssist.Hint="auto" />
                         </StackPanel>
@@ -990,6 +1058,218 @@
                                        FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0" />
                         </StackPanel>
                     </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UI.Card}" Padding="18,14" Margin="0,0,0,10">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Width="36" Height="36" CornerRadius="9"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                Margin="0,0,12,0">
+                            <materialDesign:PackIcon Kind="LayersTripleOutline" Width="20" Height="20"
+                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource UI.SectionTitle}" Text="Network Cores &amp; Updates" />
+                            <TextBlock Style="{StaticResource UI.SectionSubtitle}"
+                                       Text="Manage, check, and update underlying tunneling engines." />
+                        </StackPanel>
+
+                        <Button Grid.Column="2"
+                                Style="{StaticResource UI.GhostButton}"
+                                Background="{DynamicResource Surface.SubtleBg}"
+                                Height="32" Padding="10,0"
+                                VerticalAlignment="Center"
+                                ToolTip="Check for all core updates"
+                                Command="{Binding CheckAllUpdatesCommand}"
+                                IsEnabled="{Binding IsCheckingAllUpdates, Converter={StaticResource InverseBool}}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" VerticalAlignment="Center"
+                                                         Visibility="{Binding IsCheckingAllUpdates, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                <ProgressBar Width="14" Height="14" IsIndeterminate="True"
+                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                             Visibility="{Binding IsCheckingAllUpdates, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                             VerticalAlignment="Center" Foreground="{StaticResource Brand.AccentBrush}" />
+                                <TextBlock Text="Check Updates" Margin="6,0,0,0" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <StackPanel>
+
+                        <Border Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Border Width="30" Height="30" CornerRadius="8"
+                                                Background="#1800E5FF" BorderBrush="#3300E5FF" BorderThickness="1"
+                                                Margin="0,0,10,0">
+                                            <materialDesign:PackIcon Kind="CloudOutline" Width="16" Height="16"
+                                                                     Foreground="{StaticResource Brand.AccentBrush}"
+                                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="Aether" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                                <Border Background="#1AFFFFFF" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding AetherInstalledVersion}" FontSize="11" FontFamily="Cascadia Mono, Consolas"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="Cloudflare WARP, MASQUE HTTP/3, and WireGuard Client"
+                                                       FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+
+                                        <TextBlock Text="{Binding AetherStatusText}"
+                                                   FontSize="11.5"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,10,0" />
+
+                                        <Button Style="{StaticResource UI.PrimaryButton}"
+                                                Height="32" Padding="12,0"
+                                                Margin="0,0,6,0"
+                                                ToolTip="Download and install latest Aether version"
+                                                Command="{Binding UpdateAetherCommand}"
+                                                Visibility="{Binding HasAetherUpdate, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                IsEnabled="{Binding IsUpdatingAether, Converter={StaticResource InverseBool}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <materialDesign:PackIcon Kind="Download" Width="14" Height="14" VerticalAlignment="Center" />
+                                                <TextBlock Text="Update Now" Margin="6,0,0,0" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+
+                                        <Button Style="{StaticResource UI.GhostButton}"
+                                                Height="32" Padding="8,0"
+                                                Margin="0,0,6,0"
+                                                ToolTip="Reinstall / Re-download latest Aether core"
+                                                Command="{Binding ReinstallAetherCommand}"
+                                                IsEnabled="{Binding IsUpdatingAether, Converter={StaticResource InverseBool}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <materialDesign:PackIcon Kind="CloudDownloadOutline" Width="14" Height="14" VerticalAlignment="Center" />
+                                                <TextBlock Text="Reinstall" Margin="5,0,0,0" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+
+                                        <Button Style="{StaticResource UI.GhostButton}"
+                                                Height="32" Padding="9,0"
+                                                ToolTip="Check latest Aether version on GitHub"
+                                                Command="{Binding CheckAetherUpdateCommand}"
+                                                IsEnabled="{Binding IsCheckingAetherUpdate, Converter={StaticResource InverseBool}}">
+                                            <Grid Width="14" Height="14">
+                                                <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14"
+                                                                         Visibility="{Binding IsCheckingAetherUpdate, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                                <ProgressBar Width="14" Height="14" IsIndeterminate="True"
+                                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                                             Visibility="{Binding IsCheckingAetherUpdate, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                             Foreground="{StaticResource Brand.AccentBrush}" />
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+
+                                <ProgressBar Grid.Row="1"
+                                             Height="3"
+                                             Margin="0,10,0,2"
+                                             Value="{Binding AetherUpdateProgress}"
+                                             Maximum="100"
+                                             Foreground="{StaticResource Brand.AccentBrush}"
+                                             Background="#22FFFFFF"
+                                             Visibility="{Binding IsUpdatingAether, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Background="{DynamicResource Surface.SubtleBg}"
+                                BorderBrush="{DynamicResource Surface.SubtleBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="14,12"
+                                Margin="0,0,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Width="30" Height="30" CornerRadius="8"
+                                            Background="#188A2BE2" BorderBrush="#338A2BE2" BorderThickness="1"
+                                            Margin="0,0,10,0">
+                                        <materialDesign:PackIcon Kind="ShieldKeyOutline" Width="16" Height="16"
+                                                                 Foreground="#BA68C8"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Tor Core" FontWeight="SemiBold" FontSize="13"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <Border Background="#1AFFFFFF" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding TorInstalledVersion}" FontSize="11" FontFamily="Cascadia Mono, Consolas"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="Onion Routing, Lyrebird &amp; Conjure Pluggable Transports"
+                                                   FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding TorStatusText}"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,12,0" />
+
+                                    <Button Style="{StaticResource UI.GhostButton}"
+                                            Height="32" Padding="10,0"
+                                            ToolTip="Check Tor core version"
+                                            Command="{Binding CheckTorUpdateCommand}"
+                                            IsEnabled="{Binding IsCheckingTorUpdate, Converter={StaticResource InverseBool}}">
+                                        <Grid Width="14" Height="14">
+                                            <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14"
+                                                                     Visibility="{Binding IsCheckingTorUpdate, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                            <ProgressBar Width="14" Height="14" IsIndeterminate="True"
+                                                         Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                                         Visibility="{Binding IsCheckingTorUpdate, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                         Foreground="{StaticResource Brand.AccentBrush}" />
+                                        </Grid>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -1193,4 +1473,5 @@
             </Border>
         </StackPanel>
     </ScrollViewer>
+    </materialDesign:DialogHost>
 </UserControl>

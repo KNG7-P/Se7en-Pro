@@ -32,6 +32,8 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
     private int _processGeneration;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
+    private readonly LocalProxyBridge _socksBridge = new();
+    private readonly LocalProxyBridge _httpBridge = new();
 
     protected LocalSocksEngineBase(
         ILogger logger,
@@ -41,7 +43,12 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         _logger = logger;
         _settings = settings;
         _childGuard = childGuard;
+
+        _socksBridge.BytesTransferredChanged += OnBridgeBytesChanged;
+        _httpBridge.BytesTransferredChanged += OnBridgeBytesChanged;
     }
+
+    private void OnBridgeBytesChanged(object? sender, EventArgs e) => RaiseBytesChanged();
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
     public int SocksProxyPort { get; private set; }
@@ -56,8 +63,8 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
     private readonly List<string> _availableRegions = new();
     public IReadOnlyList<string> AvailableEgressRegions => _availableRegions.AsReadOnly();
 
-    public long BytesSent { get; protected set; }
-    public long BytesReceived { get; protected set; }
+    public long BytesSent => _socksBridge.BytesSent + _httpBridge.BytesSent;
+    public long BytesReceived => _socksBridge.BytesReceived + _httpBridge.BytesReceived;
 
     public int ConnectProgressPercent { get; protected set; }
     public string ConnectProgressText { get; protected set; } = "";
@@ -132,8 +139,6 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         SetState(ConnectionState.Connecting);
         Log($"Starting {EngineDisplayName}...");
 
-        BytesSent = 0;
-        BytesReceived = 0;
         HttpProxyPort = 0;
         ConnectedServerRegion = "";
         CurrentRouteIp = "";
@@ -149,12 +154,86 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
                 WorkSubdirectory);
             Directory.CreateDirectory(workDir);
 
-            var initialSocksPort = PickFreeLoopbackPort();
-            var httpPort = PickFreeLoopbackPort(avoid: initialSocksPort);
-            var launch = Prepare(workDir, initialSocksPort, httpPort);
-            var socksPort = launch.SocksPortOverride ?? initialSocksPort;
-            SocksProxyPort = socksPort;
-            HttpProxyPort = launch.HttpProxyPort;
+            var s = _settings.Settings;
+            var bindAddr = s.AllowLanConnections ? IPAddress.Any : IPAddress.Loopback;
+
+            var requestedSocks = SanitizeListenPort(s.LocalSocksProxyPort);
+            var requestedHttp = SanitizeListenPort(s.LocalHttpProxyPort);
+
+            if (requestedSocks != 0 && requestedHttp != 0 && requestedSocks == requestedHttp)
+            {
+                throw new InvalidOperationException(
+                    $"SOCKS and HTTP proxy ports cannot both be set to {requestedSocks}. " +
+                    "Give them different ports or set them to 0 (auto) in Settings.");
+            }
+
+            int publishedSocks;
+            if (requestedSocks > 0)
+            {
+                if (!IsPortBindable(bindAddr, requestedSocks, out var reason))
+                {
+                    throw new InvalidOperationException(
+                        $"The SOCKS port {requestedSocks} can't be opened ({reason}). " +
+                        "Pick a different port or set it to 0 (auto) in Settings.");
+                }
+                publishedSocks = requestedSocks;
+            }
+            else
+            {
+                publishedSocks = PickFreeLoopbackPort();
+            }
+
+            int publishedHttp;
+            if (requestedHttp > 0)
+            {
+                if (!IsPortBindable(bindAddr, requestedHttp, out var reason))
+                {
+                    throw new InvalidOperationException(
+                        $"The HTTP port {requestedHttp} can't be opened ({reason}). " +
+                        "Pick a different port or set it to 0 (auto) in Settings.");
+                }
+                publishedHttp = requestedHttp;
+            }
+            else
+            {
+                publishedHttp = PickFreeLoopbackPort(publishedSocks);
+            }
+
+            var avoidList = new List<int> { publishedSocks, publishedHttp };
+            var coreSocks = PickFreeLoopbackPort(avoidList.ToArray());
+            avoidList.Add(coreSocks);
+            var coreHttp = PickFreeLoopbackPort(avoidList.ToArray());
+
+            var launch = Prepare(workDir, coreSocks, coreHttp);
+            var actualCoreSocks = launch.SocksPortOverride ?? coreSocks;
+            var actualCoreHttp = launch.HttpProxyPort;
+
+            if (launch.SocksPortOverride.HasValue)
+            {
+                SocksProxyPort = actualCoreSocks;
+                HttpProxyPort = actualCoreHttp;
+            }
+            else
+            {
+                _socksBridge.Start(publishedSocks, actualCoreSocks, bindAddr);
+                if (actualCoreHttp > 0)
+                {
+                    _httpBridge.Start(publishedHttp, actualCoreHttp, bindAddr);
+                    HttpProxyPort = publishedHttp;
+                }
+                else
+                {
+                    HttpProxyPort = 0;
+                }
+                SocksProxyPort = publishedSocks;
+
+                Log($"SOCKS running on port {publishedSocks}");
+                if (HttpProxyPort > 0)
+                {
+                    Log($"HTTP proxy running on port {HttpProxyPort}");
+                }
+            }
+            var socksPort = SocksProxyPort;
 
             var psi = new ProcessStartInfo
             {
@@ -269,10 +348,12 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         {
             _process = null;
             _ = Task.Run(() => DisposeProcessQuietly(proc));
+            _socksBridge.Stop();
+            _httpBridge.Stop();
+            _socksBridge.ResetCounters();
+            _httpBridge.ResetCounters();
             SocksProxyPort = 0;
             HttpProxyPort = 0;
-            BytesSent = 0;
-            BytesReceived = 0;
             ConnectedServerRegion = "";
             CurrentRouteIp = "";
             CurrentRouteSni = "";
@@ -572,17 +653,48 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         }
     }
 
-    protected static int PickFreeLoopbackPort(int avoid = 0)
+    private static int SanitizeListenPort(int port)
+        => port is >= 1 and <= 65535 ? port : 0;
+
+    private static bool IsPortBindable(IPAddress addr, int port, out string reason)
+    {
+        reason = "";
+        TcpListener? listener = null;
+        try
+        {
+            listener = new TcpListener(addr, port);
+            listener.Start();
+            return true;
+        }
+        catch (SocketException ex)
+        {
+            reason = ex.SocketErrorCode == SocketError.AddressAlreadyInUse
+                ? "already in use"
+                : ex.SocketErrorCode.ToString();
+            return false;
+        }
+        catch (Exception ex)
+        {
+            reason = ex.Message;
+            return false;
+        }
+        finally
+        {
+            try { listener?.Stop(); } catch { }
+        }
+    }
+
+    protected static int PickFreeLoopbackPort(params int[] avoid)
     {
 
-        for (var attempt = 0; attempt < 32; attempt++)
+        for (var attempt = 0; attempt < 64; attempt++)
         {
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
             int port;
             try { port = ((IPEndPoint)listener.LocalEndpoint).Port; }
             finally { listener.Stop(); }
-            if (port != avoid) return port;
+            if (Array.IndexOf(avoid, port) < 0) return port;
         }
         throw new InvalidOperationException("Could not find a free loopback port");
     }
@@ -603,6 +715,10 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         return destPath;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex RustLogPrefixRegex = new(
+        @"^\[\d{4}-\d{2}-\d{2}T[\d:.]+Z\s+(?:INFO|WARN|ERROR|DEBUG|TRACE)\s+[^\]]+\]\s*",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
     protected void Log(string line)
     {
         LogLineAppended?.Invoke(this, line);
@@ -612,76 +728,11 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
     {
         if (string.IsNullOrWhiteSpace(line)) return;
         try { OnCoreLine(line); } catch { }
-        Log(LogSanitizer.Scrub(line));
-    }
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GetProcessIoCounters(IntPtr hProcess, out IO_COUNTERS counters);
+        var clean = RustLogPrefixRegex.Replace(line, "").Trim();
+        if (string.IsNullOrEmpty(clean)) clean = line;
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct IO_COUNTERS
-    {
-        public ulong ReadOperationCount;
-        public ulong WriteOperationCount;
-        public ulong OtherOperationCount;
-        public ulong ReadTransferCount;
-        public ulong WriteTransferCount;
-        public ulong OtherTransferCount;
-    }
-
-    private Timer? _trafficTimer;
-    private ulong _baselineBytesRead;
-    private ulong _baselineBytesWritten;
-
-    private void StartTrafficPolling()
-    {
-        StopTrafficPolling();
-        var proc = _process;
-        if (proc is null || proc.HasExited) return;
-
-        try
-        {
-            if (GetProcessIoCounters(proc.Handle, out var initial))
-            {
-                _baselineBytesRead = initial.ReadTransferCount;
-                _baselineBytesWritten = initial.WriteTransferCount;
-            }
-        }
-        catch { }
-
-        _trafficTimer = new Timer(_ =>
-        {
-            var p = _process;
-            if (p is null || p.HasExited || State != ConnectionState.Connected) return;
-
-            try
-            {
-                if (GetProcessIoCounters(p.Handle, out var io))
-                {
-                    var rx = io.ReadTransferCount >= _baselineBytesRead
-                        ? (long)(io.ReadTransferCount - _baselineBytesRead)
-                        : (long)io.ReadTransferCount;
-                    var tx = io.WriteTransferCount >= _baselineBytesWritten
-                        ? (long)(io.WriteTransferCount - _baselineBytesWritten)
-                        : (long)io.WriteTransferCount;
-
-                    BytesReceived = rx;
-                    BytesSent = tx;
-                    RaiseBytesChanged();
-                }
-            }
-            catch { }
-        }, null, 1000, 1000);
-    }
-
-    private void StopTrafficPolling()
-    {
-        try
-        {
-            _trafficTimer?.Dispose();
-        }
-        catch { }
-        _trafficTimer = null;
+        Log(LogSanitizer.Scrub(clean));
     }
 
     private void SetState(ConnectionState s)
@@ -694,17 +745,17 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         if (s == ConnectionState.Connected)
         {
             SetConnectProgress(100, "Connected");
-            StartTrafficPolling();
+
         }
         else
         {
-            StopTrafficPolling();
+
             if (s is ConnectionState.Disconnected or ConnectionState.Error)
             {
                 SetConnectProgress(0, "");
-                BytesSent = 0;
-                BytesReceived = 0;
-                RaiseBytesChanged();
+
+                _socksBridge.ResetCounters();
+                _httpBridge.ResetCounters();
             }
             else if (s == ConnectionState.Connecting && ConnectProgressPercent == 0)
             {
@@ -729,7 +780,6 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
     private void DisposeProcessQuietly(Process? proc)
     {
         if (proc is null) return;
-        StopTrafficPolling();
         try { proc.CancelOutputRead(); } catch { }
         try { proc.CancelErrorRead(); } catch { }
         try { proc.Dispose(); } catch { }
@@ -737,7 +787,6 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
     public void Dispose()
     {
-        StopTrafficPolling();
         try { _cts?.Cancel(); } catch { }
         try { _process?.Kill(entireProcessTree: true); } catch { }
         try { _process?.Dispose(); } catch { }

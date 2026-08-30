@@ -135,6 +135,21 @@ public sealed class AetherEngine : LocalSocksEngineBase
 
         args.Add("--quick-reconnect");
 
+        args.Add("--perf");
+        args.Add("high");
+
+        args.Add("--validate-secs");
+        args.Add("4");
+
+        args.Add("--dns");
+        args.Add("1.1.1.1,1.0.0.1");
+
+        if (method == ConnectionMethod.WireGuard)
+        {
+            args.Add("--keepalive");
+            args.Add("5");
+        }
+
         _transportLabel = method == ConnectionMethod.Masque
             ? (transport == "h2" ? "HTTP/2 (TCP)" : "HTTP/3 (QUIC)")
             : method.ToDisplayName();
@@ -143,8 +158,9 @@ public sealed class AetherEngine : LocalSocksEngineBase
 
         Log($"Launching Aether ({method.ToDisplayName()}, scan={scan}"
           + (method == ConnectionMethod.Masque ? $", transport={_transportLabel}" : "")
-          + (noize.Length > 0 ? $", noize={noize}" : "")
-          + $", socks 127.0.0.1:{socksPort}, http 127.0.0.1:{httpPort}).");
+          + (noize.Length > 0 ? $", noize={noize}" : "") + ").");
+
+        _candidatesFound = 0;
 
         return new PreparedLaunch(exePath, args, workDir,
             StdinPrimer: "1\n",
@@ -154,14 +170,18 @@ public sealed class AetherEngine : LocalSocksEngineBase
 
     private string _transportLabel = "";
     private string _obfuscationLabel = "";
+    private int _candidatesFound;
 
     protected override void OnCoreLine(string line)
     {
         var edge = Extract(line, "using cloudflare edge ");
         if (edge is not null)
         {
-            CurrentRouteIp = edge;
-            PublishRoute();
+            if (!string.Equals(CurrentRouteIp, edge, StringComparison.Ordinal))
+            {
+                CurrentRouteIp = edge;
+                PublishRoute();
+            }
             SetConnectProgress(70, $"Found edge {edge}, validating...");
             return;
         }
@@ -169,10 +189,13 @@ public sealed class AetherEngine : LocalSocksEngineBase
         var transport = Extract(line, "MASQUE transport: ");
         if (transport is not null)
         {
-
             var to = transport.IndexOf(" to ", StringComparison.Ordinal);
-            _transportLabel = to > 0 ? transport.Substring(0, to) : transport;
-            PublishRoute();
+            var parsed = to > 0 ? transport.Substring(0, to) : transport;
+            if (!string.Equals(_transportLabel, parsed, StringComparison.Ordinal))
+            {
+                _transportLabel = parsed;
+                PublishRoute();
+            }
             SetConnectProgress(80, $"Transport: {_transportLabel}");
             return;
         }
@@ -181,33 +204,75 @@ public sealed class AetherEngine : LocalSocksEngineBase
                        ?? Extract(line, "aethernoize primary profile: ");
         if (obfuscation is not null)
         {
-            _obfuscationLabel = obfuscation;
-            PublishRoute();
+            if (!string.Equals(_obfuscationLabel, obfuscation, StringComparison.Ordinal))
+            {
+                _obfuscationLabel = obfuscation;
+                PublishRoute();
+            }
         }
 
-        if (line.Contains("scanning", StringComparison.OrdinalIgnoreCase)
-            || line.Contains("candidate", StringComparison.OrdinalIgnoreCase)
-            || line.Contains("wireguard scan", StringComparison.OrdinalIgnoreCase))
+        if (line.Contains("verifying cached gateway", StringComparison.OrdinalIgnoreCase))
         {
-            SetConnectProgress(25, "Scanning Cloudflare edge candidates...");
+            var gw = Extract(line, "verifying cached gateway ");
+            var idx = gw?.IndexOf(" before", StringComparison.Ordinal) ?? -1;
+            var ip = idx > 0 ? gw!.Substring(0, idx) : gw;
+            SetConnectProgress(10, $"Verifying cached edge ({ip ?? "..."})...");
         }
-        else if (line.Contains("testing gateway", StringComparison.OrdinalIgnoreCase)
-                 || line.Contains("connecting to gateway", StringComparison.OrdinalIgnoreCase)
-                 || line.Contains("peer_validated", StringComparison.OrdinalIgnoreCase))
+        else if (line.Contains("cached gateway", StringComparison.OrdinalIgnoreCase) && line.Contains("no longer works", StringComparison.OrdinalIgnoreCase))
         {
-            SetConnectProgress(55, "Testing edge gateway connectivity...");
+            _candidatesFound = 0;
+            SetConnectProgress(15, "Cached edge expired; hunting fresh edge IPs...");
         }
-        else if (line.Contains("validat", StringComparison.OrdinalIgnoreCase)
-                 || line.Contains("data-plane", StringComparison.OrdinalIgnoreCase)
-                 || line.Contains("probe", StringComparison.OrdinalIgnoreCase))
+        else if (line.Contains("hunting for a working", StringComparison.OrdinalIgnoreCase))
         {
-            SetConnectProgress(85, "Validating data-plane connection...");
+            _candidatesFound = 0;
+            SetConnectProgress(20, "Hunting for working Cloudflare edge...");
         }
-        else if (line.Contains("socks5 server listening", StringComparison.OrdinalIgnoreCase)
-                 || line.Contains("tunnel validated", StringComparison.OrdinalIgnoreCase)
-                 || line.Contains("handshake_confirmed", StringComparison.OrdinalIgnoreCase))
+        else if (line.Contains("prober", StringComparison.OrdinalIgnoreCase) && line.Contains("scan mode=", StringComparison.OrdinalIgnoreCase))
         {
-            SetConnectProgress(95, "Finalizing tunnel...");
+            var candMatch = Extract(line, "candidates=");
+            var cCount = candMatch?.Split(' ')[0] ?? "2000+";
+            SetConnectProgress(25, $"Scanning {cCount} edge candidates in parallel...");
+        }
+        else if (line.Contains("candidate ok", StringComparison.OrdinalIgnoreCase))
+        {
+            _candidatesFound++;
+            var cand = Extract(line, "candidate ok ");
+            var pct = Math.Min(25 + (_candidatesFound * 6), 65);
+            SetConnectProgress(pct, $"Candidate OK ({_candidatesFound}): {cand ?? "found"}");
+        }
+        else if (line.Contains("selected MASQUE gateway", StringComparison.OrdinalIgnoreCase) || line.Contains("best gateway", StringComparison.OrdinalIgnoreCase))
+        {
+            var best = Extract(line, "selected MASQUE gateway ") ?? Extract(line, "best gateway ");
+            SetConnectProgress(70, $"Selected best edge: {best ?? "ready"}");
+        }
+        else if (line.Contains("[h2] connecting tcp to", StringComparison.OrdinalIgnoreCase) || line.Contains("[h3] connecting", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(75, "Connecting to edge gateway...");
+        }
+        else if (line.Contains("fragmenting client hello", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(80, "Applying TLS ClientHello fragmentation...");
+        }
+        else if (line.Contains("tls established", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(85, "TLS handshake established...");
+        }
+        else if (line.Contains("connect-ip request sent", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(88, "MASQUE tunnel requested...");
+        }
+        else if (line.Contains("connect-ip status: 200", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(90, "MASQUE connected (200), confirming data-plane...");
+        }
+        else if (line.Contains("tunnel validated", StringComparison.OrdinalIgnoreCase) || line.Contains("data-plane", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(96, "Data-plane confirmed! Exposing proxy...");
+        }
+        else if (line.Contains("socks5 server listening", StringComparison.OrdinalIgnoreCase) || line.Contains("handshake_confirmed", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(100, "Connected");
         }
     }
 

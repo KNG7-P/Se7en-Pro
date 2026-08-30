@@ -84,6 +84,15 @@ public sealed class InverseBoolConverter : IValueConverter
         Convert(value, targetType, parameter, culture);
 }
 
+public sealed class InverseBooleanToVisibilityConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is bool b && b ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotImplementedException();
+}
+
 public sealed class StateToBadgeBackgroundConverter : IValueConverter
 {
     private static readonly SolidColorBrush GreenBg = MakeFrozen("#2210B981");

@@ -512,18 +512,29 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
             case "BytesTransferred":
                 {
-
                     var changed = false;
-                    if (notice.Data.TryGetProperty("sent", out var bs) && bs.ValueKind == JsonValueKind.Number)
+                    JsonElement target = notice.Data;
+                    if (notice.Data.TryGetProperty("bytesTransferred", out var bt) && bt.ValueKind == JsonValueKind.Object)
+                    {
+                        target = bt;
+                    }
+
+                    if ((target.TryGetProperty("sent", out var bs) || target.TryGetProperty("bytesSent", out bs) || target.TryGetProperty("tx", out bs)) && bs.ValueKind == JsonValueKind.Number)
                     {
                         var d = bs.GetInt64();
                         if (d > 0) { BytesSent += d; changed = true; }
                     }
-                    if (notice.Data.TryGetProperty("received", out var br) && br.ValueKind == JsonValueKind.Number)
+                    if ((target.TryGetProperty("received", out var br) || target.TryGetProperty("bytesReceived", out br) || target.TryGetProperty("rx", out br)) && br.ValueKind == JsonValueKind.Number)
                     {
                         var d = br.GetInt64();
                         if (d > 0) { BytesReceived += d; changed = true; }
                     }
+                    if ((target.TryGetProperty("bytes", out var bTotal) || target.TryGetProperty("totalBytes", out bTotal)) && bTotal.ValueKind == JsonValueKind.Number)
+                    {
+                        var total = bTotal.GetInt64();
+                        if (total > BytesReceived) { BytesReceived = total; changed = true; }
+                    }
+
                     if (changed)
                     {
                         BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
@@ -1139,14 +1150,22 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         if (s == ConnectionState.Connected)
         {
             SetConnectProgress(100, "Connected");
+
         }
-        else if (s is ConnectionState.Disconnected or ConnectionState.Error)
+        else
         {
-            SetConnectProgress(0, "");
-        }
-        else if (s == ConnectionState.Connecting && ConnectProgressPercent == 0)
-        {
-            SetConnectProgress(15, "Connecting to Psiphon network...");
+
+            if (s is ConnectionState.Disconnected or ConnectionState.Error)
+            {
+                SetConnectProgress(0, "");
+                BytesSent = 0;
+                BytesReceived = 0;
+                BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
+            }
+            else if (s == ConnectionState.Connecting && ConnectProgressPercent == 0)
+            {
+                SetConnectProgress(15, "Connecting to Psiphon network...");
+            }
         }
 
         StateChanged?.Invoke(this, s);

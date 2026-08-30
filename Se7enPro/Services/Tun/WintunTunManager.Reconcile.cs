@@ -14,7 +14,7 @@ public sealed partial class WintunTunManager
         await _reconcileGate.WaitAsync();
         try
         {
-            var systemWide = _settings.Settings.SystemWideTunneling;
+            var systemWide = _settings.Settings.SystemWideTunneling && AdminElevation.IsAdministrator();
             var tunnelState = _tunnel.State;
             var socksPort = _tunnel.SocksProxyPort;
             var have = State is TunState.Starting or TunState.Running;

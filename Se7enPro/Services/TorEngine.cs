@@ -69,10 +69,8 @@ public sealed class TorEngine : LocalSocksEngineBase
         RaiseRouteChanged();
 
         Log(exit.Length == 2
-            ? $"Launching Tor (socks 127.0.0.1:{socksPort}, http 127.0.0.1:{httpPort}, "
-              + $"exit country {exit.ToUpperInvariant()} — strict). If no exit relay is available "
-              + "in that country the bootstrap will not finish; pick Automatic to use any exit."
-            : $"Launching Tor (socks 127.0.0.1:{socksPort}, http 127.0.0.1:{httpPort}, any exit country).");
+            ? $"Launching Tor (exit country {exit.ToUpperInvariant()} — strict). If no exit relay is available in that country the bootstrap will not finish; pick Automatic to use any exit."
+            : "Launching Tor (any exit country).");
 
         Dictionary<string, string>? env = null;
         if (!string.IsNullOrEmpty(Socks5ProxyOverride))

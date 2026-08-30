@@ -82,16 +82,31 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
         try { ConnectProgressChanged?.Invoke(this, EventArgs.Empty); } catch { }
     }
 
-    public async Task StartAsync()
+    public Task StartAsync()
     {
-        await _gate.WaitAsync();
+        _connectCts?.Cancel();
+        _connectCts = new CancellationTokenSource();
+        var ct = _connectCts.Token;
+
+        SetState(ConnectionState.Connecting);
+        _ = Task.Run(() => RunChainAsync(ct), ct);
+        return Task.CompletedTask;
+    }
+
+    private async Task RunChainAsync(CancellationToken ct)
+    {
         try
         {
-            _connectCts?.Cancel();
-            _connectCts = new CancellationTokenSource();
-            var ct = _connectCts.Token;
+            await _gate.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
 
-            SetState(ConnectionState.Connecting);
+        try
+        {
+            if (ct.IsCancellationRequested) return;
             var isTor = _method == ConnectionMethod.TorOverWarp;
             var label = isTor ? "Tor over WARP" : "Psiphon over WARP";
 
@@ -154,9 +169,12 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
 
             if (!outerConnected)
             {
-                Log("Outer WARP leg failed to establish; aborting chained session.");
-                await StopInternalAsync();
-                SetState(ConnectionState.Error);
+                if (!ct.IsCancellationRequested)
+                {
+                    Log("Outer WARP leg failed to establish; aborting chained session.");
+                    await StopInternalAsync();
+                    SetState(ConnectionState.Error);
+                }
                 return;
             }
 
@@ -189,6 +207,8 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 await Task.Delay(500, ct);
             }
 
+            if (ct.IsCancellationRequested) return;
+
             if (innerConnected)
             {
                 SetProgress(100, $"Connected ({label})");
@@ -215,24 +235,32 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
         }
         finally
         {
-            _gate.Release();
+            try { _gate.Release(); } catch { }
         }
     }
 
     public async Task StopAsync()
     {
-        await _gate.WaitAsync();
+        _connectCts?.Cancel();
+        SetState(ConnectionState.Disconnecting);
         try
         {
-            _connectCts?.Cancel();
-            SetState(ConnectionState.Disconnecting);
-            await StopInternalAsync();
-            SetProgress(0, "");
-            SetState(ConnectionState.Disconnected);
+            await _gate.WaitAsync();
+            try
+            {
+                await StopInternalAsync();
+                SetProgress(0, "");
+                SetState(ConnectionState.Disconnected);
+            }
+            finally
+            {
+                _gate.Release();
+            }
         }
-        finally
+        catch
         {
-            _gate.Release();
+            await StopInternalAsync();
+            SetState(ConnectionState.Disconnected);
         }
     }
 

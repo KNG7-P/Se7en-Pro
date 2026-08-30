@@ -166,9 +166,7 @@ public static class LogSanitizer
     {
         if (string.IsNullOrEmpty(line)) return line;
 
-        var s = Ipv4Regex.Replace(line, "<ip>");
-        s = Ipv6Regex.Replace(s, "<ipv6>");
-        s = LongHexRegex.Replace(s, "<hex>");
+        var s = LongHexRegex.Replace(line, "<hex>");
         s = LongBase64Regex.Replace(s, "<b64>");
         return s;
     }

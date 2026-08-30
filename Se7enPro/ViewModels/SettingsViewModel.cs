@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Se7enPro.Models;
@@ -26,6 +28,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     private readonly IThemeService _themeService;
     private readonly ITunnelCoreManager _tunnel;
     private readonly IStartupRegistration _startup;
+    private readonly ICoreUpdateService _coreUpdateService;
 
     private bool _suppressThemeSideEffects;
 
@@ -39,12 +42,19 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         ISettingsService settingsService,
         IThemeService themeService,
         ITunnelCoreManager tunnel,
-        IStartupRegistration startup)
+        IStartupRegistration startup,
+        ICoreUpdateService coreUpdateService)
     {
         _settingsService = settingsService;
         _themeService = themeService;
         _tunnel = tunnel;
         _startup = startup;
+        _coreUpdateService = coreUpdateService;
+
+        _aetherInstalledVersion = "v" + _coreUpdateService.GetInstalledVersion("aether");
+        _aetherLatestVersion = _aetherInstalledVersion;
+        _torInstalledVersion = "v" + _coreUpdateService.GetInstalledVersion("tor");
+        _torLatestVersion = _torInstalledVersion;
 
         var s = _settingsService.Settings;
         _selectedTheme = s.Theme;
@@ -126,11 +136,18 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         if (System.Windows.Application.Current is { } app)
         {
-            app.Dispatcher.BeginInvoke(new Action(RefreshLanProxyInfo));
+            app.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                RefreshLanProxyInfo();
+                OnPropertyChanged(nameof(DisplaySocksPort));
+                OnPropertyChanged(nameof(DisplayHttpPort));
+            }));
         }
         else
         {
             RefreshLanProxyInfo();
+            OnPropertyChanged(nameof(DisplaySocksPort));
+            OnPropertyChanged(nameof(DisplayHttpPort));
         }
     }
 
@@ -432,6 +449,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         _settingsService.Settings.LocalSocksProxyPort = ParseListenPort(value);
         _settingsService.Save();
+        OnPropertyChanged(nameof(DisplaySocksPort));
         RefreshLanProxyInfo();
     }
 
@@ -440,7 +458,48 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         _settingsService.Settings.LocalHttpProxyPort = ParseListenPort(value);
         _settingsService.Save();
+        OnPropertyChanged(nameof(DisplayHttpPort));
         RefreshLanProxyInfo();
+    }
+
+    public string DisplaySocksPort
+    {
+        get
+        {
+            if (!SupportsCustomProxyPorts)
+            {
+                var live = _tunnel.SocksProxyPort;
+                return live > 0 ? $"{live} (Auto)" : "Auto (Dynamic)";
+            }
+            return SocksPort;
+        }
+        set
+        {
+            if (SupportsCustomProxyPorts)
+            {
+                SocksPort = value;
+            }
+        }
+    }
+
+    public string DisplayHttpPort
+    {
+        get
+        {
+            if (!SupportsCustomProxyPorts)
+            {
+                var live = _tunnel.HttpProxyPort;
+                return live > 0 ? $"{live} (Auto)" : "Auto (Dynamic)";
+            }
+            return HttpPort;
+        }
+        set
+        {
+            if (SupportsCustomProxyPorts)
+            {
+                HttpPort = value;
+            }
+        }
     }
 
     [ObservableProperty] private string _saveButtonText = "Save Settings";
@@ -762,6 +821,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         OnPropertyChanged(nameof(ShowBeastMode));
         OnPropertyChanged(nameof(CanUseAutoFind));
         OnPropertyChanged(nameof(CanEditAdvancedTunneling));
+        OnPropertyChanged(nameof(SupportsCustomProxyPorts));
+        OnPropertyChanged(nameof(ProxyPortsSubtitle));
+        OnPropertyChanged(nameof(DisplaySocksPort));
+        OnPropertyChanged(nameof(DisplayHttpPort));
     }
 
     private ConnectionMethod CurrentMethod =>
@@ -770,9 +833,20 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     public bool IsStandalonePsiphon => CurrentMethod == ConnectionMethod.Psiphon;
     public bool IsPsiphonMethod => CurrentMethod is ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp;
     public bool IsAetherMethod => CurrentMethod.IsAether() || CurrentMethod.IsChained();
-    public bool IsMasqueMethod => CurrentMethod == ConnectionMethod.Masque;
+    public bool IsMasqueMethod =>
+        CurrentMethod == ConnectionMethod.Masque ||
+        (CurrentMethod.IsChained() && SelectedChainedOuterTransport is "auto" or "masque");
     public bool IsTorMethod => CurrentMethod is ConnectionMethod.Tor or ConnectionMethod.TorOverWarp;
     public bool IsChainedMethod => CurrentMethod.IsChained();
+    public bool SupportsCustomProxyPorts =>
+        CurrentMethod is ConnectionMethod.Psiphon
+                      or ConnectionMethod.Tor
+                      or ConnectionMethod.PsiphonOverWarp
+                      or ConnectionMethod.TorOverWarp;
+
+    public string ProxyPortsSubtitle => SupportsCustomProxyPorts
+        ? "Blank = auto-pick random open ports on next connect."
+        : "Ports are assigned dynamically by the core in this mode.";
 
     public string ActiveMethodDescription =>
         ConnectionMethods.FirstOrDefault(m => m.Key == SelectedConnectionMethod)?.Description ?? "";
@@ -934,6 +1008,8 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         _settingsService.Settings.ChainedOuterTransport = NormalizeChainedOuter(value);
         _settingsService.Save();
+        OnPropertyChanged(nameof(IsMasqueMethod));
+        RestartIfActive(ConnectionMethod.Masque);
     }
 
     private static string NormalizeChainedOuter(string? val) =>
@@ -1109,6 +1185,196 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         {
             host = proxy;
         }
+    }
+
+    [ObservableProperty]
+    private string _aetherInstalledVersion = "v1.7.0";
+
+    [ObservableProperty]
+    private string _aetherLatestVersion = "v1.7.0";
+
+    [ObservableProperty]
+    private string _aetherStatusText = "Up to date";
+
+    [ObservableProperty]
+    private bool _hasAetherUpdate;
+
+    [ObservableProperty]
+    private bool _isCheckingAetherUpdate;
+
+    [ObservableProperty]
+    private bool _isUpdatingAether;
+
+    [ObservableProperty]
+    private int _aetherUpdateProgress;
+
+    [ObservableProperty]
+    private string _torInstalledVersion = "v0.4.9.11";
+
+    [ObservableProperty]
+    private string _torLatestVersion = "v0.4.9.11";
+
+    [ObservableProperty]
+    private string _torStatusText = "Up to date";
+
+    [ObservableProperty]
+    private bool _isCheckingTorUpdate;
+
+    [ObservableProperty]
+    private bool _isCheckingAllUpdates;
+
+    [ObservableProperty]
+    private bool _isCoreUpdateSuccessDialogOpen;
+
+    [ObservableProperty]
+    private string _coreUpdateSuccessTitle = "";
+
+    [ObservableProperty]
+    private string _coreUpdateSuccessMessage = "";
+
+    [RelayCommand]
+    private async Task CheckAllUpdatesAsync()
+    {
+        if (IsCheckingAllUpdates || IsCheckingAetherUpdate || IsCheckingTorUpdate || IsUpdatingAether) return;
+        IsCheckingAllUpdates = true;
+
+        try
+        {
+            await Task.WhenAll(CheckAetherUpdateAsync(), CheckTorUpdateAsync());
+        }
+        finally
+        {
+            IsCheckingAllUpdates = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CheckTorUpdateAsync()
+    {
+        if (IsCheckingTorUpdate) return;
+        IsCheckingTorUpdate = true;
+        TorStatusText = "Checking for updates...";
+
+        try
+        {
+            var info = await _coreUpdateService.CheckForUpdateAsync("tor");
+            TorInstalledVersion = "v" + info.InstalledVersion;
+            TorLatestVersion = "v" + info.LatestVersion;
+            TorStatusText = "Tor core is up to date";
+        }
+        catch (Exception ex)
+        {
+            TorStatusText = "Check failed: " + ex.Message;
+        }
+        finally
+        {
+            IsCheckingTorUpdate = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CheckAetherUpdateAsync()
+    {
+        if (IsCheckingAetherUpdate || IsUpdatingAether) return;
+        IsCheckingAetherUpdate = true;
+        AetherStatusText = "Checking for updates...";
+
+        try
+        {
+            var info = await _coreUpdateService.CheckForUpdateAsync("aether");
+            AetherInstalledVersion = "v" + info.InstalledVersion;
+            AetherLatestVersion = "v" + info.LatestVersion;
+            HasAetherUpdate = info.HasUpdate;
+            AetherStatusText = info.HasUpdate
+                ? $"Update available: v{info.LatestVersion}"
+                : "Aether is up to date";
+        }
+        catch (Exception ex)
+        {
+            AetherStatusText = "Check failed: " + ex.Message;
+        }
+        finally
+        {
+            IsCheckingAetherUpdate = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ReinstallAetherAsync()
+    {
+        if (IsUpdatingAether) return;
+        await UpdateAetherAsync();
+    }
+
+    [RelayCommand]
+    private async Task UpdateAetherAsync()
+    {
+        if (IsUpdatingAether) return;
+        IsUpdatingAether = true;
+        AetherUpdateProgress = 0;
+        AetherStatusText = "Starting download...";
+
+        try
+        {
+            var progress = new Progress<int>(p =>
+            {
+                AetherUpdateProgress = p;
+                AetherStatusText = p < 80
+                    ? $"Downloading: {p}%"
+                    : (p < 95 ? "Extracting & Installing..." : "Finalizing...");
+            });
+
+            var success = await _coreUpdateService.UpdateCoreAsync("aether", progress);
+            if (success)
+            {
+                var newVer = _coreUpdateService.GetInstalledVersion("aether");
+                AetherInstalledVersion = "v" + newVer;
+                AetherLatestVersion = "v" + newVer;
+                HasAetherUpdate = false;
+                AetherStatusText = $"Updated to v{newVer}";
+
+                CoreUpdateSuccessTitle = "Aether Core Updated Successfully";
+                CoreUpdateSuccessMessage = $"Aether network engine has been successfully updated to v{newVer}.\nPlease restart the application to apply the updated core.";
+                IsCoreUpdateSuccessDialogOpen = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            AetherStatusText = "Update failed: " + ex.Message;
+        }
+        finally
+        {
+            IsUpdatingAether = false;
+        }
+    }
+
+    [RelayCommand]
+    private void RestartApplication()
+    {
+        try
+        {
+            var exe = Process.GetCurrentProcess().MainModule?.FileName ?? Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+            {
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+            }
+        }
+        catch { }
+
+        try
+        {
+            Application.Current.Shutdown();
+        }
+        catch
+        {
+            Environment.Exit(0);
+        }
+    }
+
+    [RelayCommand]
+    private void CloseCoreUpdateSuccessDialog()
+    {
+        IsCoreUpdateSuccessDialogOpen = false;
     }
 
     private static string NormalizeScheme(string? scheme)

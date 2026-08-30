@@ -151,6 +151,22 @@ public partial class MainWindow : Window
                 mmi.ptMaxSize.y = Math.Abs(rcWorkArea.Bottom - rcWorkArea.Top);
             }
         }
+
+        var source = HwndSource.FromHwnd(hwnd);
+        var dpiX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        var dpiY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+
+        var minWidth = 940.0;
+        var minHeight = 770.0;
+        if (source?.RootVisual is Window window)
+        {
+            if (window.MinWidth > 0) minWidth = window.MinWidth;
+            if (window.MinHeight > 0) minHeight = window.MinHeight;
+        }
+
+        mmi.ptMinTrackSize.x = (int)Math.Ceiling(minWidth * dpiX);
+        mmi.ptMinTrackSize.y = (int)Math.Ceiling(minHeight * dpiY);
+
         Marshal.StructureToPtr(mmi, lParam, true);
     }
 

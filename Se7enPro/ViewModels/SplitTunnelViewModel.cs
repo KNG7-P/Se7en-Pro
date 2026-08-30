@@ -40,7 +40,7 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
             string.Equals(s.SplitTunnelMode, "include", StringComparison.OrdinalIgnoreCase)
                 ? "include"
                 : "exclude";
-        _systemWideEnabled = s.SystemWideTunneling;
+        _systemWideEnabled = AdminElevation.IsAdministrator() && s.SystemWideTunneling;
         LoadSplitTunnelEntries();
 
         _settingsService.SettingsChanged += OnSettingsServiceChanged;
