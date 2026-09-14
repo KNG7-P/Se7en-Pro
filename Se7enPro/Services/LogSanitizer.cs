@@ -97,6 +97,7 @@ public static class LogSanitizer
         var m = CdnScanActiveRegex.Match(msg);
         if (m.Success)
         {
+            _cdnScanActive = true;
             var mode = m.Groups[1].Value;
             var workers = m.Groups[2].Value;
             return $"CDN scan active - {mode} mode, {workers} workers";
@@ -108,10 +109,19 @@ public static class LogSanitizer
 
         m = CdnScanFoundRegex.Match(msg);
         if (m.Success)
-            return $"CDN scan found: {m.Groups[1].Value} via {m.Groups[2].Value}";
+        {
+            var ip = m.Groups[1].Value;
+            var sni = m.Groups[2].Value;
+            return _cdnScanActive
+                ? $"CDN scan found: {ip} via {sni}"
+                : $"CDN Fronting edge: {ip} via {sni}";
+        }
 
         if (msg.Equals("cdn fronting scan stopped", StringComparison.OrdinalIgnoreCase))
+        {
+            _cdnScanActive = false;
             return "CDN scan stopped";
+        }
 
         m = BeastModeRegex.Match(msg);
         if (m.Success)
@@ -126,6 +136,9 @@ public static class LogSanitizer
 
         return Scrub(msg);
     }
+
+    private static volatile bool _cdnScanActive;
+    public static void ResetScanState() => _cdnScanActive = false;
 
     private static readonly Regex CdnScanActiveRegex = new(
         @"cdn fronting scan active\s*\(mode:\s*(\w+),\s*workers:\s*(\d+)\)",
@@ -168,6 +181,8 @@ public static class LogSanitizer
 
         var s = LongHexRegex.Replace(line, "<hex>");
         s = LongBase64Regex.Replace(s, "<b64>");
+        s = Ipv4Regex.Replace(s, "<ip4>");
+        s = Ipv6Regex.Replace(s, "<ip6>");
         return s;
     }
 }

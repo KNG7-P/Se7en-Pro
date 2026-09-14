@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -148,17 +149,21 @@ internal static class WintunRouteApi
 
     public sealed record RouteEntry(int IfIndex, IPAddress Destination, byte Prefix, IPAddress NextHop, uint Metric);
 
-    public static RouteEntry AddRoute(
+    public static RouteEntry? AddRoute(
         int ifIndex, IPAddress destination, byte prefix, IPAddress nextHop, uint metric = 0)
     {
         var row = BuildRouteRow(ifIndex, destination, prefix, nextHop, metric);
         var rc = CreateIpForwardEntry2(ref row);
-        if (rc != NoError && rc != ErrorObjectAlreadyExists)
+        if (rc == NoError)
+        {
+            return new RouteEntry(ifIndex, destination, prefix, nextHop, metric);
+        }
+        if (rc != ErrorObjectAlreadyExists)
         {
             throw new InvalidOperationException(
                 $"CreateIpForwardEntry2({destination}/{prefix} via {nextHop}) failed with Win32 error {rc}");
         }
-        return new RouteEntry(ifIndex, destination, prefix, nextHop, metric);
+        return null;
     }
 
     public static void DeleteRoute(RouteEntry entry)
@@ -365,6 +370,16 @@ internal static class WintunRouteApi
             var conns = GetActiveTcpConnections();
             foreach (var conn in conns)
             {
+                var pid = conn.Pid;
+                var fullPath = TryGetProcessPath(pid);
+                var fileName = string.IsNullOrEmpty(fullPath) ? null : Path.GetFileName(fullPath);
+                if (!string.IsNullOrEmpty(fileName) &&
+                    EngineProcessNames.All.Any(e => string.Equals(e, fileName, StringComparison.OrdinalIgnoreCase)))
+                {
+
+                    continue;
+                }
+
                 var remotePort = (ushort)IPAddress.NetworkToHostOrder((short)conn.Raw.RemotePort);
                 var localPort = (ushort)IPAddress.NetworkToHostOrder((short)conn.Raw.LocalPort);
                 if (ports.Contains((int)remotePort) || ports.Contains((int)localPort))
@@ -376,3 +391,4 @@ internal static class WintunRouteApi
         catch { }
     }
 }
+

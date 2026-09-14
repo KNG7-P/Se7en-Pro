@@ -17,6 +17,8 @@ internal sealed partial class SocksDnsForwarder
         public string? LocalDnsIp;
 
         public Action<IPAddress, string>? AddressSeen;
+
+        public bool CanPinLocalV6;
     }
 
     private volatile SplitPolicy? _split;

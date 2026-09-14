@@ -26,8 +26,15 @@ internal static class SecretStore
         0x5B, 0xE8, 0x57, 0x70, 0x08, 0x99, 0xE2, 0x9A, 0x29, 0x26, 0x82, 0x0E, 0xB8, 0x8B, 0x7E, 0x4E
     };
 
-    private static readonly ConcurrentDictionary<int, string> StringCache = new();
-    private static readonly ConcurrentDictionary<int, byte[]> BytesCache = new();
+    private static readonly ConcurrentDictionary<string, string> StringCache = new();
+    private static readonly ConcurrentDictionary<string, byte[]> BytesCache = new();
+
+    private static string CacheKey(byte[] blob)
+    {
+
+        var hash = SHA256.HashData(blob);
+        return Convert.ToBase64String(hash);
+    }
 
     private static byte[] DeriveKey()
     {
@@ -37,12 +44,14 @@ internal static class SecretStore
             salt[i] = (byte)(Alpha[i] ^ Beta[i]);
         }
         using var mac = new HMACSHA256(salt);
-        return mac.ComputeHash(Gamma);
+        var key = mac.ComputeHash(Gamma);
+        Array.Clear(salt, 0, salt.Length);
+        return key;
     }
 
     public static string DecryptString(byte[] blob)
     {
-        var key = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(blob);
+        var key = CacheKey(blob);
         if (StringCache.TryGetValue(key, out var cached))
         {
             return cached;
@@ -50,18 +59,20 @@ internal static class SecretStore
         var plain = Decrypt(blob);
         var s = Encoding.UTF8.GetString(plain);
         StringCache[key] = s;
+        Array.Clear(plain, 0, plain.Length);
         return s;
     }
 
     public static byte[] DecryptBytes(byte[] blob)
     {
-        var key = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(blob);
+        var key = CacheKey(blob);
         if (BytesCache.TryGetValue(key, out var cached))
         {
-            return cached;
+            return (byte[])cached.Clone();
         }
         var plain = Decrypt(blob);
-        BytesCache[key] = plain;
+
+        BytesCache[key] = (byte[])plain.Clone();
         return plain;
     }
 

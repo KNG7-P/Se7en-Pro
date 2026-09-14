@@ -1,19 +1,41 @@
 # =====================================================================
 #  Se7en Pro — .gitignore
-#  The repo tracks the WPF C# client (Se7enPro/) and everything it
-#  needs to build & run, including the bundled engine binaries under
-#  Se7enPro/Resources. Build output and local tooling state stay out.
 # =====================================================================
 
-# ---- Build output ----
+# ---- Build & Staging Output ----
 [Bb]in/
 [Oo]bj/
 artifacts/
 publish/
+build_staging/
 *.binlog
 *.exe.config
+TestResults/
+Output/
+installers/
 
-# ---- Visual Studio / Rider / VS Code ----
+# ---- Distribution & Archive Artifacts ----
+*.zip
+*.7z
+*.tar.gz
+
+# ---- Flutter ----
+Se7enFlutter/build/
+Se7enFlutter/.dart_tool/
+Se7enFlutter/.flutter-plugins-dependencies
+windows/flutter/ephemeral/
+**/windows/flutter/ephemeral/
+
+# ---- Sensitive / Local Server Entries & Configurations ----
+*.toml
+server_entries.bin
+server_entries.txt
+Se7enPro/Resources/server_entries.bin
+Se7enPro/Resources/server_entries.txt
+Se7enPro/Resources/aether/*.toml
+Se7enFlutter/Resources/aether/*.toml
+
+# ---- Visual Studio / Rider / VS Code / Android Studio ----
 .vs/
 .idea/
 .vscode/
@@ -22,27 +44,32 @@ publish/
 *.userosscache
 *.sln.docstates
 *.rsuser
+*.iml
 UpgradeLog*.htm
 
-# ---- Local agent / tooling state ----
+# ---- AI Agents & Local Tooling State ----
+.cursorrules
+AGENTS.md
+GEMINI.md
 .claude/
+.kilo/
+.gemini/
+.agent/
+tools/
+Se7enPro/tools/
 
-# ---- Logs & runtime state ----
+# ---- Logs & Runtime State ----
 *.log
 
-# ---- OS noise ----
+# ---- OS Noise & Temp ----
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-
-# ---- Temp / test output ----
 *.tmp
-TestResults/
 *.bak
-# ---- Secrets & Server Lists ----
-Se7enPro/Resources/server_entries.txt
-Se7enPro/Resources/server_entries.bin
-Se7enPro/Resources/aether/*.toml
-Se7enPro/Services/EmbeddedValues.plaintext.json
-*.toml
+
+# ---- Python ----
+__pycache__/
+*.pyc
+*.pyo

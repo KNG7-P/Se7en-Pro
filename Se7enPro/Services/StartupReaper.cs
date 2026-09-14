@@ -22,12 +22,15 @@ public sealed class StartupReaper : IStartupReaper
             Path.Combine(localAppData, "Se7en", "tun2socks"),
             Path.Combine(localAppData, "Se7en", "tor"),
             Path.Combine(localAppData, "Se7en", "aether"),
+            Path.Combine(localAppData, "Se7en", "shard"),
+            Path.Combine(localAppData, "Se7en", "ultra"),
             Path.Combine(localAppData, "Psiphon", "tunnel-core"),
             Path.Combine(localAppData, "Psiphon", "tun2socks"),
             Path.Combine(localAppData, "Psiphon", "singbox-tun"),
             Path.Combine(localAppData, "Psiphon", "xray-tun"),
             Path.Combine(Path.GetTempPath(), "Se7en"),
             Path.Combine(Path.GetTempPath(), "Psiphon"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources"),
         };
 
         Process[] processes;
@@ -64,7 +67,11 @@ public sealed class StartupReaper : IStartupReaper
 
                 if (string.IsNullOrEmpty(imagePath)) continue;
 
-                if (!IsUnderAny(imagePath, roots)) continue;
+                var fileName = Path.GetFileName(imagePath);
+                var isSe7enChild = fileName.StartsWith("Se7enPro.", StringComparison.OrdinalIgnoreCase)
+                    || EngineProcessNames.All.Any(name => string.Equals(name, fileName, StringComparison.OrdinalIgnoreCase) && IsUnderAny(imagePath, roots));
+
+                if (!IsUnderAny(imagePath, roots) && !isSe7enChild) continue;
 
                 _logger.LogInformation(
                     "Killing stale child pid {Pid} ({Image})",

@@ -24,6 +24,8 @@ public sealed class InstalledAppInfo
 
     public ImageSource? Icon { get; set; }
 
+    public string? IconBase64 { get; set; }
+
     public string SearchText => $"{Name}\n{FileName}\n{ExePath}";
 }
 
@@ -298,7 +300,12 @@ public static class InstalledAppsProvider
 
         try
         {
-            Parallel.ForEach(apps, options, app => app.Icon = TryExtractIcon(app.ExePath));
+            Parallel.ForEach(apps, options, app =>
+            {
+                var (source, base64) = TryExtractIconAndBase64(app.ExePath);
+                app.Icon = source;
+                app.IconBase64 = base64;
+            });
         }
         catch (OperationCanceledException) { throw; }
         catch
@@ -307,24 +314,30 @@ public static class InstalledAppsProvider
         }
     }
 
-    private static ImageSource? TryExtractIcon(string exePath)
+    private static (ImageSource? Source, string? Base64) TryExtractIconAndBase64(string exePath)
     {
         System.Drawing.Icon? icon = null;
         try
         {
             icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
-            if (icon is null) return null;
+            if (icon is null) return (null, null);
 
             var source = Imaging.CreateBitmapSourceFromHIcon(
                 icon.Handle,
                 System.Windows.Int32Rect.Empty,
                 BitmapSizeOptions.FromEmptyOptions());
             source.Freeze();
-            return source;
+
+            using var bmp = icon.ToBitmap();
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+
+            return (source, base64);
         }
         catch
         {
-            return null;
+            return (null, null);
         }
         finally
         {

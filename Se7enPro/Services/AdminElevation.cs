@@ -23,6 +23,9 @@ public static class AdminElevation
     public static Action? ReacquireMutexAction { get; set; }
     public static Action? ShutdownAppAction { get; set; }
 
+    public static Action? ReleaseDaemonMutexAction { get; set; }
+    public static Action? ReacquireDaemonMutexAction { get; set; }
+
     public static bool TryRestartElevated()
     {
         try

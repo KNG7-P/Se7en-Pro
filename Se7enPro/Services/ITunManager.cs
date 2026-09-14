@@ -10,6 +10,7 @@ public interface ITunManager : IAsyncDisposable
     string? LastError { get; }
 
     event EventHandler? StateChanged;
+    event EventHandler<string>? LogLineAppended;
 }
 
 public enum TunState

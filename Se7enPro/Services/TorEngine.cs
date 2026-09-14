@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Models;
@@ -32,6 +33,8 @@ public sealed class TorEngine : LocalSocksEngineBase
 
     protected override TimeSpan ReadyTimeout => TimeSpan.FromSeconds(150);
 
+    protected override bool AutoProbeUpdatesConnectedServerRegion => false;
+
     protected override PreparedLaunch Prepare(string workDir, int socksPort, int httpPort)
     {
         var resTor = Path.Combine(AppDir, "Resources", "tor");
@@ -57,11 +60,24 @@ public sealed class TorEngine : LocalSocksEngineBase
         var torData = Path.Combine(workDir, "tordata");
         Directory.CreateDirectory(torData);
 
+        var exit = NormalizeExitCountry(_settings.Settings.TorExitCountry);
+        if (exit.Length == 2)
+        {
+            try
+            {
+                var stateFile = Path.Combine(torData, "state");
+                if (File.Exists(stateFile))
+                {
+                    File.Delete(stateFile);
+                }
+            }
+            catch { }
+        }
+
         var torrcPath = Path.Combine(workDir, "torrc");
         File.WriteAllText(torrcPath,
             BuildTorrc(socksPort, httpPort, torData, geoip, geoip6, lyrebird, conjure));
 
-        var exit = NormalizeExitCountry(_settings.Settings.TorExitCountry);
         ConnectedServerRegion = exit.Length == 2 ? exit.ToUpperInvariant() : "";
         CurrentRouteIp = "";
         _bootstrapText = "Bootstrapping…";
@@ -73,11 +89,12 @@ public sealed class TorEngine : LocalSocksEngineBase
             : "Launching Tor (any exit country).");
 
         Dictionary<string, string>? env = null;
-        if (!string.IsNullOrEmpty(Socks5ProxyOverride))
+        var _socksOverride = TryGetSocks5ProxyOverride();
+        if (!string.IsNullOrEmpty(_socksOverride))
         {
             env = new Dictionary<string, string>
             {
-                ["TOR_PT_PROXY"] = $"socks5://{Socks5ProxyOverride}"
+                ["TOR_PT_PROXY"] = $"socks5://{_socksOverride}"
             };
         }
 
@@ -110,7 +127,11 @@ public sealed class TorEngine : LocalSocksEngineBase
         }
     }
 
-    internal static string? Socks5ProxyOverride;
+    private static readonly object _overrideLock = new();
+    private static string? _socks5ProxyOverride;
+    internal static void SetSocks5ProxyOverride(string v) { lock (_overrideLock) _socks5ProxyOverride = v; }
+    internal static void ClearSocks5ProxyOverride() { lock (_overrideLock) _socks5ProxyOverride = null; }
+    private static string? TryGetSocks5ProxyOverride() { lock (_overrideLock) return _socks5ProxyOverride; }
 
     private string BuildTorrc(
         int socksPort, int httpPort, string torData,
@@ -121,18 +142,16 @@ public sealed class TorEngine : LocalSocksEngineBase
 
         sb.AppendLine($"SocksPort 127.0.0.1:{socksPort}");
         var bridges = ParseBridges(s.TorBridges);
-        if (!string.IsNullOrEmpty(Socks5ProxyOverride))
+        var socks5Override = TryGetSocks5ProxyOverride();
+        if (!string.IsNullOrEmpty(socks5Override))
         {
-            if (bridges.Count == 0)
-            {
-                sb.AppendLine($"Socks5Proxy {Socks5ProxyOverride}");
-            }
+            sb.AppendLine($"Socks5Proxy {socks5Override}");
         }
 
         sb.AppendLine($"HTTPTunnelPort 127.0.0.1:{httpPort}");
-        sb.AppendLine($"DataDirectory {P(torData)}");
-        sb.AppendLine($"GeoIPFile {P(geoip)}");
-        sb.AppendLine($"GeoIPv6File {P(geoip6)}");
+        sb.AppendLine($"DataDirectory {ToCleanPath(torData)}");
+        sb.AppendLine($"GeoIPFile {ToCleanPath(geoip)}");
+        sb.AppendLine($"GeoIPv6File {ToCleanPath(geoip6)}");
         sb.AppendLine("Log notice stdout");
         sb.AppendLine("ClientOnly 1");
         sb.AppendLine("AvoidDiskWrites 1");
@@ -143,15 +162,17 @@ public sealed class TorEngine : LocalSocksEngineBase
             sb.AppendLine($"ExitNodes {{{exit}}}");
             sb.AppendLine("StrictNodes 1");
 
-            sb.AppendLine("MaxCircuitDirtiness 60");
+            sb.AppendLine("MaxCircuitDirtiness 10");
         }
 
-        if (bridges.Count > 0)
+        if (string.IsNullOrEmpty(socks5Override) && bridges.Count > 0)
         {
             sb.AppendLine("UseBridges 1");
 
-            sb.AppendLine($"ClientTransportPlugin obfs4,meek_lite,webtunnel,scramblesuit,snowflake exec {P(lyrebird)}");
-            sb.AppendLine($"ClientTransportPlugin conjure exec {P(conjure)}");
+            var cleanLyrebird = ToCleanPath(lyrebird);
+            var cleanConjure = ToCleanPath(conjure);
+            sb.AppendLine($"ClientTransportPlugin obfs4,meek_lite,webtunnel,scramblesuit,snowflake exec {cleanLyrebird}");
+            sb.AppendLine($"ClientTransportPlugin conjure exec {cleanConjure}");
             foreach (var bridge in bridges)
             {
                 sb.AppendLine($"Bridge {bridge}");
@@ -184,5 +205,22 @@ public sealed class TorEngine : LocalSocksEngineBase
         return result;
     }
 
-    private static string P(string path) => path.Replace('\\', '/');
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetShortPathName(string lpszLongPath, StringBuilder lpszShortPath, uint cchBuffer);
+
+    private static string ToCleanPath(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+        try
+        {
+            var sb = new StringBuilder(512);
+            var res = GetShortPathName(path, sb, (uint)sb.Capacity);
+            if (res > 0 && res < sb.Capacity)
+            {
+                return sb.ToString();
+            }
+        }
+        catch { }
+        return path.Replace('/', '\\');
+    }
 }

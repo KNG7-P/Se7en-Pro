@@ -1,0 +1,53 @@
+name: se7en
+description: "Se7en Pro — a modern, minimal multi-engine censorship-circumvention client."
+publish_to: 'none'
+version: 1.0.4+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Tray icon + window controls (frameless title bar, minimize-to-tray, drag)
+  window_manager: ^0.4.2
+  tray_manager: ^0.3.2
+
+  # Persisted settings (settings.json equivalent)
+  shared_preferences: ^2.3.2
+  path_provider: ^2.1.4
+  path: ^1.9.0
+
+  # Icons & typography
+  phosphor_flutter: ^2.1.0
+  google_fonts: ^6.2.1
+
+  # Country flags for the region picker
+  country_flags: ^3.1.0
+
+  # JSON-RPC / model plumbing
+  json_annotation: ^4.9.0
+
+  # Utility
+  intl: ^0.20.2
+  url_launcher: ^6.3.0
+  collection: ^1.18.0
+  flutter_acrylic: ^1.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.13
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

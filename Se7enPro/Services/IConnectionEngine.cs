@@ -40,4 +40,6 @@ public interface IConnectionEngine
 
     Task StartAsync();
     Task StopAsync();
+
+    void CancelConnecting();
 }

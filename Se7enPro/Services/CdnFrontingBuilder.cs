@@ -13,6 +13,7 @@ public static class CdnFrontingBuilder
         new (string, string)[]
         {
 
+            ("edge-original", "92.123.102.43"),
             ("edge-a-1",      "23.215.0.206"),
             ("edge-a-2",      "23.215.0.203"),
             ("edge-b-1",      "23.212.250.91"),
@@ -21,7 +22,6 @@ public static class CdnFrontingBuilder
             ("edge-c-2",      "23.12.147.29"),
             ("edge-d-1",      "23.73.207.8"),
             ("edge-d-2",      "23.73.207.15"),
-            ("edge-original", "92.123.102.43"),
             ("edge-ir-1",     "184.24.77.42"),
             ("edge-ir-2",     "184.24.77.32"),
             ("edge-ir-3",     "184.24.77.21"),
@@ -60,19 +60,22 @@ public static class CdnFrontingBuilder
     };
 
     public static JsonArray BuildDialOverrides(string? customIpList, string? customSni)
-        => BuildDialOverrides(customIpList, customSni, includeBuiltInDefaults: true);
+        => BuildDialOverrides(customIpList, customSni, includeBuiltInDefaults: true, skipCertVerify: false);
 
     public static JsonArray BuildDialOverrides(
         string? customIpList,
         string? customSni,
-        bool includeBuiltInDefaults)
+        bool includeBuiltInDefaults,
+        bool skipCertVerify = false,
+        bool includeFastly = true,
+        bool includeAkamai = true)
     {
         var overrides = new JsonArray();
         var edgeDialAddresses = new HashSet<string>(StringComparer.Ordinal);
         var snis = ParseCdnFrontingCustomSnis(customSni);
         var primarySni = snis.Count > 0 ? snis[0] : "";
 
-        if (includeBuiltInDefaults)
+        if (includeBuiltInDefaults && includeFastly)
         {
             overrides.Add(MakeOverride(
                 overrideId: "fastly-provider",
@@ -81,7 +84,8 @@ public static class CdnFrontingBuilder
                 dialAddress: "pypi.org",
                 sniServerName: "pypi.org",
                 verifyServerNames: FastlyVerifyServerNames,
-                alpnProtocols: new[] { "h2", "http/1.1" }));
+                alpnProtocols: new[] { "h2", "http/1.1" },
+                skipCertVerify: skipCertVerify));
 
             overrides.Add(MakeOverride(
                 overrideId: "fastly-address",
@@ -90,22 +94,23 @@ public static class CdnFrontingBuilder
                 dialAddress: "pypi.org",
                 sniServerName: "pypi.org",
                 verifyServerNames: FastlyVerifyServerNames,
-                alpnProtocols: new[] { "h2", "http/1.1" }));
+                alpnProtocols: new[] { "h2", "http/1.1" },
+                skipCertVerify: skipCertVerify));
         }
 
         var customIps = ParseCdnFrontingCustomIpList(customIpList);
         for (var i = 0; i < customIps.Count; i++)
         {
             var sniForIp = snis.Count > 0 ? snis[i % snis.Count] : "";
-            PutEdgeOverride(overrides, edgeDialAddresses, $"edge-custom-{i + 1}", customIps[i], sniForIp);
+            PutEdgeOverride(overrides, edgeDialAddresses, $"edge-custom-{i + 1}", customIps[i], sniForIp, skipCertVerify);
         }
 
-        if (includeBuiltInDefaults)
+        if (includeBuiltInDefaults && includeAkamai)
         {
 
             foreach (var (id, ip) in DefaultEdgeIps)
             {
-                PutEdgeOverride(overrides, edgeDialAddresses, id, ip, primarySni);
+                PutEdgeOverride(overrides, edgeDialAddresses, id, ip, primarySni, skipCertVerify);
             }
         }
 
@@ -196,17 +201,20 @@ public static class CdnFrontingBuilder
         return true;
     }
 
-    private static JsonObject MakeEdgeOverride(string overrideId, string ipAddress, string customSni)
+    public const string DefaultAkamaiSni = "a.akamaized-staging.net";
+
+    private static JsonObject MakeEdgeOverride(string overrideId, string ipAddress, string customSni, bool skipCertVerify = false)
     {
-        var sniServerName = string.IsNullOrEmpty(customSni) ? ipAddress : customSni;
+        var sniServerName = string.IsNullOrWhiteSpace(customSni) ? DefaultAkamaiSni : customSni.Trim();
         return MakeOverride(
             overrideId: overrideId,
             matchFrontingProviderIdRegexes: null,
             matchDialAddressRegexes: new[] { ".*" },
             dialAddress: ipAddress,
             sniServerName: sniServerName,
-            verifyServerNames: BuildEdgeVerifyServerNames(ipAddress, sniServerName),
-            alpnProtocols: new[] { "http/1.1" });
+            verifyServerNames: BuildEdgeVerifyServerNames(sniServerName),
+            alpnProtocols: new[] { "http/1.1" },
+            skipCertVerify: skipCertVerify);
     }
 
     private static void PutEdgeOverride(
@@ -214,11 +222,12 @@ public static class CdnFrontingBuilder
         HashSet<string> dialAddresses,
         string overrideId,
         string ipAddress,
-        string customSni)
+        string customSni,
+        bool skipCertVerify = false)
     {
         if (dialAddresses.Add(ipAddress))
         {
-            overrides.Add(MakeEdgeOverride(overrideId, ipAddress, customSni));
+            overrides.Add(MakeEdgeOverride(overrideId, ipAddress, customSni, skipCertVerify));
         }
     }
 
@@ -229,7 +238,8 @@ public static class CdnFrontingBuilder
         string dialAddress,
         string sniServerName,
         IReadOnlyList<string> verifyServerNames,
-        IReadOnlyList<string> alpnProtocols)
+        IReadOnlyList<string> alpnProtocols,
+        bool skipCertVerify = false)
     {
         var obj = new JsonObject
         {
@@ -248,24 +258,29 @@ public static class CdnFrontingBuilder
         obj["VerifyServerNames"] = ToJsonArray(verifyServerNames);
         obj["ALPNProtocols"] = ToJsonArray(alpnProtocols);
         obj["TLSProfile"] = "Chrome-83";
+        if (skipCertVerify)
+        {
+            obj["SkipCertVerify"] = true;
+        }
         return obj;
     }
 
-    private static List<string> BuildEdgeVerifyServerNames(string ipAddress, string sniServerName)
+    private static List<string> BuildEdgeVerifyServerNames(string sniServerName)
     {
-        var list = new List<string>(capacity: 9);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var list = new List<string>(capacity: 10);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         void Add(string? v)
         {
             if (!string.IsNullOrEmpty(v) && seen.Add(v)) list.Add(v);
         }
         Add(sniServerName);
-        Add(ipAddress);
-        Add("a248.e.akamai.net");
-        Add("a.akamaized.net");
         Add("a.akamaized-staging.net");
+        Add("a.akamaized.net");
+        Add("a248.e.akamai.net");
         Add("a.akamaihd.net");
         Add("a.akamaihd-staging.net");
+        Add("ds-aksb.akamaized.net");
+        Add("ak.net.akamaized.net");
         Add("www.akamai.com");
         return list;
     }

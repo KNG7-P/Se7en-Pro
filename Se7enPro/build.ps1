@@ -1,4 +1,3 @@
-
 param(
     [switch]$Publish,
     [switch]$Run
@@ -34,4 +33,3 @@ try {
 finally {
     Pop-Location
 }
-

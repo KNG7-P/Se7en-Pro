@@ -11,5 +11,7 @@ public interface ISettingsService
 
     void Save();
 
+    void Update(UserSettings updated);
+
     event EventHandler? SettingsChanged;
 }

@@ -28,6 +28,10 @@ public interface ITunnelCoreManager
 
     long BytesReceived { get; }
 
+    double DownSpeedBytesPerSec { get; }
+
+    double UpSpeedBytesPerSec { get; }
+
     int ConnectProgressPercent { get; }
 
     string ConnectProgressText { get; }

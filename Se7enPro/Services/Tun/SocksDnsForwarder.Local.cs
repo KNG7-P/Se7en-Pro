@@ -13,7 +13,7 @@ internal sealed partial class SocksDnsForwarder
 
     private async Task<byte[]?> QueryLocalAsync(byte[] query, CancellationToken ct)
     {
-        var localIp = IPAddress.Parse(_split!.LocalDnsIp!);
+        if (!IPAddress.TryParse(_split?.LocalDnsIp, out var localIp)) return null;
         for (var attempt = 0; attempt < 2; attempt++)
         {
             try
@@ -34,7 +34,16 @@ internal sealed partial class SocksDnsForwarder
         return null;
     }
 
-    internal static List<IPAddress> ExtractAnswerARecords(byte[] r)
+    internal static List<IPAddress> ExtractAnswerARecords(byte[] r) =>
+        ExtractAnswerRecords(r, wantV4: true, wantV6: false);
+
+    internal static List<IPAddress> ExtractAnswerAaaaRecords(byte[] r) =>
+        ExtractAnswerRecords(r, wantV4: false, wantV6: true);
+
+    internal static List<IPAddress> ExtractAnswerAddresses(byte[] r) =>
+        ExtractAnswerRecords(r, wantV4: true, wantV6: true);
+
+    private static List<IPAddress> ExtractAnswerRecords(byte[] r, bool wantV4, bool wantV6)
     {
         var result = new List<IPAddress>();
         if (r.Length < 12) return result;
@@ -60,9 +69,15 @@ internal sealed partial class SocksDnsForwarder
             i += 10;
             if (i + rdlen > r.Length) break;
 
-            if (type == 1 && rdlen == 4)
+            if (wantV4 && type == 1 && rdlen == 4)
             {
                 result.Add(new IPAddress(new[] { r[i], r[i + 1], r[i + 2], r[i + 3] }));
+            }
+            else if (wantV6 && type == 28 && rdlen == 16)
+            {
+                var bytes = new byte[16];
+                Buffer.BlockCopy(r, i, bytes, 0, 16);
+                result.Add(new IPAddress(bytes));
             }
             i += rdlen;
         }

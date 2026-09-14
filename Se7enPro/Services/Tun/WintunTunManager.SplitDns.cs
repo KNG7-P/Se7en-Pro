@@ -52,30 +52,55 @@ public sealed partial class WintunTunManager
                       + "through the tunnel and may still surface the VPN IP.");
         }
 
+        var canPinV6 = _realRouteV6Known;
+        if (domains.Count > 0 && !canPinV6 && _v6Enabled)
+        {
+            WriteDiag("NOTE: the machine has IPv6 but no IPv6 default gateway was found; "
+                      + "AAAA answers for bypass domains will be withheld so those sites "
+                      + "stay on IPv4 and off the tunnel.");
+        }
+
         return new SocksDnsForwarder.SplitPolicy
         {
             ExcludeMode = !include,
             Domains = WidenDomainMatchSet(domains),
             LocalDnsIp = localDns,
             AddressSeen = OnSplitAddressSeen,
+            CanPinLocalV6 = canPinV6,
         };
     }
 
     private void OnSplitAddressSeen(IPAddress ip, string queriedName)
     {
-        if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return;
+        var isV6 = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6;
+        if (!isV6 && ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return;
 
         var s = _settings.Settings;
         if (!s.SplitTunnelEnabled) return;
 
         var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-        if (!include && !_realRouteKnown) return;
+
+        byte hostPrefix = isV6 ? (byte)128 : (byte)32;
+
+        if (include)
+        {
+            if (isV6 && !_v6Enabled) return;
+        }
+        else
+        {
+            if (isV6 ? !_realRouteV6Known : !_realRouteKnown) return;
+        }
 
         try
         {
             var entry = include
-                ? WintunRouteApi.AddRoute(_tunIfIndex, ip, 32, TunAddressV4)
-                : WintunRouteApi.AddRoute(_realIfIndex, ip, 32, _realGateway);
+                ? WintunRouteApi.AddRoute(_tunIfIndex, ip, hostPrefix, isV6 ? TunAddressV6 : TunAddressV4)
+                : WintunRouteApi.AddRoute(
+                    isV6 ? _realIfIndexV6 : _realIfIndex,
+                    ip, hostPrefix,
+                    isV6 ? _realGatewayV6 : _realGateway);
+
+            if (entry is null) return;
 
             var key = ip.ToString();
             var added = false;

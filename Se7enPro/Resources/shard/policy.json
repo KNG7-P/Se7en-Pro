@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "updated": "2026-09-10",
+  "edges": [
+    "104.21.70.21",
+    "104.21.33.59",
+    "188.114.97.0",
+    "188.114.97.6",
+    "172.67.141.182",
+    "172.67.217.240"
+  ],
+  "geoblocked": [
+    "www.nvidia.com",
+    "nvidia.com",
+    "images.nvidia.com",
+    "www.avast.com",
+    "avast.com",
+    "www.android.com",
+    "android.com"
+  ],
+  "sanctioned": []
+}

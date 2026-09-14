@@ -70,6 +70,7 @@ public sealed partial class WintunTunManager
         WintunRouteApi.RouteEntry[] routes;
         SocksDnsForwarder? forwarder;
         bool dnsSet;
+        bool quicBlock;
         CancellationTokenSource? refresherCts;
         Task? refresherTask;
         CancellationTokenSource? processSplitCts;
@@ -78,11 +79,15 @@ public sealed partial class WintunTunManager
         {
             routes = _appliedRoutes.ToArray();
             _appliedRoutes.Clear();
+            _catchAllRoutes.Clear();
+            _catchAllSuspended = false;
             _dynamicRoutes.Clear();
             forwarder = _dnsForwarder;
             _dnsForwarder = null;
             dnsSet = _adapterDnsSet;
             _adapterDnsSet = false;
+            quicBlock = _quicBlockInstalled;
+            _quicBlockInstalled = false;
             refresherCts = _refresherCts;
             refresherTask = _refresherTask;
             _refresherCts = null;
@@ -93,6 +98,8 @@ public sealed partial class WintunTunManager
             _processSplitTask = null;
         }
         _realRouteKnown = false;
+
+        CancelCatchAllGraceTimer();
 
         try { refresherCts?.Cancel(); } catch { }
         try { processSplitCts?.Cancel(); } catch { }
@@ -118,6 +125,16 @@ public sealed partial class WintunTunManager
             try { await WintunDnsShell.ClearAdapterDnsAsync(TunInterfaceName); } catch { }
         }
         WintunRouteApi.FlushDnsCache();
+
+        if (quicBlock)
+        {
+
+            try { await WintunFirewallShell.RemoveQuicBlockAsync(CancellationToken.None); }
+            catch (Exception ex) { _logger.LogWarning(ex, "QUIC fail-fast rule removal failed"); }
+        }
+
+        try { await WintunFirewallShell.RemoveDnsLeakBlockAsync(CancellationToken.None); } catch { }
+        WintunDnsShell.SetSmartNameResolution(disable: false);
 
         if (proc is not null)
         {
@@ -147,7 +164,6 @@ public sealed partial class WintunTunManager
 
     private void SuppressSystemProxy()
     {
-        if (!_settings.Settings.SetSystemProxy) return;
         try
         {
             _systemProxy.Clear();

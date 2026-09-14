@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -54,6 +55,7 @@ public sealed partial class WintunTunManager
 
     private void WriteLogLine(string line)
     {
+        try { LogLineAppended?.Invoke(this, line); } catch { }
         try
         {
             var writer = _logWriter;
@@ -96,6 +98,22 @@ public sealed partial class WintunTunManager
             var matches = System.Text.RegularExpressions.Regex.Matches(
                 output, @"SWD\\Wintun\\\{[0-9a-fA-F\-]+\}");
             var ids = matches.Select(m => m.Value).Distinct().ToList();
+
+            var protectedGuids = LiveForeignAdapterGuids();
+            var kept = new List<string>();
+            ids.RemoveAll(id =>
+            {
+                var guid = ExtractAdapterGuid(id);
+                if (guid is null || !protectedGuids.Contains(guid)) return false;
+                kept.Add(id);
+                return true;
+            });
+            if (kept.Count > 0)
+            {
+                WriteDiag($"pnputil pre-cleanup: kept {kept.Count} Wintun device(s) belonging to other "
+                          + $"live adapters: {string.Join(", ", kept)}");
+            }
+
             if (ids.Count == 0)
             {
                 WriteDiag("pnputil pre-cleanup: no stale Wintun devices");
@@ -127,6 +145,73 @@ public sealed partial class WintunTunManager
         catch (Exception ex)
         {
             WriteDiag($"pnputil pre-cleanup failed (continuing): {ex.Message}");
+        }
+    }
+
+    private static HashSet<string> LiveForeignAdapterGuids()
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (string.Equals(nic.Name, TunInterfaceName, StringComparison.OrdinalIgnoreCase)) continue;
+                var guid = ExtractAdapterGuid(nic.Id);
+                if (guid is not null) set.Add(guid);
+            }
+        }
+        catch {  }
+        return set;
+    }
+
+    private static string? ExtractAdapterGuid(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return null;
+        var m = System.Text.RegularExpressions.Regex.Match(value, @"\{[0-9a-fA-F\-]{36}\}");
+        return m.Success ? m.Value.ToUpperInvariant() : null;
+    }
+
+    private void KillOrphanTunCores()
+    {
+        if (string.IsNullOrEmpty(_workDir)) return;
+
+        var expectedImage = Path.Combine(_workDir, CachedTunExeName);
+        Process? own;
+        lock (_lock) own = _process;
+
+        Process[] candidates;
+        try { candidates = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(CachedTunExeName)); }
+        catch (Exception ex)
+        {
+            WriteDiag($"orphan tun core scan failed (continuing): {ex.Message}");
+            return;
+        }
+
+        foreach (var proc in candidates)
+        {
+            try
+            {
+                if (own is not null && proc.Id == own.Id) continue;
+
+                var image = WintunRouteApi.TryGetProcessPath(proc.Id);
+                if (image is null
+                    || !string.Equals(image, expectedImage, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                WriteDiag($"reaping orphaned tun core (pid {proc.Id}) still holding '{TunInterfaceName}'");
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(3000);
+            }
+            catch (Exception ex)
+            {
+                WriteDiag($"orphaned tun core pid {proc.Id} not reaped: {ex.Message}");
+            }
+            finally
+            {
+                try { proc.Dispose(); } catch { }
+            }
         }
     }
 

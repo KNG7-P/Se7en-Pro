@@ -11,8 +11,23 @@ using Microsoft.Extensions.Logging;
 
 namespace Se7enPro.Services;
 
-public sealed class CoreUpdateService : ICoreUpdateService
+public sealed class CoreUpdateService : ICoreUpdateService, IDisposable
 {
+    private const string AetherAssetName = "aether-windows-x86_64.zip";
+    private const string ReleaseApiUrl =
+        "https://api.github.com/repos/CluvexStudio/Aether/releases/latest";
+
+    private const string ReleaseDownloadPrefix =
+        "https://github.com/CluvexStudio/Aether/releases/download/";
+
+    private const string RequiredSignerSubject = "Cluvex";
+
+    private static readonly bool RequireSignedCoreBinaries = true;
+
+    private const long MaxArchiveBytes = 128L * 1024 * 1024;
+
+    private const long MaxExtractedBytes = 256L * 1024 * 1024;
+
     private readonly ILogger<CoreUpdateService> _logger;
     private readonly HttpClient _httpClient;
 
@@ -25,6 +40,19 @@ public sealed class CoreUpdateService : ICoreUpdateService
         };
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Se7enPro-CoreUpdater/1.0");
     }
+
+    public void Dispose() => _httpClient.Dispose();
+
+    private static bool IsTrustedDownloadUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+        if (!uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!string.IsNullOrEmpty(uri.UserInfo)) return false;
+        return uri.AbsoluteUri.StartsWith(ReleaseDownloadPrefix, StringComparison.Ordinal);
+    }
+
+    public const string UnknownVersion = "unknown";
 
     public string GetInstalledVersion(string coreId)
     {
@@ -50,7 +78,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
                         if (!string.IsNullOrEmpty(fvi.FileVersion))
                             return fvi.FileVersion;
                     }
-                    return "1.7.0";
+                    return UnknownVersion;
                 }
 
                 case "tor":
@@ -75,18 +103,25 @@ public sealed class CoreUpdateService : ICoreUpdateService
                                 }
                             }
                         }
+
+                        try
+                        {
+                            var fvi = FileVersionInfo.GetVersionInfo(exePath);
+                            if (!string.IsNullOrEmpty(fvi.FileVersion)) return fvi.FileVersion;
+                        }
+                        catch { }
                     }
-                    return "0.4.9.11";
+                    return UnknownVersion;
                 }
 
                 default:
-                    return "Unknown";
+                    return UnknownVersion;
             }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to determine installed version for core: {CoreId}", coreId);
-            return coreId.Equals("tor", StringComparison.OrdinalIgnoreCase) ? "0.4.9.11" : "1.7.0";
+            return UnknownVersion;
         }
     }
 
@@ -94,40 +129,25 @@ public sealed class CoreUpdateService : ICoreUpdateService
     {
         var installed = GetInstalledVersion(coreId);
 
-        if (coreId.Equals("tor", StringComparison.OrdinalIgnoreCase))
-        {
-
-            await Task.Delay(400, ct);
-            return new CoreUpdateInfo(
-                CoreId: "tor",
-                DisplayName: "Tor (Onion Routing)",
-                InstalledVersion: installed,
-                LatestVersion: installed,
-                HasUpdate: false,
-                DownloadUrl: "",
-                ReleaseNotes: "Tor engine is running the latest bundled release.",
-                DownloadSizeBytes: 0
-            );
-        }
-
         if (!coreId.Equals("aether", StringComparison.OrdinalIgnoreCase))
         {
+
             return new CoreUpdateInfo(
                 CoreId: coreId,
                 DisplayName: GetCoreDisplayName(coreId),
                 InstalledVersion: installed,
-                LatestVersion: installed,
+                LatestVersion: UnknownVersion,
                 HasUpdate: false,
                 DownloadUrl: "",
-                ReleaseNotes: "Core update not yet available for this engine.",
+                ReleaseNotes: "This engine ships with the app; Se7en does not check a remote "
+                              + "release feed for it, so no update status is available.",
                 DownloadSizeBytes: 0
             );
         }
 
         try
         {
-            const string apiUrl = "https://api.github.com/repos/CluvexStudio/Aether/releases/latest";
-            using var req = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            using var req = new HttpRequestMessage(HttpMethod.Get, ReleaseApiUrl);
             using var res = await _httpClient.SendAsync(req, ct);
             res.EnsureSuccessStatusCode();
 
@@ -147,7 +167,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
                 foreach (var asset in assetsElem.EnumerateArray())
                 {
                     var name = asset.TryGetProperty("name", out var nameElem) ? nameElem.GetString() ?? "" : "";
-                    if (name.Equals("aether-windows-x86_64.zip", StringComparison.OrdinalIgnoreCase))
+                    if (name.Equals(AetherAssetName, StringComparison.OrdinalIgnoreCase))
                     {
                         downloadUrl = asset.TryGetProperty("browser_download_url", out var urlElem) ? urlElem.GetString() ?? "" : "";
                         sizeBytes = asset.TryGetProperty("size", out var sizeElem) ? sizeElem.GetInt64() : 0;
@@ -158,7 +178,14 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
             if (string.IsNullOrEmpty(downloadUrl) && !string.IsNullOrEmpty(tagName))
             {
-                downloadUrl = $"https://github.com/CluvexStudio/Aether/releases/download/{tagName}/aether-windows-x86_64.zip";
+                downloadUrl = $"{ReleaseDownloadPrefix}{Uri.EscapeDataString(tagName)}/{AetherAssetName}";
+            }
+
+            if (!string.IsNullOrEmpty(downloadUrl) && !IsTrustedDownloadUrl(downloadUrl))
+            {
+                _logger.LogWarning(
+                    "Rejecting Aether asset URL outside the expected release path: {Url}", downloadUrl);
+                downloadUrl = "";
             }
 
             var hasUpdate = IsNewerVersion(installed, latestVersion);
@@ -194,83 +221,78 @@ public sealed class CoreUpdateService : ICoreUpdateService
             throw new InvalidOperationException("Could not find download URL for Aether update.");
         }
 
+        if (!IsTrustedDownloadUrl(updateInfo.DownloadUrl))
+        {
+            throw new InvalidOperationException(
+                $"Refusing to download the core from an untrusted URL: {updateInfo.DownloadUrl}");
+        }
+
         var tempDir = Path.Combine(Path.GetTempPath(), "Se7enPro_Update_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
-        var zipPath = Path.Combine(tempDir, "aether-windows-x86_64.zip");
+        var zipPath = Path.Combine(tempDir, AetherAssetName);
         var extractedExe = Path.Combine(tempDir, "aether.exe");
 
         try
         {
 
             progress?.Report(5);
-            using (var response = await _httpClient.GetAsync(updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+            await DownloadArchiveAsync(updateInfo, zipPath, progress, ct);
+
+            progress?.Report(72);
+
+            ExtractAetherExe(zipPath, extractedExe);
+
+            progress?.Report(78);
+
+            var trust = BinaryTrust.VerifyAuthenticode(extractedExe, RequiredSignerSubject);
+            if (!trust.Trusted)
             {
-                response.EnsureSuccessStatusCode();
-                var totalBytes = response.Content.Headers.ContentLength ?? (updateInfo.DownloadSizeBytes > 0 ? updateInfo.DownloadSizeBytes : 4500000);
-
-                await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                await using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
-
-                var buffer = new byte[81920];
-                long downloadedBytes = 0;
-                int bytesRead;
-
-                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+                if (RequireSignedCoreBinaries)
                 {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
-                    downloadedBytes += bytesRead;
-
-                    if (totalBytes > 0)
-                    {
-                        var pct = (int)(5 + (downloadedBytes * 70 / totalBytes));
-                        progress?.Report(Math.Min(75, pct));
-                    }
+                    throw new InvalidOperationException(
+                        $"The downloaded Aether binary failed signature verification and was NOT installed: "
+                        + $"{trust.Detail}");
                 }
+                _logger.LogWarning(
+                    "SECURITY: installing an unverified Aether binary because signature enforcement is "
+                    + "disabled in this build: {Detail}", trust.Detail);
+            }
+            else
+            {
+                _logger.LogInformation("Downloaded Aether binary verified: {Detail}", trust.Detail);
             }
 
-            progress?.Report(80);
+            progress?.Report(84);
 
-            using (var archive = ZipFile.OpenRead(zipPath))
-            {
-                var entry = archive.GetEntry("aether.exe") ??
-                            archive.Entries.FirstOrDefault(e => e.Name.Equals("aether.exe", StringComparison.OrdinalIgnoreCase));
-
-                if (entry is null)
-                {
-                    throw new FileNotFoundException("aether.exe was not found inside the downloaded archive.");
-                }
-
-                entry.ExtractToFile(extractedExe, overwrite: true);
-            }
-
-            progress?.Report(85);
-
-            KillRunningAetherProcesses();
+            KillOwnAetherProcesses();
 
             progress?.Report(90);
-
-            var appResourcePath = Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe");
-            SafeReplaceFile(extractedExe, appResourcePath);
 
             var localAppCachedPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Se7en", "aether", EngineProcessNames.Aether);
-            SafeReplaceFile(extractedExe, localAppCachedPath);
+            AtomicFile.Install(extractedExe, localAppCachedPath);
 
+            var appResourcePath = Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe");
             try
             {
-                var devSourcePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Resources", "aether", "aether.exe"));
-                if (File.Exists(devSourcePath))
-                {
-                    SafeReplaceFile(extractedExe, devSourcePath);
-                }
+                AtomicFile.Install(extractedExe, appResourcePath);
             }
-            catch { }
+            catch (Exception ex)
+            {
+
+                _logger.LogInformation(ex,
+                    "Could not refresh the bundled copy at {Path}; the cached core was updated", appResourcePath);
+            }
+
+            progress?.Report(96);
 
             var verifiedVer = QueryExeVersion(localAppCachedPath, "--version");
             if (string.IsNullOrWhiteSpace(verifiedVer))
             {
-                verifiedVer = QueryExeVersion(appResourcePath, "--version");
+                throw new InvalidOperationException(
+                    "The core was installed but did not respond to --version; the previous binary has been "
+                    + "left in place as .bak next to it.");
             }
 
             progress?.Report(100);
@@ -288,48 +310,132 @@ public sealed class CoreUpdateService : ICoreUpdateService
         }
     }
 
-    private static void KillRunningAetherProcesses()
+    private async Task DownloadArchiveAsync(
+        CoreUpdateInfo updateInfo, string zipPath, IProgress<int>? progress, CancellationToken ct)
     {
-        foreach (var name in new[] { "Se7enPro.Aether", "aether" })
+        using var response = await _httpClient.GetAsync(
+            updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        var finalUrl = response.RequestMessage?.RequestUri?.AbsoluteUri;
+        if (!string.IsNullOrEmpty(finalUrl) && !IsTrustedDownloadUrl(finalUrl))
         {
-            try
+
+            if (!finalUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                foreach (var p in Process.GetProcessesByName(name))
-                {
-                    try { p.Kill(entireProcessTree: true); } catch { }
-                    try { p.WaitForExit(1000); } catch { }
-                    try { p.Dispose(); } catch { }
-                }
+                throw new InvalidOperationException(
+                    $"The core download was redirected to a non-HTTPS location: {finalUrl}");
             }
-            catch { }
+        }
+
+        var declared = response.Content.Headers.ContentLength
+                       ?? (updateInfo.DownloadSizeBytes > 0 ? updateInfo.DownloadSizeBytes : 0);
+        if (declared > MaxArchiveBytes)
+        {
+            throw new InvalidOperationException(
+                $"The core archive declares {declared:N0} bytes, above the {MaxArchiveBytes:N0} byte limit.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        await using var fileStream = new FileStream(
+            zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+
+        var buffer = new byte[81920];
+        long downloadedBytes = 0;
+        int bytesRead;
+
+        while ((bytesRead = await stream.ReadAsync(buffer, ct)) > 0)
+        {
+            downloadedBytes += bytesRead;
+            if (downloadedBytes > MaxArchiveBytes)
+            {
+                throw new InvalidOperationException(
+                    $"The core archive exceeded the {MaxArchiveBytes:N0} byte limit mid-download.");
+            }
+            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
+
+            if (declared > 0)
+            {
+                var pct = (int)(5 + (downloadedBytes * 65 / declared));
+                progress?.Report(Math.Min(70, pct));
+            }
         }
     }
 
-    private static void SafeReplaceFile(string source, string destination)
+    private static void ExtractAetherExe(string zipPath, string destination)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        try
+        using var archive = ZipFile.OpenRead(zipPath);
+        var entry = archive.GetEntry("aether.exe") ??
+                    archive.Entries.FirstOrDefault(
+                        e => e.Name.Equals("aether.exe", StringComparison.OrdinalIgnoreCase));
+
+        if (entry is null)
         {
-            if (File.Exists(destination))
-            {
-                File.Delete(destination);
-            }
-            File.Copy(source, destination, overwrite: true);
+            throw new FileNotFoundException("aether.exe was not found inside the downloaded archive.");
         }
-        catch
+        if (entry.Length > MaxExtractedBytes)
         {
-            var tempOld = destination + ".old." + Guid.NewGuid().ToString("N");
-            try
+            throw new InvalidOperationException(
+                $"aether.exe inside the archive declares {entry.Length:N0} bytes, above the "
+                + $"{MaxExtractedBytes:N0} byte limit.");
+        }
+
+        using var source = entry.Open();
+        using var target = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
+        var buffer = new byte[81920];
+        long written = 0;
+        int read;
+        while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            written += read;
+            if (written > MaxExtractedBytes)
             {
-                if (File.Exists(destination)) File.Move(destination, tempOld);
+                throw new InvalidOperationException(
+                    $"aether.exe expanded past the {MaxExtractedBytes:N0} byte limit.");
             }
-            catch { }
-            File.Copy(source, destination, overwrite: true);
-            try
+            target.Write(buffer, 0, read);
+        }
+    }
+
+    private void KillOwnAetherProcesses()
+    {
+        var ourImages = new[]
+        {
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Se7en", "aether", EngineProcessNames.Aether),
+            Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe"),
+        };
+
+        foreach (var name in new[] { Path.GetFileNameWithoutExtension(EngineProcessNames.Aether), "aether" })
+        {
+            Process[] found;
+            try { found = Process.GetProcessesByName(name); }
+            catch { continue; }
+
+            foreach (var p in found)
             {
-                if (File.Exists(tempOld)) File.Delete(tempOld);
+                try
+                {
+                    var image = WintunRouteApi.TryGetProcessPath(p.Id);
+                    if (image is null ||
+                        !ourImages.Any(our => string.Equals(image, our, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+                    _logger.LogInformation("Stopping our Aether core (pid {Pid}) before replacing it", p.Id);
+                    p.Kill(entireProcessTree: true);
+                    p.WaitForExit(2000);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Could not stop Aether pid {Pid}", p.Id);
+                }
+                finally
+                {
+                    try { p.Dispose(); } catch { }
+                }
             }
-            catch { }
         }
     }
 
