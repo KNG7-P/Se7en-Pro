@@ -22,7 +22,7 @@
 
 ```powershell
 # Clone repository
-git clone https://github.com/yesmaynameisO/Se7en-Pro.git
+git clone https://github.com/KNG7-P/Se7en-Pro.git
 cd Se7en-Pro
 
 # Install Python dependency for build secrets
@@ -126,7 +126,7 @@ GitHub Actions automatically builds all 8 package variants, verifies secret encr
 
 ```powershell
 # کلون کردن ریپازیتوری
-git clone https://github.com/yesmaynameisO/Se7en-Pro.git
+git clone https://github.com/KNG7-P/Se7en-Pro.git
 cd Se7en-Pro
 
 # نصب کتابخانه پایتون برای رمزگذاری مقادیر
@@ -230,7 +230,7 @@ git push origin v1.0.5
 
 ```powershell
 # Клонирование репозитория
-git clone https://github.com/yesmaynameisO/Se7en-Pro.git
+git clone https://github.com/KNG7-P/Se7en-Pro.git
 cd Se7en-Pro
 
 # Установка зависимостей Python
@@ -328,7 +328,7 @@ git push origin v1.0.5
 
 ```powershell
 # 克隆代码仓库
-git clone https://github.com/yesmaynameisO/Se7en-Pro.git
+git clone https://github.com/KNG7-P/Se7en-Pro.git
 cd Se7en-Pro
 
 # 安装构建辅助 Python 模块
