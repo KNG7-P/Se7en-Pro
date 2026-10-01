@@ -78,13 +78,13 @@ public static class CountryHelper
     }
 
     public static bool HasFlag(string? code) =>
-    !string.IsNullOrWhiteSpace(code) && Names.ContainsKey(code);
+        !string.IsNullOrWhiteSpace(code) && (code.Length == 2 || Names.ContainsKey(code));
 
-    public static readonly string[] PsiphonSeedRegionCodes =
+    private static readonly string[] SeedRegionCodes =
     {
-        "AT", "AU", "BE", "CA", "CH", "CZ", "DE", "DK", "ES", "FI", "FR",
-        "GB", "ID", "IE", "IN", "IT", "JP", "LT", "NL", "NO", "PL", "RO",
-        "RS", "SE", "SG", "US",
+        "AT", "BE", "BG", "CA", "CH", "CZ", "DE", "DK", "ES", "FI", "FR",
+        "GB", "HR", "HU", "IE", "IN", "IT", "JP", "LV", "MX", "NL", "NO",
+        "PL", "PT", "RO", "RS", "SE", "SG", "SK", "UA", "US",
     };
 
     private static readonly Lazy<ObservableCollection<Country>> _seedRegions = new(() =>
@@ -94,13 +94,16 @@ public static class CountryHelper
             new("auto", "Auto (best available)"),
         };
         var ordered = new List<Country>();
-        foreach (var c in PsiphonSeedRegionCodes) ordered.Add(new Country(c, FullName(c)));
+        foreach (var c in SeedRegionCodes) ordered.Add(new Country(c, FullName(c)));
         ordered.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         foreach (var entry in ordered) list.Add(entry);
         return list;
     });
 
-    public static ObservableCollection<Country> BuildSeedRegions() => _seedRegions.Value;
+        public static ObservableCollection<Country> BuildSeedRegions() => new(_seedRegions.Value);
 }
 
-public sealed record Country(string Code, string Name);
+public sealed record Country(string Code, string EnglishName) : LocalizedItem
+{
+    public string Name => Loc.Of(EnglishName);
+}

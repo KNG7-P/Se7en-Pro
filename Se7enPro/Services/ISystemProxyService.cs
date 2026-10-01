@@ -7,4 +7,6 @@ public interface ISystemProxyService
     void Clear();
 
     void RestoreIfCrashed();
+
+        bool IsApplied { get; }
 }

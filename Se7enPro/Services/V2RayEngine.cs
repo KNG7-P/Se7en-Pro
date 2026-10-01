@@ -24,6 +24,28 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
     private Process? _process;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private CancellationTokenSource? _runCts;
+    private int _processGeneration;
+
+        private void OnProcessExited(int generation)
+    {
+        if (generation != _processGeneration) return;
+
+        Log("V2Ray core process exited.");
+
+        var p = _process;
+        if (p is not null)
+        {
+            _process = null;
+            try { p.CancelOutputRead(); } catch { }
+            try { p.CancelErrorRead(); } catch { }
+            try { p.Dispose(); } catch { }
+        }
+
+        if (State != ConnectionState.Disconnected)
+        {
+            SetState(ConnectionState.Disconnected);
+        }
+    }
 
     public V2RayEngine(
         ILogger<V2RayEngine> logger,
@@ -43,6 +65,38 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
     internal static void SetSocksPortOverride(int port) { lock (_overrideLock) _socksPortOverride = port; }
     internal static void ClearSocksPortOverride() { lock (_overrideLock) _socksPortOverride = null; }
     internal static int? TryGetSocksPortOverride() { lock (_overrideLock) return _socksPortOverride; }
+
+    
+    
+    
+    private static string? _userUpstreamOverride;
+    internal static void SetUserUpstreamOverride(string? url)
+    {
+        lock (_overrideLock) _userUpstreamOverride = string.IsNullOrWhiteSpace(url) ? null : url.Trim();
+    }
+    internal static void ClearUserUpstreamOverride() { lock (_overrideLock) _userUpstreamOverride = null; }
+    internal static string? TryGetUserUpstreamOverride() { lock (_overrideLock) return _userUpstreamOverride; }
+
+    private static bool _suppressSettingsUpstream;
+    internal static void SetSuppressSettingsUpstream(bool suppress)
+    {
+        lock (_overrideLock) _suppressSettingsUpstream = suppress;
+    }
+
+        private static string? ResolveUserUpstreamUrl(Models.UserSettings s)
+    {
+        var url = TryGetUserUpstreamOverride();
+        if (string.IsNullOrEmpty(url) && !_suppressSettingsUpstream && !TryGetSocksPortOverride().HasValue)
+        {
+            url = TunnelCoreManager.BuildUpstreamProxyUrl(s);
+        }
+        if (string.IsNullOrEmpty(url)) return null;
+        if (url.StartsWith("socks5h://", StringComparison.OrdinalIgnoreCase))
+        {
+            url = "socks5://" + url["socks5h://".Length..];
+        }
+        return url;
+    }
 
     public int SocksProxyPort => TryGetSocksPortOverride() ??
         (_settings.Settings.UseCustomProxyPorts && _settings.Settings.LocalSocksProxyPort > 0
@@ -76,14 +130,18 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
     public long BytesReceived { get; private set; }
     public int ConnectProgressPercent { get; private set; }
     public string ConnectProgressText { get; private set; } = "";
-    public IReadOnlyList<string> CoreProcessNames => new[] { "xray.exe", "sing-box.exe" };
+    public IReadOnlyList<string> CoreProcessNames => OperatingSystem.IsWindows()
+        ? new[] { "xray.exe", "sing-box.exe" }
+        : new[] { "xray", "sing-box", "xray.exe", "sing-box.exe" };
 
+#pragma warning disable CS0067
     public event EventHandler<ConnectionState>? StateChanged;
     public event EventHandler<Notice>? NoticeReceived;
     public event EventHandler<string>? LogLineAppended;
     public event EventHandler? BytesTransferredChanged;
     public event EventHandler? RouteChanged;
     public event EventHandler? ConnectProgressChanged;
+#pragma warning restore CS0067
 
     private void SetState(ConnectionState state)
     {
@@ -146,68 +204,80 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
+            psi.EnvironmentVariables["GOMEMLIMIT"] = "40MiB";
+            psi.EnvironmentVariables["GODEBUG"] = "madvdontneed=1";
             if (!isXray)
             {
                 psi.EnvironmentVariables["ENABLE_DEPRECATED_LEGACY_DNS_SERVERS"] = "true";
                 psi.EnvironmentVariables["ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER"] = "true";
             }
 
+            
+            
+            
+            
+            
+            var generation = ++_processGeneration;
+
             _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
             _process.OutputDataReceived += (_, e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e.Data)) Log(e.Data);
+                
+                
+                
+                
+                
+                if (!string.IsNullOrWhiteSpace(e.Data)) Log(LogSanitizer.Scrub(e.Data));
             };
             _process.ErrorDataReceived += (_, e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e.Data)) Log(e.Data);
+                if (!string.IsNullOrWhiteSpace(e.Data)) Log(LogSanitizer.Scrub(e.Data));
             };
-            _process.Exited += (_, _) =>
-            {
-                Log("V2Ray core process exited.");
-                if (State != ConnectionState.Disconnected)
-                {
-                    SetState(ConnectionState.Disconnected);
-                }
-            };
+            _process.Exited += (_, _) => OnProcessExited(generation);
 
             _process.Start();
             _process.BeginOutputReadLine();
             _process.BeginErrorReadLine();
             _childGuard.Adopt(_process);
 
-            var portReady = false;
-            for (var i = 0; i < 30; i++)
-            {
-                if (_process == null || _process.HasExited) break;
-                try
-                {
-                    using var probe = new TcpClient();
-                    using var probeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(400));
-                    await probe.ConnectAsync(IPAddress.Loopback, SocksProxyPort, probeCts.Token);
-                    portReady = true;
-                    break;
-                }
-                catch
-                {
-                    await Task.Delay(250);
-                }
-            }
+            
+            
+            
+            
+            var portReady = await SocksProbe.WaitForTunnelAsync(
+                SocksProxyPort, DateTime.UtcNow + TimeSpan.FromSeconds(8),
+                _runCts?.Token ?? CancellationToken.None);
 
-            if (!portReady || _process == null || _process.HasExited)
+            if (portReady is null || _process == null || _process.HasExited)
             {
                 if (_runCts?.IsCancellationRequested == true)
                 {
                     SetState(ConnectionState.Disconnected);
                     return;
                 }
+
+                
+                
+                
+                
+                
                 Log($"V2Ray inbound port {SocksProxyPort} failed to open or process exited prematurely.");
+                var doomed = _process;
+                _process = null;
+                if (doomed is not null)
+                {
+                    try { if (!doomed.HasExited) doomed.Kill(entireProcessTree: true); } catch { }
+                    try { doomed.CancelOutputRead(); } catch { }
+                    try { doomed.CancelErrorRead(); } catch { }
+                    try { doomed.Dispose(); } catch { }
+                }
                 SetState(ConnectionState.Error);
                 return;
             }
 
             SetProgress(100, "V2Ray core ready");
             SetState(ConnectionState.Connected);
-            Log($"V2Ray inbound active on 127.0.0.1:{SocksProxyPort} (SOCKS) & 127.0.0.1:{SocksProxyPort + 1} (HTTP)");
+            Log($"V2Ray inbound active on 127.0.0.1:{SocksProxyPort} (SOCKS) & 127.0.0.1:{HttpProxyPort} (HTTP)");
         }
         catch (Exception ex)
         {
@@ -236,17 +306,38 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         await _gate.WaitAsync();
         try
         {
+            
+            
+            _processGeneration++;
             _runCts?.Cancel();
-            if (_process != null && !_process.HasExited)
+            var proc = _process;
+            _process = null;
+            if (proc is not null && !proc.HasExited)
             {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                
+                
+                
+                
                 try
                 {
-                    _process.Kill(true);
-                    await _process.WaitForExitAsync();
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await proc.WaitForExitAsync(cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogWarning("V2Ray core did not exit within 5s after Kill; continuing");
                 }
                 catch { }
             }
-            _process = null;
+
+            if (proc is not null)
+            {
+                try { proc.CancelOutputRead(); } catch { }
+                try { proc.CancelErrorRead(); } catch { }
+                try { proc.Dispose(); } catch { }
+            }
+
             SetState(ConnectionState.Disconnected);
             Log("V2Ray core stopped.");
         }
@@ -257,7 +348,7 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         }
     }
 
-    private V2RayConfigEntry? ResolveActiveConfig()
+    public V2RayConfigEntry? ResolveActiveConfig()
     {
         var list = _settings.Settings.V2RayConfigs;
         if (list == null || list.Count == 0) return null;
@@ -273,22 +364,34 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         var isXray = coreSetting.Contains("xray");
 
         var appDir = AppDomain.CurrentDomain.BaseDirectory;
+        var xrayBin = OperatingSystem.IsWindows() ? "xray.exe" : "xray";
+        var singboxBin = OperatingSystem.IsWindows() ? "sing-box.exe" : "sing-box";
+
         if (isXray)
         {
-            var candidate = Path.Combine(appDir, "Resources", "xray", "xray.exe");
+            var candidate = Path.Combine(appDir, "Resources", "xray", xrayBin);
             if (File.Exists(candidate)) return (candidate, true);
+            var candidateWin = Path.Combine(appDir, "Resources", "xray", "xray.exe");
+            if (File.Exists(candidateWin)) return (candidateWin, true);
         }
         else
         {
-            var candidate = Path.Combine(appDir, "Resources", "sing_box", "sing-box.exe");
+            var candidate = Path.Combine(appDir, "Resources", "sing_box", singboxBin);
             if (File.Exists(candidate)) return (candidate, false);
+            var candidateWin = Path.Combine(appDir, "Resources", "sing_box", "sing-box.exe");
+            if (File.Exists(candidateWin)) return (candidateWin, false);
         }
 
-        var xrayFallback = Path.Combine(appDir, "Resources", "xray", "xray.exe");
+        
+        var xrayFallback = Path.Combine(appDir, "Resources", "xray", xrayBin);
         if (File.Exists(xrayFallback)) return (xrayFallback, true);
+        var xrayFallbackWin = Path.Combine(appDir, "Resources", "xray", "xray.exe");
+        if (File.Exists(xrayFallbackWin)) return (xrayFallbackWin, true);
 
-        var singboxFallback = Path.Combine(appDir, "Resources", "sing_box", "sing-box.exe");
+        var singboxFallback = Path.Combine(appDir, "Resources", "sing_box", singboxBin);
         if (File.Exists(singboxFallback)) return (singboxFallback, false);
+        var singboxFallbackWin = Path.Combine(appDir, "Resources", "sing_box", "sing-box.exe");
+        if (File.Exists(singboxFallbackWin)) return (singboxFallbackWin, false);
 
         return ("", true);
     }
@@ -301,13 +404,9 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         var filePath = Path.Combine(dir, isXray ? "xray_run.json" : "singbox_run.json");
 
         var s = _settings.Settings;
-        var authUser = s.LanAuthEnabled ? s.LanProxyUsername : null;
-        var authPass = s.LanAuthEnabled ? s.LanProxyPassword : null;
-        var bindAddr = LanExposurePolicy.ResolveBindAddress(s.AllowLanConnections, authUser, authPass, engineEnforcesCredentials: true, out var lanReason);
-        var isChainedOuter = TryGetSocksPortOverride().HasValue;
-        var listenAddr = isChainedOuter || !bindAddr.Equals(System.Net.IPAddress.Any) ? "127.0.0.1" : "0.0.0.0";
-        if (!string.IsNullOrEmpty(lanReason) && s.AllowLanConnections) _logger.LogInformation("[V2Ray] {Reason}", lanReason);
         var hasAuth = s.LanAuthEnabled && !string.IsNullOrWhiteSpace(s.LanProxyUsername) && !string.IsNullOrEmpty(s.LanProxyPassword);
+        var isChainedOuter = TryGetSocksPortOverride().HasValue;
+        var listenAddr = isChainedOuter || !s.AllowLanConnections ? "127.0.0.1" : "0.0.0.0";
 
         if (isXray)
         {
@@ -366,15 +465,20 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
                 });
             }
 
+            var xrayOutbounds = BuildXrayOutbounds(config, s.ShadowsocksMethod, shouldFragment, s.V2RayFragmentPackets, s.V2RayFragmentLength, s.V2RayFragmentInterval, ResolveUserUpstreamUrl(s));
             var xrayObj = new Dictionary<string, object>
             {
                 ["log"] = new { loglevel = "warning" },
                 ["dns"] = new { servers = dnsServers },
                 ["inbounds"] = xrayInbounds.ToArray(),
-                ["outbounds"] = BuildXrayOutbounds(config, s.ShadowsocksMethod, shouldFragment, s.V2RayFragmentPackets, s.V2RayFragmentLength, s.V2RayFragmentInterval)
+                ["outbounds"] = xrayOutbounds
             };
+            
+            
             if (muxEnabled)
-                xrayObj["mux"] = new { enabled = true, concurrency = 8 };
+                foreach (var ob in xrayOutbounds)
+                    if (ob is Dictionary<string, object> d && d.TryGetValue("tag", out var t) && t as string == "proxy")
+                        d["mux"] = new { enabled = true, concurrency = 8 };
 
             File.WriteAllText(filePath, JsonSerializer.Serialize(xrayObj, new JsonSerializerOptions { WriteIndented = true }));
         }
@@ -442,7 +546,7 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
                 ["log"] = new { level = "warn" },
                 ["dns"] = new { servers = singboxDnsServers },
                 ["inbounds"] = singboxInbounds,
-                ["outbounds"] = BuildSingBoxOutbounds(config, s.ShadowsocksMethod, shouldFragment),
+                ["outbounds"] = BuildSingBoxOutbounds(config, s.ShadowsocksMethod, shouldFragment, ResolveUserUpstreamUrl(s)),
                 ["route"] = new
                 {
                     default_domain_resolver = "local",
@@ -472,7 +576,7 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
     private static string ResolveSsMethod(V2RayConfigEntry? c, string? globalMethod)
     {
-
+        
         string? candidate = null;
         if (!string.IsNullOrWhiteSpace(globalMethod) && ValidSsMethods.Contains(globalMethod.Trim()))
             candidate = globalMethod!.Trim();
@@ -482,13 +586,29 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         return candidate ?? "2022-blake3-aes-128-gcm";
     }
 
+    private static readonly HashSet<string> ValidStreamSecurity =
+        new(StringComparer.OrdinalIgnoreCase) { "none", "tls", "reality" };
+
+    private static readonly HashSet<string> ValidFlows =
+        new(StringComparer.OrdinalIgnoreCase) { "xtls-rprx-vision", "xtls-rprx-vision-udp443" };
+
+        private static string NormalizeStreamSecurity(string? raw)
+    {
+        var v = (raw ?? "").Trim().ToLowerInvariant();
+        if (v.Length == 0) return "none";
+        if (ValidStreamSecurity.Contains(v)) return v;
+
+        return "none";
+    }
+
     private static object[] BuildXrayOutbounds(
         V2RayConfigEntry? c,
         string? globalSsMethod = null,
         bool enableFragment = false,
         string fragmentPackets = "tlshello",
         string fragmentLength = "100-200",
-        string fragmentInterval = "10-20")
+        string fragmentInterval = "10-20",
+        string? userUpstreamUrl = null)
     {
         if (c == null || string.IsNullOrWhiteSpace(c.Address))
         {
@@ -500,15 +620,38 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
         var proto = (c.Protocol ?? "vless").ToLowerInvariant();
         var network = string.IsNullOrWhiteSpace(c.Network) ? "tcp" : c.Network.ToLowerInvariant();
-        var security = string.IsNullOrWhiteSpace(c.Security) ? "none" : c.Security.ToLowerInvariant();
+
+        
+        
+        
+        
+        
+        
+        
+        var security = proto is "shadowsocks" or "ss"
+            ? "none"
+            : NormalizeStreamSecurity(c.Security);
+
+        
+        
+        
+        var netIsRaw = network is "tcp" or "raw";
+
+        
+        
+        
+        var isXHttp = network is "xhttp" or "splithttp" or "http" or "h2";
 
         var streamSettings = new Dictionary<string, object>
         {
-            ["network"] = (network is "xhttp" or "splithttp") ? "xhttp" : network,
+            ["network"] = isXHttp ? "xhttp" : network,
             ["security"] = security
         };
 
-        if (enableFragment)
+        
+        
+        
+        if (enableFragment && string.IsNullOrEmpty(userUpstreamUrl))
         {
             streamSettings["sockopt"] = new
             {
@@ -519,11 +662,34 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
         if (security == "reality")
         {
+            
+            
+            
+            
+            
+            if (!netIsRaw && !isXHttp && network != "grpc")
+            {
+                throw new InvalidOperationException(
+                    $"\"{c.Name}\" uses Reality over {network}. Reality needs a TCP, XHTTP or gRPC node.");
+            }
+
+            if (string.IsNullOrWhiteSpace(c.PublicKey))
+            {
+                throw new InvalidOperationException(
+                    $"\"{c.Name}\" asks for Reality but the link carried no public key (pbk).");
+            }
+
             var sni = string.IsNullOrWhiteSpace(c.Sni) ? c.Host ?? c.Address : c.Sni;
+            if (IPAddress.TryParse(sni, out _))
+            {
+                throw new InvalidOperationException(
+                    $"\"{c.Name}\" has an IP address ({sni}) as its SNI. TLS and Reality need a hostname.");
+            }
+
             streamSettings["realitySettings"] = new
             {
                 serverName = sni,
-                publicKey = c.PublicKey ?? "",
+                publicKey = c.PublicKey!,
                 shortId = c.ShortId ?? "",
                 spiderX = "/",
                 fingerprint = "chrome"
@@ -548,20 +714,17 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             streamSettings["tlsSettings"] = tlsDict;
         }
 
-        if (network is "xhttp" or "splithttp")
+        if (isXHttp)
         {
             var xhttpHost = !string.IsNullOrWhiteSpace(c.Host) ? c.Host : (!string.IsNullOrWhiteSpace(c.Sni) ? c.Sni : c.Address);
             streamSettings["xhttpSettings"] = new
             {
                 path = c.Path ?? "/",
                 host = xhttpHost,
-                mode = "auto"
-            };
-            streamSettings["splithttpSettings"] = new
-            {
-                path = c.Path ?? "/",
-                host = xhttpHost,
-                mode = "auto"
+                
+                
+                
+                mode = network is "xhttp" or "splithttp" ? "auto" : "stream-one"
             };
         }
         else if (network == "ws")
@@ -571,15 +734,6 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             {
                 path = c.Path ?? "/",
                 host = wsHost
-            };
-        }
-        else if (network is "http" or "h2")
-        {
-            var h2Host = !string.IsNullOrWhiteSpace(c.Host) ? c.Host : (!string.IsNullOrWhiteSpace(c.Sni) ? c.Sni : c.Address);
-            streamSettings["httpSettings"] = new
-            {
-                path = c.Path ?? "/",
-                host = new[] { h2Host }
             };
         }
         else if (network == "grpc")
@@ -599,13 +753,18 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
                 ["id"] = c.UserId,
                 ["encryption"] = "none"
             };
-
+            
+            
+            
+            
+            
+            
             if (!string.IsNullOrWhiteSpace(c.Flow))
             {
                 var cleanFlow = c.Flow.Trim();
-                if (!string.Equals(cleanFlow, "none", StringComparison.OrdinalIgnoreCase) && network == "tcp")
+                if (netIsRaw && ValidFlows.Contains(cleanFlow))
                 {
-                    userObj["flow"] = cleanFlow;
+                    userObj["flow"] = cleanFlow.ToLowerInvariant();
                 }
             }
 
@@ -666,16 +825,47 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
         var outbounds = new List<object>
         {
-            new
+            new Dictionary<string, object>
             {
-                tag = "proxy",
-                protocol = (proto is "shadowsocks" or "ss") ? "shadowsocks" : proto,
-                settings = outboundSettings,
-                streamSettings = streamSettings
+                ["tag"] = "proxy",
+                ["protocol"] = (proto is "shadowsocks" or "ss") ? "shadowsocks" : proto,
+                ["settings"] = outboundSettings,
+                ["streamSettings"] = streamSettings
             }
         };
 
-        if (enableFragment)
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        if (!string.IsNullOrEmpty(userUpstreamUrl))
+        {
+            var upstream = BuildXrayUpstreamOutbound(userUpstreamUrl);
+            if (upstream is not null)
+            {
+                
+                
+                var sockopt = new Dictionary<string, object>();
+                if (streamSettings.TryGetValue("sockopt", out var existing) &&
+                    existing is Dictionary<string, object> existingMap)
+                {
+                    foreach (var kv in existingMap) sockopt[kv.Key] = kv.Value;
+                }
+
+                sockopt["dialerProxy"] = "user-upstream";
+                streamSettings["sockopt"] = sockopt;
+
+                outbounds.Add(upstream);
+            }
+        }
+
+        if (enableFragment && string.IsNullOrEmpty(userUpstreamUrl))
         {
             outbounds.Add(new
             {
@@ -705,7 +895,69 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         return outbounds.ToArray();
     }
 
-    private static object[] BuildSingBoxOutbounds(V2RayConfigEntry? c, string? globalSsMethod = null, bool enableFragment = false)
+        private static object? BuildXrayUpstreamOutbound(string url)
+    {
+        if (!TryParseUpstreamUri(url, out var uri, out var user, out var pass))
+        {
+            return null;
+        }
+        var scheme = uri.Scheme.ToLowerInvariant();
+        object users = Array.Empty<object>();
+        if (!string.IsNullOrEmpty(user))
+        {
+            users = new object[]
+            {
+                string.IsNullOrEmpty(pass)
+                    ? new { user = user }
+                    : new { user = user, pass = pass }
+            };
+        }
+
+        if (scheme is "socks5" or "socks" or "socks5h")
+        {
+            return new Dictionary<string, object>
+            {
+                ["tag"] = "user-upstream",
+                ["protocol"] = "socks",
+                ["settings"] = new Dictionary<string, object>
+                {
+                    ["servers"] = new object[]
+                    {
+                        new Dictionary<string, object>
+                        {
+                            ["address"] = uri.Host,
+                            ["port"] = uri.Port > 0 ? uri.Port : 1080,
+                            ["users"] = users
+                        }
+                    }
+                }
+            };
+        }
+
+        if (scheme is "http" or "https")
+        {
+            return new Dictionary<string, object>
+            {
+                ["tag"] = "user-upstream",
+                ["protocol"] = "http",
+                ["settings"] = new Dictionary<string, object>
+                {
+                    ["servers"] = new object[]
+                    {
+                        new Dictionary<string, object>
+                        {
+                            ["address"] = uri.Host,
+                            ["port"] = uri.Port > 0 ? uri.Port : (scheme == "https" ? 443 : 8080),
+                            ["users"] = users
+                        }
+                    }
+                }
+            };
+        }
+        return null;
+    }
+
+    private static object[] BuildSingBoxOutbounds(V2RayConfigEntry? c, string? globalSsMethod = null, bool enableFragment = false, string? userUpstreamUrl = null)
     {
         if (c == null || string.IsNullOrWhiteSpace(c.Address))
         {
@@ -730,9 +982,10 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             if (!string.IsNullOrWhiteSpace(c.Flow))
             {
                 var cleanFlow = c.Flow.Trim();
-                if (!string.Equals(cleanFlow, "none", StringComparison.OrdinalIgnoreCase) && (c.Network == "tcp" || string.IsNullOrEmpty(c.Network)))
+                var sbNet = (c.Network ?? "tcp").Trim().ToLowerInvariant();
+                if (ValidFlows.Contains(cleanFlow) && (sbNet is "tcp" or "raw"))
                 {
-                    outb["flow"] = cleanFlow;
+                    outb["flow"] = cleanFlow.ToLowerInvariant();
                 }
             }
         }
@@ -765,7 +1018,13 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             outb["password"] = c.UserId;
         }
 
-        if (c.Security == "tls" || c.Security == "reality")
+        
+        
+        
+        
+        
+        var singBoxSecurity = NormalizeStreamSecurity(c.Security);
+        if (singBoxSecurity is "tls" or "reality")
         {
             var tls = new Dictionary<string, object>
             {
@@ -778,7 +1037,7 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
                     fingerprint = "chrome"
                 }
             };
-            if (c.Security == "reality")
+            if (singBoxSecurity == "reality")
             {
                 var realityDict = new Dictionary<string, object>
                 {
@@ -825,6 +1084,24 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             };
         }
 
+        
+        
+        
+        if (!string.IsNullOrEmpty(userUpstreamUrl))
+        {
+            var upstream = BuildSingBoxUpstreamOutbound(userUpstreamUrl);
+            if (upstream is not null)
+            {
+                outb["detour"] = "user-upstream";
+                return new object[]
+                {
+                    outb,
+                    upstream,
+                    new { type = "direct", tag = "direct" }
+                };
+            }
+        }
+
         return new object[]
         {
             outb,
@@ -832,20 +1109,83 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         };
     }
 
+        private static object? BuildSingBoxUpstreamOutbound(string url)
+    {
+        if (!TryParseUpstreamUri(url, out var uri, out var user, out var pass))
+        {
+            return null;
+        }
+        var scheme = uri.Scheme.ToLowerInvariant();
+        var d = new Dictionary<string, object>
+        {
+            ["tag"] = "user-upstream",
+            ["server"] = uri.Host,
+            ["server_port"] = uri.Port > 0 ? uri.Port : 1080
+        };
+        if (scheme is "socks5" or "socks" or "socks5h")
+        {
+            d["type"] = "socks";
+            d["version"] = "5";
+        }
+        else if (scheme is "http" or "https")
+        {
+            d["type"] = "http";
+            if (uri.Port <= 0) d["server_port"] = scheme == "https" ? 443 : 8080;
+        }
+        else
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrEmpty(user))
+        {
+            d["username"] = user;
+            d["password"] = pass ?? "";
+        }
+        return d;
+    }
+
+        private static bool TryParseUpstreamUri(
+        string url, out Uri uri, out string? user, out string? pass)
+    {
+        user = null;
+        pass = null;
+        try
+        {
+            uri = new Uri(url);
+            if (!uri.IsAbsoluteUri || string.IsNullOrEmpty(uri.Host)) return false;
+            var info = uri.UserInfo;
+            if (!string.IsNullOrEmpty(info))
+            {
+                var parts = info.Split(':', 2);
+                user = Uri.UnescapeDataString(parts[0]);
+                pass = parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : "";
+            }
+            return true;
+        }
+        catch
+        {
+            
+            uri = null!;
+            return false;
+        }
+    }
+
     private static string NormalizeRealityPublicKey(string? key)
     {
         if (string.IsNullOrWhiteSpace(key)) return "";
-
+        
         return key.Trim().Replace('+', '-').Replace('/', '_').TrimEnd('=');
     }
 
     private static readonly SemaphoreSlim _testThrottle = new(4, 4);
 
-    public async Task<int> MeasureRealDelayAsync(V2RayConfigEntry? config, CancellationToken ct = default)
+        public async Task<int> MeasureRealDelayAsync(V2RayConfigEntry? config, CancellationToken ct = default)
     {
         if (config == null || string.IsNullOrWhiteSpace(config.Address) || config.Port <= 0)
             return -1;
 
+        
         if (State == ConnectionState.Connected && ResolveActiveConfig()?.Id == config.Id)
         {
             return await ProbeUrlThroughProxyAsync(SocksProxyPort, ct);
@@ -881,7 +1221,7 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
                 var shouldFragment = config.EnableFragment ?? s.V2RayEnableFragment;
                 var xrayTestObj = new Dictionary<string, object>
                 {
-                    ["log"] = new { loglevel = "none" },
+                    ["log"] = new { loglevel = "warning" },
                     ["dns"] = new
                     {
                         servers = new object[]
@@ -976,6 +1316,8 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
+            psi.EnvironmentVariables["GOMEMLIMIT"] = "32MiB";
+            psi.EnvironmentVariables["GODEBUG"] = "madvdontneed=1";
             if (!isXray)
             {
                 psi.EnvironmentVariables["ENABLE_DEPRECATED_LEGACY_DNS_SERVERS"] = "true";
@@ -983,19 +1325,26 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             }
 
             using var proc = new Process { StartInfo = psi };
-            var stderrBuilder = new StringBuilder();
-            proc.ErrorDataReceived += (_, e) =>
+            var coreOutput = new StringBuilder();
+            
+            
+            
+            
+            void OnCoreLine(object? sender, DataReceivedEventArgs e)
             {
                 if (!string.IsNullOrWhiteSpace(e.Data))
-                    stderrBuilder.AppendLine(e.Data);
-            };
+                    lock (coreOutput) coreOutput.AppendLine(e.Data);
+            }
+            proc.ErrorDataReceived += OnCoreLine;
+            proc.OutputDataReceived += OnCoreLine;
             proc.Start();
             proc.BeginErrorReadLine();
+            proc.BeginOutputReadLine();
             _childGuard.Adopt(proc);
 
             try
             {
-
+                
                 var ready = false;
                 for (var i = 0; i < 60; i++)
                 {
@@ -1016,10 +1365,16 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
                 if (!ready || proc.HasExited)
                 {
-                    if (stderrBuilder.Length > 0)
+                    string captured;
+                    lock (coreOutput) captured = coreOutput.ToString().Trim();
+                    
+                    
+                    
+                    if (captured.Length > 0)
                     {
                         _logger.LogWarning("[V2Ray Ping] Core {Exe} failed or exited before port {Port}: {Error}",
-                            Path.GetFileName(exePath), testSocksPort, stderrBuilder.ToString().Trim());
+                            Path.GetFileName(exePath), testSocksPort, captured);
+                        Log($"[V2Ray Ping] {Path.GetFileName(exePath)} could not start for this node: {captured}");
                     }
                     return -3;
                 }
@@ -1071,11 +1426,15 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
     private static async Task<int> ProbeUrlThroughProxyAsync(int socksPort, CancellationToken ct)
     {
+        
+        
+        
         var targetUrls = new[]
         {
             "http://www.google.com/generate_204",
             "http://www.gstatic.com/generate_204",
-            "http://cp.cloudflare.com/generate_204"
+            "http://cp.cloudflare.com/generate_204",
+            "https://www.gstatic.com/generate_204"
         };
 
         foreach (var url in targetUrls)
@@ -1112,34 +1471,10 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             catch { }
         }
 
-        try
-        {
-            var sw = Stopwatch.StartNew();
-            using var tcp = new TcpClient();
-            using var pingCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            pingCts.CancelAfter(TimeSpan.FromSeconds(3.5));
-            await tcp.ConnectAsync(IPAddress.Loopback, socksPort, pingCts.Token);
-            using var stream = tcp.GetStream();
-
-            await stream.WriteAsync(new byte[] { 0x05, 0x01, 0x00 }, pingCts.Token);
-            var greet = new byte[2];
-            await stream.ReadExactlyAsync(greet, pingCts.Token);
-            if (greet[0] == 0x05 && greet[1] == 0x00)
-            {
-
-                var connectReq = new byte[] { 0x05, 0x01, 0x00, 0x01, 8, 8, 8, 8, 0x00, 0x35 };
-                await stream.WriteAsync(connectReq, pingCts.Token);
-                var reply = new byte[4];
-                await stream.ReadExactlyAsync(reply, pingCts.Token);
-                if (reply[1] == 0x00)
-                {
-                    sw.Stop();
-                    return Math.Max(1, (int)sw.ElapsedMilliseconds);
-                }
-            }
-        }
-        catch { }
-
+        
+        
+        
+        
         return -3;
     }
 

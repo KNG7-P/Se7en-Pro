@@ -11,36 +11,26 @@ public sealed class UserSettings
     [JsonPropertyName("language")]
     public string Language { get; set; } = "en";
 
+    [JsonPropertyName("visualEffects")]
+    public string VisualEffects { get; set; } = "auto";
+
     [JsonPropertyName("egressRegion")]
     public string EgressRegion { get; set; } = "";
 
     [JsonPropertyName("disableTimeouts")]
     public bool DisableTimeouts { get; set; }
 
-    public const int MinPort = 1;
-    public const int MaxPort = 65535;
-
-    public static int SanitizePort(int port, int fallback = 0)
-        => port is >= MinPort and <= MaxPort ? port : fallback;
-
-    private int _localSocksProxyPort;
     [JsonPropertyName("localSocksProxyPort")]
-    public int LocalSocksProxyPort
-    {
-        get => _localSocksProxyPort;
-        set => _localSocksProxyPort = SanitizePort(value);
-    }
+    public int LocalSocksProxyPort { get; set; }
 
-    private int _localHttpProxyPort;
     [JsonPropertyName("localHttpProxyPort")]
-    public int LocalHttpProxyPort
-    {
-        get => _localHttpProxyPort;
-        set => _localHttpProxyPort = SanitizePort(value);
-    }
+    public int LocalHttpProxyPort { get; set; }
 
     [JsonPropertyName("useCustomProxyPorts")]
     public bool UseCustomProxyPorts { get; set; }
+
+    [JsonPropertyName("lanAuthEnabled")]
+    public bool LanAuthEnabled { get; set; }
 
     [JsonPropertyName("allowLanConnections")]
     public bool AllowLanConnections { get; set; }
@@ -54,9 +44,6 @@ public sealed class UserSettings
     [JsonPropertyName("startWithWindows")]
     public bool StartWithWindows { get; set; }
 
-    [JsonPropertyName("ipScannerEnabled")]
-    public bool IpScannerEnabled { get; set; }
-
     [JsonPropertyName("minimizeToTray")]
     public bool MinimizeToTray { get; set; } = true;
 
@@ -66,8 +53,12 @@ public sealed class UserSettings
     [JsonPropertyName("upstreamProxy")]
     public string UpstreamProxy { get; set; } = "";
 
+    
+    
+    
+    
     [JsonPropertyName("upstreamProxyEnabled")]
-    public bool UpstreamProxyEnabled { get; set; } = false;
+    public bool UpstreamProxyEnabled { get; set; } = true;
 
     [JsonPropertyName("upstreamProxyScheme")]
     public string UpstreamProxyScheme { get; set; } = "http";
@@ -76,7 +67,6 @@ public sealed class UserSettings
     public string UpstreamProxyUsername { get; set; } = "";
 
     [JsonPropertyName("upstreamProxyPassword")]
-    [System.Text.Json.Serialization.JsonConverter(typeof(Services.EncryptedStringConverter))]
     public string UpstreamProxyPassword { get; set; } = "";
 
     [JsonPropertyName("systemWideTunneling")]
@@ -106,8 +96,13 @@ public sealed class UserSettings
     [JsonPropertyName("saveFoundIpsAndSni")]
     public bool SaveFoundIpsAndSni { get; set; } = false;
 
+    private List<string> _frontedMeekCDNScanBuiltInSets = new() { "psiphon-akamai", "fastly" };
     [JsonPropertyName("frontedMeekCDNScanBuiltInSets")]
-    public List<string> FrontedMeekCDNScanBuiltInSets { get; set; } = new() { "psiphon-akamai", "fastly" };
+    public List<string> FrontedMeekCDNScanBuiltInSets
+    {
+        get => _frontedMeekCDNScanBuiltInSets ??= new() { "psiphon-akamai", "fastly" };
+        set => _frontedMeekCDNScanBuiltInSets = value ?? new() { "psiphon-akamai", "fastly" };
+    }
 
     [JsonPropertyName("establishTunnelTimeoutSeconds")]
     public int? EstablishTunnelTimeoutSeconds { get; set; } = 300;
@@ -121,24 +116,89 @@ public sealed class UserSettings
     [JsonPropertyName("conduitRejectCensoredCountries")]
     public bool ConduitRejectCensoredCountries { get; set; } = true;
 
-    [JsonPropertyName("lanAuthEnabled")]
-    public bool LanAuthEnabled { get; set; } = false;
-
     [JsonPropertyName("lanProxyUsername")]
     public string LanProxyUsername { get; set; } = "";
 
     [JsonPropertyName("lanProxyPassword")]
-    [System.Text.Json.Serialization.JsonConverter(typeof(Services.EncryptedStringConverter))]
     public string LanProxyPassword { get; set; } = "";
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     [JsonPropertyName("connectionMethod")]
     public string ConnectionMethod { get; set; } = "wireguard";
 
+    
+    
     [JsonPropertyName("aetherProtocol")]
     public string AetherProtocol { get; set; } = "masque";
 
+    
+    [JsonPropertyName("aetherScanMode")]
+    public string AetherScanMode { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherScanModeMasque")]
+    public string AetherScanModeMasque { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherScanModeMim")]
+    public string AetherScanModeMim { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherScanModeWireguard")]
+    public string AetherScanModeWireguard { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherScanModeWarp")]
+    public string AetherScanModeWarp { get; set; } = "balanced";
+
+    
+    
+    [JsonPropertyName("aetherNoize")]
+    public string AetherNoize { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherNoizeMasque")]
+    public string AetherNoizeMasque { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherNoizeMim")]
+    public string AetherNoizeMim { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherNoizeWireguard")]
+    public string AetherNoizeWireguard { get; set; } = "balanced";
+
+    [JsonPropertyName("aetherNoizeWarp")]
+    public string AetherNoizeWarp { get; set; } = "balanced";
+
+    
+    [JsonPropertyName("aetherIpVersion")]
+    public string AetherIpVersion { get; set; } = "4";
+
+    [JsonPropertyName("aetherIpVersionMasque")]
+    public string AetherIpVersionMasque { get; set; } = "4";
+
+    [JsonPropertyName("aetherIpVersionMim")]
+    public string AetherIpVersionMim { get; set; } = "4";
+
+    [JsonPropertyName("aetherIpVersionWireguard")]
+    public string AetherIpVersionWireguard { get; set; } = "4";
+
+    [JsonPropertyName("aetherIpVersionWarp")]
+    public string AetherIpVersionWarp { get; set; } = "4";
+
+    
+    
+    [JsonPropertyName("aetherManualPeer")]
+    public string AetherManualPeer { get; set; } = "";
+
     [JsonPropertyName("aetherEndpointMasque")]
     public string AetherEndpointMasque { get; set; } = "";
+
+    [JsonPropertyName("aetherEndpointMim")]
+    public string AetherEndpointMim { get; set; } = "";
 
     [JsonPropertyName("aetherEndpointWireguard")]
     public string AetherEndpointWireguard { get; set; } = "";
@@ -146,24 +206,42 @@ public sealed class UserSettings
     [JsonPropertyName("aetherEndpointWarp")]
     public string AetherEndpointWarp { get; set; } = "";
 
-    [JsonPropertyName("aetherEndpointMasqueOnMasque")]
-    public string AetherEndpointMasqueOnMasque { get; set; } = "";
+    
+    [JsonPropertyName("aetherWiwOuterPeer")]
+    public string AetherWiwOuterPeer { get; set; } = "";
 
-    [JsonPropertyName("aetherScanMode")]
-    public string AetherScanMode { get; set; } = "balanced";
+    [JsonPropertyName("aetherWiwInnerPeer")]
+    public string AetherWiwInnerPeer { get; set; } = "";
 
-    [JsonPropertyName("aetherNoize")]
-    public string AetherNoize { get; set; } = "balanced";
+    
+    [JsonPropertyName("aetherMimOuterPeer")]
+    public string AetherMimOuterPeer { get; set; } = "";
 
-    [JsonPropertyName("aetherIpVersion")]
-    public string AetherIpVersion { get; set; } = "4";
+    [JsonPropertyName("aetherMimInnerPeer")]
+    public string AetherMimInnerPeer { get; set; } = "";
 
-    [JsonPropertyName("aetherPerfProfile")]
-    public string AetherPerfProfile { get; set; } = "auto";
+    
+    [JsonPropertyName("aetherExitLoc")]
+    public string AetherExitLoc { get; set; } = "";
 
-    [JsonPropertyName("aetherManualPeer")]
-    public string AetherManualPeer { get; set; } = "";
+    [JsonPropertyName("aetherExitLocMasque")]
+    public string AetherExitLocMasque { get; set; } = "";
 
+    [JsonPropertyName("aetherExitLocMim")]
+    public string AetherExitLocMim { get; set; } = "";
+
+    [JsonPropertyName("aetherExitLocWireguard")]
+    public string AetherExitLocWireguard { get; set; } = "";
+
+    [JsonPropertyName("aetherExitLocWarp")]
+    public string AetherExitLocWarp { get; set; } = "";
+
+    
+    
+    [JsonPropertyName("aetherCacheEdges")]
+    public bool AetherCacheEdges { get; set; } = true;
+
+    
     [JsonPropertyName("chainedOuterTransport")]
     public string ChainedOuterTransport { get; set; } = "auto";
 
@@ -173,69 +251,107 @@ public sealed class UserSettings
     [JsonPropertyName("chainedTorOuterTransport")]
     public string ChainedTorOuterTransport { get; set; } = "auto";
 
+    
     [JsonPropertyName("chainedSubMode")]
     public string ChainedSubMode { get; set; } = "psiphon_warp";
+
+    
+    
+    
+    
+    
+    
+    
+    [JsonPropertyName("aetherEch")]
+    public bool AetherEch { get; set; }
+
+    
+    
+    
+    
+    
+    [JsonPropertyName("aetherMasqueTransport")]
+    public string AetherMasqueTransport
+    {
+        get => _aetherMasqueTransport;
+        set
+        {
+            _aetherMasqueTransport = value;
+            _aetherMasqueQuic = string.Equals(value, "h3", System.StringComparison.OrdinalIgnoreCase);
+        }
+    }
+    private string _aetherMasqueTransport = "h3";
+
+    [JsonPropertyName("aetherMasqueQuic")]
+    public bool AetherMasqueQuic
+    {
+        get => _aetherMasqueQuic;
+        set
+        {
+            _aetherMasqueQuic = value;
+            _aetherMasqueTransport = value ? "h3" : "h2";
+        }
+    }
+    private bool _aetherMasqueQuic = true;
+
+    
+    [JsonPropertyName("aetherFragment")]
+    public bool AetherFragment { get; set; } = false;
+
+    
+    [JsonPropertyName("aetherFragmentSize")]
+    public string AetherFragmentSize { get; set; } = "";
+
+    [JsonPropertyName("aetherFragmentDelay")]
+    public string AetherFragmentDelay { get; set; } = "";
+
+    
+    [JsonPropertyName("torExitCountry")]
+    public string TorExitCountry { get; set; } = "";
+
+    
+    
+    [JsonPropertyName("torBridges")]
+    public string TorBridges { get; set; } = "";
+
+    
+    
+    
+    
+    
+    [JsonPropertyName("splitTunnelEnabled")]
+    public bool SplitTunnelEnabled { get; set; }
+
+    
+    
+    
+    
+    
+    [JsonPropertyName("splitTunnelMode")]
+    public string SplitTunnelMode { get; set; } = "exclude";
+
+    [JsonPropertyName("splitTunnelEntries")]
+    public List<SplitTunnelEntry> SplitTunnelEntries { get; set; } = new();
+
+    
+    [JsonPropertyName("shardCustomCfIp")]
+    public string ShardCustomCfIp { get; set; } = "";
+
+    [JsonPropertyName("shardSmartSplit")]
+    public bool ShardSmartSplit { get; set; } = false;
+
+    [JsonPropertyName("shardRotateIp")]
+    public bool ShardRotateIp { get; set; } = true;
 
     [JsonPropertyName("shadowsocksMethod")]
     public string ShadowsocksMethod { get; set; } = "2022-blake3-aes-128-gcm";
 
-    [JsonPropertyName("aetherEch")]
-    public bool AetherEch { get; set; }
-
-    [JsonPropertyName("aetherMasqueTransport")]
-    public string AetherMasqueTransport { get; set; } = "h3";
-
-    [JsonPropertyName("aetherFragment")]
-    public bool AetherFragment { get; set; } = false;
-
-    [JsonPropertyName("aetherMimEnabled")]
-    public bool AetherMimEnabled { get; set; } = false;
-
-    [JsonPropertyName("aetherMimOuter")]
-    public string AetherMimOuter { get; set; } = "";
-
-    [JsonPropertyName("aetherMimInner")]
-    public string AetherMimInner { get; set; } = "";
-
-    [JsonPropertyName("aetherMimPeers")]
-    public string AetherMimPeers { get; set; } = "";
-
-    [JsonPropertyName("aetherQuicV2")]
-    public bool AetherQuicV2 { get; set; } = true;
-
-    [JsonPropertyName("aetherMark")]
-    public string AetherMark { get; set; } = "";
-
-    [JsonPropertyName("torExitCountry")]
-    public string TorExitCountry { get; set; } = "";
-
-    [JsonPropertyName("torBridges")]
-    public string TorBridges { get; set; } = "";
-
-    [JsonPropertyName("splitTunnelEnabled")]
-    public bool SplitTunnelEnabled { get; set; }
-
-    [JsonPropertyName("splitTunnelMode")]
-    public string SplitTunnelMode { get; set; } = "exclude";
-
-    private List<SplitTunnelEntry> _splitTunnelEntries = new();
-    [JsonPropertyName("splitTunnelEntries")]
-    public List<SplitTunnelEntry> SplitTunnelEntries
-    {
-        get => _splitTunnelEntries ??= new();
-        set => _splitTunnelEntries = value ?? new();
-    }
-
+    
     [JsonPropertyName("v2rayCore")]
     public string V2RayCore { get; set; } = "xray";
 
-    private int _v2rayInboundPort = 10808;
     [JsonPropertyName("v2rayInboundPort")]
-    public int V2RayInboundPort
-    {
-        get => _v2rayInboundPort;
-        set => _v2rayInboundPort = SanitizePort(value, 10808);
-    }
+    public int V2RayInboundPort { get; set; } = 10808;
 
     [JsonPropertyName("v2rayEnableMux")]
     public bool V2RayEnableMux { get; set; } = false;
@@ -265,15 +381,6 @@ public sealed class UserSettings
         get => _v2rayConfigs ??= new();
         set => _v2rayConfigs = value ?? new();
     }
-
-    [JsonPropertyName("shardCustomCfIp")]
-    public string ShardCustomCfIp { get; set; } = "";
-
-    [JsonPropertyName("shardSmartSplit")]
-    public bool ShardSmartSplit { get; set; } = false;
-
-    [JsonPropertyName("shardRotateIp")]
-    public bool ShardRotateIp { get; set; } = true;
 }
 
 public sealed class V2RayConfigEntry
@@ -326,8 +433,25 @@ public sealed class V2RayConfigEntry
     [JsonPropertyName("isActive")]
     public bool IsActive { get; set; }
 
-    [JsonPropertyName("latency")]
-    public int Latency { get; set; } = -1;
+    public V2RayConfigEntry Clone() => new()
+    {
+        Id = Id,
+        Name = Name,
+        Protocol = Protocol,
+        Address = Address,
+        Port = Port,
+        UserId = UserId,
+        Security = Security,
+        Network = Network,
+        Path = Path,
+        Host = Host,
+        Sni = Sni,
+        PublicKey = PublicKey,
+        ShortId = ShortId,
+        Flow = Flow,
+        EnableFragment = EnableFragment,
+        IsActive = IsActive,
+    };
 }
 
 public sealed class SplitTunnelEntry

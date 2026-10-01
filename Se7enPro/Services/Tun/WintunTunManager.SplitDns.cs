@@ -11,8 +11,7 @@ namespace Se7enPro.Services;
 
 public sealed partial class WintunTunManager
 {
-
-    internal static List<string> WidenDomainMatchSet(IEnumerable<string> domains)
+        internal static List<string> WidenDomainMatchSet(IEnumerable<string> domains)
     {
         var set = new List<string>();
         foreach (var d in domains)
@@ -28,7 +27,7 @@ public sealed partial class WintunTunManager
         return set;
     }
 
-    private SocksDnsForwarder.SplitPolicy BuildSplitPolicy()
+        private SocksDnsForwarder.SplitPolicy BuildSplitPolicy()
     {
         var s = _settings.Settings;
         if (!s.SplitTunnelEnabled)
@@ -52,55 +51,31 @@ public sealed partial class WintunTunManager
                       + "through the tunnel and may still surface the VPN IP.");
         }
 
-        var canPinV6 = _realRouteV6Known;
-        if (domains.Count > 0 && !canPinV6 && _v6Enabled)
-        {
-            WriteDiag("NOTE: the machine has IPv6 but no IPv6 default gateway was found; "
-                      + "AAAA answers for bypass domains will be withheld so those sites "
-                      + "stay on IPv4 and off the tunnel.");
-        }
-
         return new SocksDnsForwarder.SplitPolicy
         {
             ExcludeMode = !include,
             Domains = WidenDomainMatchSet(domains),
             LocalDnsIp = localDns,
             AddressSeen = OnSplitAddressSeen,
-            CanPinLocalV6 = canPinV6,
         };
     }
 
-    private void OnSplitAddressSeen(IPAddress ip, string queriedName)
+        private void OnSplitAddressSeen(IPAddress ip, string queriedName, bool viaTunnel)
     {
-        var isV6 = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6;
-        if (!isV6 && ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return;
+        if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return;
 
         var s = _settings.Settings;
         if (!s.SplitTunnelEnabled) return;
 
         var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-
-        byte hostPrefix = isV6 ? (byte)128 : (byte)32;
-
-        if (include)
-        {
-            if (isV6 && !_v6Enabled) return;
-        }
-        else
-        {
-            if (isV6 ? !_realRouteV6Known : !_realRouteKnown) return;
-        }
+        if (viaTunnel != include) return;
+        if (!include && !_realRouteKnown) return;
 
         try
         {
             var entry = include
-                ? WintunRouteApi.AddRoute(_tunIfIndex, ip, hostPrefix, isV6 ? TunAddressV6 : TunAddressV4)
-                : WintunRouteApi.AddRoute(
-                    isV6 ? _realIfIndexV6 : _realIfIndex,
-                    ip, hostPrefix,
-                    isV6 ? _realGatewayV6 : _realGateway);
-
-            if (entry is null) return;
+                ? WintunRouteApi.AddRoute(_tunIfIndex, ip, 32, TunAddressV4)
+                : WintunRouteApi.AddRoute(_realIfIndex, ip, 32, _realGateway);
 
             var key = ip.ToString();
             var added = false;
@@ -125,7 +100,7 @@ public sealed partial class WintunTunManager
         }
     }
 
-    internal static IReadOnlyList<string> DetectUnderlyingDnsServersV4()
+        internal static IReadOnlyList<string> DetectUnderlyingDnsServersV4()
     {
         if (UnderlyingDnsServersOverride is not null)
         {
@@ -164,7 +139,7 @@ public sealed partial class WintunTunManager
         return preferred.Concat(fallback).ToList();
     }
 
-    private async Task RunSplitDnsRefresherAsync(CancellationToken ct)
+        private async Task RunSplitDnsRefresherAsync(CancellationToken ct)
     {
         try { await Task.Delay(TimeSpan.FromSeconds(10), ct); }
         catch (OperationCanceledException) { return; }

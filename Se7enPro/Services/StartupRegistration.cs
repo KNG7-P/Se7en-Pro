@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Microsoft.Win32;
 
 namespace Se7enPro.Services;
@@ -20,13 +21,49 @@ public sealed class StartupRegistration : IStartupRegistration
             var stored = key.GetValue(ValueName) as string;
             if (string.IsNullOrEmpty(stored)) return false;
 
+            
+            
+            
+            
+            
+            
+            var exe = StoredExecutable(stored);
+            if (exe is null) return false;
+
             var path = Environment.ProcessPath ?? "";
-            return !string.IsNullOrEmpty(path) && stored.IndexOf(path, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (string.IsNullOrEmpty(path)) return false;
+
+            return string.Equals(exe, path.Trim(), StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
             return false;
         }
+    }
+
+        private static string? StoredExecutable(string commandLine)
+    {
+        var v = commandLine.Trim();
+        if (v.Length == 0) return null;
+
+        if (v[0] == '"')
+        {
+            var close = v.IndexOf('"', 1);
+            if (close <= 1) return null;
+            return v[1..close];
+        }
+
+        
+        
+        
+        var firstSpace = v.IndexOf(' ');
+        if (firstSpace == 0) return null;
+        if (firstSpace < 0) return v;
+        if (v.Contains('"', StringComparison.Ordinal)) return null;
+
+        
+        var token = v[..firstSpace];
+        return token.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? token : null;
     }
 
     public void SetEnabled(bool enabled)
@@ -38,11 +75,20 @@ public sealed class StartupRegistration : IStartupRegistration
 
             if (enabled)
             {
-                key.SetValue(ValueName, BuildCommand(), RegistryValueKind.String);
+                var command = BuildCommand();
+                if (command.Length == 0) return;
+                key.SetValue(ValueName, command, RegistryValueKind.String);
             }
             else
             {
-                if (key.GetValue(ValueName) is not null)
+                
+                
+                var stored = key.GetValue(ValueName) as string;
+                var exe = stored is null ? null : StoredExecutable(stored);
+                var ours = exe is not null &&
+                           string.Equals(exe, (Environment.ProcessPath ?? "").Trim(),
+                               StringComparison.OrdinalIgnoreCase);
+                if (stored is not null && ours)
                 {
                     key.DeleteValue(ValueName, throwOnMissingValue: false);
                 }
@@ -67,8 +113,21 @@ public sealed class StartupRegistration : IStartupRegistration
         var path = Environment.ProcessPath ?? "";
         if (string.IsNullOrEmpty(path)) return "";
 
-        var quotedPath = path.Contains(' ', StringComparison.Ordinal) ? $"\"{path}\"" : path;
-        return $"{quotedPath} {AutostartArg}";
+        
+        
+        
+        
+        var leaf = Path.GetFileName(path);
+        if (!path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(leaf, "dotnet.exe", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(leaf, "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        
+        
+        return $"\"{path}\" {AutostartArg}";
     }
 
     private static string NormalizePath(string value)

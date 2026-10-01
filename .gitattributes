@@ -7,13 +7,15 @@
 # ---- Text sources ----
 *.cs     text diff=csharp
 *.xaml   text
+*.axaml  text
 *.csproj text
 *.sln    text eol=crlf
 *.json   text
 *.md     text
+*.yml    text eol=lf
 *.ps1    text eol=crlf
-*.py     text
-*.toml   text
+*.py     text eol=lf
+*.iss    text eol=crlf
 *.config text
 *.manifest text
 *.txt    text
@@ -25,8 +27,10 @@
 *.png  binary
 *.jpg  binary
 *.bin  binary
+*.dat  binary
 *.eot  binary
 *.ttf  binary
 *.woff binary
 *.woff2 binary
 *.7z   binary
+*.zip  binary

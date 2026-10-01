@@ -11,24 +11,40 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <RootNamespace>Se7enPro</RootNamespace>
-    <AssemblyName>Se7enCore</AssemblyName>
+    <AssemblyName>Se7enPro</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Platforms>x64;x86;AnyCPU</Platforms>
-    <PlatformTarget>x64</PlatformTarget>
+    <PlatformTarget Condition="'$(Platform)' == 'x86' or '$(RuntimeIdentifier)' == 'win-x86'">x86</PlatformTarget>
+    <PlatformTarget Condition="'$(Platform)' != 'x86' and '$(RuntimeIdentifier)' != 'win-x86'">x64</PlatformTarget>
     <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
     <UseAppHost>true</UseAppHost>
-    <Version>1.0.4</Version>
-    <AssemblyVersion>1.0.4.0</AssemblyVersion>
-    <FileVersion>1.0.4.0</FileVersion>
+    <RollForward>LatestMajor</RollForward>
+    <Version>1.0.5</Version>
+    <AssemblyVersion>1.0.5.0</AssemblyVersion>
+    <FileVersion>1.0.5.0</FileVersion>
     <Product>Se7en Pro</Product>
     <Company>Se7en Pro</Company>
-    <Description>Se7en Pro — modern Windows client</Description>
+    <Description>Se7en Pro - modern Windows client</Description>
 
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Se7enGeneratedSecrets>$(MSBuildThisFileDirectory)Services\BuildSecrets.g.cs</Se7enGeneratedSecrets>
+    <Se7enServerEntries>$(MSBuildThisFileDirectory)Resources\server_entries.bin</Se7enServerEntries>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('$(Se7enGeneratedSecrets)') AND '$(DesignTimeBuild)' != 'true'">
+    <DefineConstants>$(DefineConstants);SE7EN_SECRETS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
@@ -46,7 +62,7 @@
     <None Include="Resources\server_entries.txt" Condition="Exists('Resources\server_entries.txt')">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
-    <EmbeddedResource Include="Resources\server_entries.bin" Condition="Exists('Resources\server_entries.bin')">
+    <EmbeddedResource Include="$(Se7enServerEntries)" Condition="Exists('$(Se7enServerEntries)')">
       <LogicalName>Se7enPro.Resources.server_entries.bin</LogicalName>
     </EmbeddedResource>
 
@@ -58,9 +74,6 @@
     </Content>
 
     <Content Include="Resources\aether\aether.exe">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\aether\pt\lyrebird.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
 
@@ -80,25 +93,27 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
 
-    <Content Include="Resources\xray\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\sing_box\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-
     <Content Include="Resources\shard\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
 
-    <EmbeddedResource Include="Resources\akamai_seed_ips.txt" />
-    <EmbeddedResource Include="Resources\akamai_ip_ranges.txt" />
-    <EmbeddedResource Include="Resources\cloudflare_ip_ranges.txt" />
-    <EmbeddedResource Include="Resources\fastly_ip_ranges.txt" />
+    <Content Include="Resources\xray\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="Resources\sing_box\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
   </ItemGroup>
 
   <ItemGroup>
     <Resource Include="Assets\**\*" />
+    <Resource Include="Resources\Flags\*.png" />
+    <Content Include="Resources\Fonts\*.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Fonts\%(Filename)%(Extension)</Link>
+    </Content>
   </ItemGroup>
 
 </Project>

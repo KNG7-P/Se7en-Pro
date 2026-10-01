@@ -7,8 +7,7 @@ namespace Se7enPro.Services;
 
 public static class SplitRules
 {
-
-    public static string? NormalizeSplitDomain(string raw)
+        public static string? NormalizeSplitDomain(string raw)
     {
         var s = (raw ?? "").Trim();
         if (s.Length == 0) return null;
@@ -22,6 +21,7 @@ public static class SplitRules
         var cut = s.IndexOfAny(new[] { '/', '\\', '?', '#' });
         if (cut >= 0) s = s[..cut];
 
+        
         if (!s.Contains('[') && s.IndexOf(':') is var c && c > 0)
             s = s[..c];
 
@@ -30,7 +30,7 @@ public static class SplitRules
         return s;
     }
 
-    public static string? NormalizeSplitIpCidr(string raw)
+        public static string? NormalizeSplitIpCidr(string raw)
     {
         var s = (raw ?? "").Trim();
         if (s.Length == 0) return null;
@@ -55,17 +55,17 @@ public static class SplitRules
         return $"{ip}/{prefix}";
     }
 
-    public static bool LooksLikeAppPath(string s) =>
+        public static bool LooksLikeAppPath(string s) =>
         s.Contains('\\') || s.Contains('/') || (s.Length >= 2 && s[1] == ':');
 
-    public static string NormalizeProcessName(string raw)
+        public static string NormalizeProcessName(string raw)
     {
         var s = (raw ?? "").Trim();
         if (!s.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) s += ".exe";
         return s;
     }
 
-    public static void ClassifySplitEntries(
+        public static void ClassifySplitEntries(
         UserSettings? settings,
         out List<string> domains,
         out List<string> ipCidrs,
@@ -105,7 +105,7 @@ public static class SplitRules
                     }
                     break;
 
-                default:
+                default: 
                     var d = NormalizeSplitDomain(raw);
                     if (d is not null && !domains.Contains(d)) domains.Add(d);
                     break;
@@ -113,7 +113,7 @@ public static class SplitRules
         }
     }
 
-    public static (IPAddress Addr, byte Prefix)? ParseIpCidr(string cidr)
+        public static (IPAddress Addr, byte Prefix)? ParseIpCidr(string cidr)
     {
         var slash = cidr.IndexOf('/');
         var addrPart = slash >= 0 ? cidr[..slash] : cidr;

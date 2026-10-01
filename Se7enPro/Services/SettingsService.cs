@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Models;
 
@@ -17,10 +20,14 @@ public sealed class SettingsService : ISettingsService
 
     private readonly ILogger<SettingsService> _logger;
     private readonly string _path;
-
+    private readonly string _backupPath;
     private readonly object _writeLock = new();
 
-    private string BackupPath => _path + ".bak";
+    
+    
+    private static readonly HashSet<string> KnownKeys = BuildKnownKeys();
+
+    private JsonObject? _foreignKeys;
 
     public UserSettings Settings { get; private set; } = new();
 
@@ -33,7 +40,9 @@ public sealed class SettingsService : ISettingsService
         var dir = Path.Combine(localAppData, "Se7en");
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "settings.json");
+        _backupPath = Path.Combine(dir, "settings.json.last-good");
 
+        
         if (!File.Exists(_path))
         {
             var legacyPath = Path.Combine(localAppData, "Psiphon", "settings.json");
@@ -44,116 +53,250 @@ public sealed class SettingsService : ISettingsService
         }
     }
 
+    private static HashSet<string> BuildKnownKeys()
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prop in typeof(UserSettings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (!prop.CanWrite) continue;
+            keys.Add(prop.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? prop.Name);
+        }
+        return keys;
+    }
+
+    
+    
+    
+    private void CaptureForeignKeys(string json)
+    {
+        _foreignKeys = null;
+        try
+        {
+            var parsed = JsonNode.Parse(json)?.AsObject();
+            if (parsed is null) return;
+
+            var foreign = new JsonObject();
+            foreach (var property in parsed)
+            {
+                if (KnownKeys.Contains(property.Key)) continue;
+                foreign[property.Key] = property.Value?.DeepClone();
+            }
+
+            if (foreign.Count > 0) _foreignKeys = foreign;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not inspect foreign keys in {Path}", _path);
+        }
+    }
+
+    private string MergeForeignKeys(string json)
+    {
+        var foreign = _foreignKeys;
+        if (foreign is null || foreign.Count == 0) return json;
+
+        try
+        {
+            var obj = JsonNode.Parse(json)?.AsObject();
+            if (obj is null) return json;
+
+            foreach (var property in foreign)
+            {
+                if (obj.ContainsKey(property.Key)) continue;
+                obj[property.Key] = property.Value?.DeepClone();
+            }
+
+            return obj.ToJsonString(JsonOpts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not restore foreign keys in {Path}; writing typed settings", _path);
+            return json;
+        }
+    }
+
     public void Load()
     {
         try
         {
-            var settings = TryRead(_path);
-
-            settings ??= TryRead(BackupPath);
-
-            if (settings is null)
+            if (!File.Exists(_path))
             {
-                var fresh = !File.Exists(_path) && !File.Exists(BackupPath);
-                if (!fresh)
-                {
-                    _logger.LogWarning(
-                        "settings.json and its backup are unreadable; keeping files and using defaults in-memory");
-                    try
-                    {
-                        var corruptPath = _path + ".corrupt." + DateTime.UtcNow.Ticks;
-                        if (File.Exists(_path)) File.Copy(_path, corruptPath, true);
-                    }
-                    catch { }
-                }
                 Settings = new UserSettings();
-                if (fresh)
-                {
-                    Save();
-                }
+                _foreignKeys = null;
+                Save();
                 return;
             }
 
-            Settings = settings;
+            var json = File.ReadAllText(_path);
+            Settings = JsonSerializer.Deserialize<UserSettings>(UnprotectSecrets(json), JsonOpts)
+                       ?? new UserSettings();
+            CaptureForeignKeys(json);
+            MigrateRemovedAutoMethod();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to load settings from {Path}; using defaults", _path);
+            
+            
+            
+            
+            _logger.LogWarning(ex, "Failed to load settings from {Path}; trying the last good copy", _path);
+            try
+            {
+                var rescue = File.ReadAllText(_backupPath);
+                Settings = JsonSerializer.Deserialize<UserSettings>(UnprotectSecrets(rescue), JsonOpts)
+                           ?? new UserSettings();
+                CaptureForeignKeys(rescue);
+                MigrateRemovedAutoMethod();
+                return;
+            }
+            catch (Exception rescueEx)
+            {
+                _logger.LogWarning(rescueEx, "Last good settings copy unusable; falling back to defaults");
+            }
+
             Settings = new UserSettings();
+            _foreignKeys = null;
         }
     }
 
-    private UserSettings? TryRead(string path)
+        private void MigrateRemovedAutoMethod()
     {
-        for (var attempt = 0; attempt < 3; attempt++)
+        var settings = Settings;
+        if (settings is null) return;
+
+        var method = (settings.ConnectionMethod ?? "").Trim();
+        if (string.Equals(method, "auto", StringComparison.OrdinalIgnoreCase))
         {
-            try
-            {
-                if (!File.Exists(path)) return null;
-                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var sr = new StreamReader(fs, Encoding.UTF8);
-                var json = sr.ReadToEnd();
-                if (string.IsNullOrWhiteSpace(json)) return null;
-                return JsonSerializer.Deserialize<UserSettings>(json, JsonOpts);
-            }
-            catch (Exception ex) when (attempt < 2)
-            {
-                _logger.LogWarning(ex, "settings file {Path} read attempt {Attempt} failed; retrying", path, attempt);
-                System.Threading.Thread.Sleep(50);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "settings file {Path} could not be read", path);
-                return null;
-            }
+            settings.ConnectionMethod = ConnectionMethodExtensions.ParseConnectionMethod(method).ToToken();
+            _logger?.LogInformation(
+                "Settings carried the removed Auto connection method; migrated to {Method}",
+                settings.ConnectionMethod);
         }
-        return null;
+
+        if (_foreignKeys is null) return;
+        if (!_foreignKeys.Remove("autoLastSuccessfulMethod")) return;
+
+        _logger?.LogInformation("Dropped the removed autoLastSuccessfulMethod setting");
+        Save();
     }
 
     public void Save()
     {
+        
+        
+        
+        
+        lock (_writeLock)
+        {
+            try
+            {
+                var json = MergeForeignKeys(JsonSerializer.Serialize(Settings, JsonOpts));
+                json = ProtectSecrets(json);
+                var temp = _path + ".tmp";
+                File.WriteAllText(temp, json);
+                if (File.Exists(_path)) File.Copy(_path, _backupPath, overwrite: true);
+                File.Move(temp, _path, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save settings to {Path}", _path);
+                return;
+            }
+        }
+
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    
+    
+    
+    
+    
+    
+    
+
+    private static readonly string[] SecretKeys =
+    {
+        "upstreamProxyPassword",
+        "lanProxyPassword",
+    };
+
+    private string ProtectSecrets(string json)
+    {
         try
         {
+            var obj = JsonNode.Parse(json)?.AsObject();
+            if (obj is null) return json;
 
-            var json = JsonSerializer.Serialize(Settings, JsonOpts);
-            lock (_writeLock)
+            foreach (var key in SecretKeys)
             {
-                WriteAtomic(json);
+                if (obj[key] is JsonValue v && v.TryGetValue<string>(out var s) &&
+                    !string.IsNullOrEmpty(s) && !ProtectedSecret.LooksProtected(s))
+                {
+                    obj[key] = ProtectedSecret.Protect(s);
+                }
             }
-            SettingsChanged?.Invoke(this, EventArgs.Empty);
+
+            
+            
+            
+            if (obj["v2RayConfigs"] is JsonArray configs)
+            {
+                foreach (var entry in configs)
+                {
+                    if (entry is JsonObject cfg &&
+                        cfg["userId"] is JsonValue cv && cv.TryGetValue<string>(out var id) &&
+                        !string.IsNullOrEmpty(id) && !ProtectedSecret.LooksProtected(id))
+                    {
+                        cfg["userId"] = ProtectedSecret.Protect(id);
+                    }
+                }
+            }
+
+            return obj.ToJsonString(JsonOpts);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save settings to {Path}", _path);
+            
+            
+            _logger.LogWarning(ex, "Could not protect stored secrets; writing them unprotected");
+            return json;
         }
     }
 
-    private void WriteAtomic(string json)
+    private string UnprotectSecrets(string json)
     {
-        var tmp = _path + ".tmp";
-        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+        try
         {
-            var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
-            fs.Write(bytes, 0, bytes.Length);
+            var obj = JsonNode.Parse(json)?.AsObject();
+            if (obj is null) return json;
 
-            fs.Flush(flushToDisk: true);
+            foreach (var key in SecretKeys)
+            {
+                if (obj[key] is JsonValue v && v.TryGetValue<string>(out var s))
+                {
+                    obj[key] = ProtectedSecret.Unprotect(s);
+                }
+            }
+
+            if (obj["v2RayConfigs"] is JsonArray configs)
+            {
+                foreach (var entry in configs)
+                {
+                    if (entry is JsonObject cfg &&
+                        cfg["userId"] is JsonValue cv && cv.TryGetValue<string>(out var id))
+                    {
+                        cfg["userId"] = ProtectedSecret.Unprotect(id);
+                    }
+                }
+            }
+
+            return obj.ToJsonString(JsonOpts);
         }
-
-        if (File.Exists(_path))
+        catch (Exception ex)
         {
-
-            File.Replace(tmp, _path, BackupPath, ignoreMetadataErrors: true);
+            _logger.LogWarning(ex, "Could not unprotect stored secrets");
+            return json;
         }
-        else
-        {
-            File.Move(tmp, _path);
-        }
-    }
-
-    public void Update(UserSettings updated)
-    {
-        if (updated == null) return;
-        Settings = updated;
-        Save();
     }
 }

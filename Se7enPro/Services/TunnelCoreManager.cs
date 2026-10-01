@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -10,7 +11,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Linq;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Models;
 
@@ -31,21 +31,37 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
     private volatile bool _userWantsConnection;
     private CancellationTokenSource? _retryDelayCts;
 
+    
+    
+    
+    
+    
+    
+    
     private int _consecutiveFastFailures;
     private DateTime _lastStartUtc;
     private const int MaxConsecutiveFastFailures = 6;
     private static readonly TimeSpan FastFailWindow = TimeSpan.FromSeconds(20);
 
+    
+    
+    
+    
+    
     private int _processGeneration;
 
+    
+    
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
 
-    private static readonly object _upstreamLock = new();
+    private static readonly object UpstreamOverrideLock = new();
     private static string? _upstreamProxyUrlOverride;
-    public static string? UpstreamProxyUrlOverride { get { lock (_upstreamLock) return _upstreamProxyUrlOverride; } set { lock (_upstreamLock) _upstreamProxyUrlOverride = value; } }
-    public static void SetUpstreamProxyUrlOverride(string v) { lock (_upstreamLock) _upstreamProxyUrlOverride = v; }
-    public static void ClearUpstreamProxyUrlOverride() { lock (_upstreamLock) _upstreamProxyUrlOverride = null; }
-    internal static string? TryGetUpstreamProxyUrlOverride() { lock (_upstreamLock) return _upstreamProxyUrlOverride; }
+
+        public static string? UpstreamProxyUrlOverride
+    {
+        get { lock (UpstreamOverrideLock) return _upstreamProxyUrlOverride; }
+        set { lock (UpstreamOverrideLock) _upstreamProxyUrlOverride = value; }
+    }
 
     public TunnelCoreManager(
         ILogger<TunnelCoreManager> logger,
@@ -69,8 +85,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
     public long BytesSent { get; private set; }
     public long BytesReceived { get; private set; }
-    public double DownSpeedBytesPerSec => 0;
-    public double UpSpeedBytesPerSec => 0;
 
     public int ConnectProgressPercent { get; private set; }
     public string ConnectProgressText { get; private set; } = "";
@@ -78,6 +92,8 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
     private readonly List<string> _availableRegions = new();
     public IReadOnlyList<string> AvailableEgressRegions => _availableRegions.AsReadOnly();
 
+    
+    
     public ConnectionMethod Method => ConnectionMethod.Psiphon;
     public IReadOnlyList<string> CoreProcessNames { get; } = new[] { EngineProcessNames.Psiphon };
 
@@ -106,14 +122,37 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
     public event EventHandler? LogCleared;
     public event EventHandler? RouteChanged;
 
+        public event EventHandler<bool>? ConnectionIntentChanged;
+
     public Task StartAsync() => RunGatedAsync(StartAsyncCore);
+
+    private void SetConnectionIntent(bool wantsConnection)
+    {
+        if (_userWantsConnection == wantsConnection) return;
+        _userWantsConnection = wantsConnection;
+        try
+        {
+            ConnectionIntentChanged?.Invoke(this, wantsConnection);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ConnectionIntentChanged handler failed");
+        }
+    }
 
     private void StartAsyncCore()
     {
-
+        
+        
+        
+        
         var wasWanting = _userWantsConnection;
         _userWantsConnection = true;
-        if (!wasWanting) _consecutiveFastFailures = 0;
+        if (!wasWanting)
+        {
+            _consecutiveFastFailures = 0;
+            ConnectionIntentChanged?.Invoke(this, true);
+        }
         CancelPendingRestart();
 
         if (_process is not null && !_process.HasExited)
@@ -124,7 +163,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
         SetState(ConnectionState.Connecting);
         AppendLog("Starting tunnel...");
-        LogSanitizer.ResetScanState();
 
         BytesSent = 0;
         BytesReceived = 0;
@@ -134,6 +172,12 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
         RouteChanged?.Invoke(this, EventArgs.Empty);
 
+        
+        
+        
+        
+        
+        
         if (!TryValidateConfiguredPorts(out var portError))
         {
             AppendLog(portError);
@@ -160,6 +204,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
             _cts = new CancellationTokenSource();
 
+            
             _processGeneration++;
             var generation = _processGeneration;
 
@@ -173,6 +218,8 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 CreateNoWindow = true,
                 WorkingDirectory = _workDir,
             };
+            psi.EnvironmentVariables["GOMEMLIMIT"] = "40MiB";
+            psi.EnvironmentVariables["GODEBUG"] = "madvdontneed=1";
             psi.ArgumentList.Add("--config");
             psi.ArgumentList.Add(configPath);
             if (serverListPath is not null)
@@ -188,7 +235,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
             if (!_process.Start())
             {
-                throw new InvalidOperationException("Failed to start psiphon-tunnel-core.exe");
+                throw new InvalidOperationException("Failed to start psiphon-tunnel-core");
             }
 
             _childGuard.Adopt(_process);
@@ -231,17 +278,45 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
             {
                 return Task.CompletedTask;
             }
-            return StopAsyncCoreAsync().ContinueWith(_ => StartAsyncCore());
+            return RestartAsyncCoreAsync();
         });
+    }
+
+        private async Task RestartAsyncCoreAsync()
+    {
+        try
+        {
+            await StopAsyncCoreAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Stop failed during restart; starting anyway");
+        }
+
+        try
+        {
+            StartAsyncCore();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Restart failed to start the tunnel");
+            SetState(ConnectionState.Error);
+        }
     }
 
     public Task StopAsync() => RunGatedAsync(StopAsyncCoreAsync);
 
     private async Task StopAsyncCoreAsync()
     {
-        _userWantsConnection = false;
+        SetConnectionIntent(wantsConnection: false);
         _consecutiveFastFailures = 0;
         CancelPendingRestart();
+
+        
+        
+        
+        
+        _processGeneration++;
 
         var proc = _process;
         if (proc is null || proc.HasExited)
@@ -254,7 +329,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
         SetState(ConnectionState.Disconnecting);
         AppendLog("Stopping tunnel...");
-        LogSanitizer.ResetScanState();
 
         try
         {
@@ -270,9 +344,16 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         }
         finally
         {
-            _cts?.Cancel();
+            var doneCts = _cts;
+            _cts = null;
+            try { doneCts?.Cancel(); } catch { }
+            try { doneCts?.Dispose(); } catch { }
             _process = null;
             DisposeProcessQuietly(proc);
+
+            
+            
+            
 
             ConnectedServerRegion = "";
             CurrentRouteIp = "";
@@ -291,13 +372,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         }
     }
 
-    public void CancelConnecting()
-    {
-        _userWantsConnection = false;
-        CancelPendingRestart();
-        try { _cts?.Cancel(); } catch { }
-    }
-
     private static async Task<bool> WaitForExitAsync(Process p, TimeSpan timeout)
     {
         try
@@ -314,7 +388,10 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
     private void OnProcessExited(int generation)
     {
-
+        
+        
+        
+        
         if (generation != _processGeneration)
         {
             _logger.LogInformation(
@@ -331,10 +408,12 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         var ranFor = DateTime.UtcNow - _lastStartUtc;
         _process = null;
 
+        
+        
         var toDispose = proc;
         _ = Task.Run(() => DisposeProcessQuietly(toDispose));
 
-        if (State is ConnectionState.Disconnecting or ConnectionState.Disconnected || !_userWantsConnection)
+        if (State == ConnectionState.Disconnecting)
         {
             return;
         }
@@ -343,9 +422,14 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         NoteFailureAndMaybeRestart(ranLongEnough: ranFor >= FastFailWindow);
     }
 
+    
+    
+    
     private void NoteFailureAndMaybeRestart(bool ranLongEnough)
     {
-
+        
+        
+        
         _ = RunGatedAsync(() => NoteFailureAndMaybeRestartCore(ranLongEnough));
     }
 
@@ -359,7 +443,8 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
         if (ranLongEnough)
         {
-
+            
+            
             _consecutiveFastFailures = 0;
             AppendLog("Auto-restarting tunnel-core...");
             SetState(ConnectionState.Connecting);
@@ -374,13 +459,14 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
             CancelPendingRestart();
             AppendLog(
                 $"tunnel-core failed {_consecutiveFastFailures} times in a row without staying up. "
-              + "Giving up to avoid a restart loop â€” check your port settings and network, then press Connect to retry.");
+              + "Giving up to avoid a restart loop — check your port settings and network, then press Connect to retry.");
             _logger.LogError(
                 "Giving up after {Count} consecutive fast failures", _consecutiveFastFailures);
             SetState(ConnectionState.Error);
             return;
         }
 
+        
         var delaySeconds = Math.Min(60, 3 * (1 << (_consecutiveFastFailures - 1)));
         AppendLog(
             $"tunnel-core exited too quickly; retrying in {delaySeconds}s "
@@ -406,11 +492,33 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
             }
             if (!_userWantsConnection)
             {
-
+                
+                
                 if (State == ConnectionState.Connecting) SetState(ConnectionState.Disconnected);
                 return;
             }
-            try { await StartAsync(); }
+            
+            
+            
+            
+            
+            try
+            {
+                await _lifecycleGate.WaitAsync(cts.Token);
+                try
+                {
+                    if (!_userWantsConnection) return;
+                    StartAsyncCore();
+                }
+                finally
+                {
+                    _lifecycleGate.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Auto-restart attempt failed");
@@ -440,7 +548,18 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
             var notice = JsonSerializer.Deserialize<Notice>(line);
             if (notice is not null && !string.IsNullOrEmpty(notice.NoticeType))
             {
-                HandleNotice(notice);
+                
+                
+                
+                if (notice.Data.ValueKind != JsonValueKind.Object)
+                {
+                    AppendLog($"[notice] ignored \"{notice.NoticeType}\": data is {notice.Data.ValueKind}, expected an object.");
+                }
+                else
+                {
+                    HandleNotice(notice);
+                }
+
                 NoticeReceived?.Invoke(this, notice);
                 var pretty = LogSanitizer.FormatNotice(notice.NoticeType, notice.Data);
                 if (!string.IsNullOrEmpty(pretty))
@@ -450,9 +569,9 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 return;
             }
         }
-        catch
+        catch (JsonException ex)
         {
-
+            _logger.LogDebug(ex, "Core line was not a notice JSON object");
         }
 
         if (stderr)
@@ -472,7 +591,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                         : 0;
                     if (count > 0)
                     {
-
+                        
                         _consecutiveFastFailures = 0;
                         SetState(ConnectionState.Connected);
                     }
@@ -487,7 +606,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 if (notice.Data.TryGetProperty("port", out var sp) && sp.ValueKind == JsonValueKind.Number)
                 {
                     SocksProxyPort = sp.GetInt32();
-                    SetConnectProgress(35, "Local SOCKS proxy ready");
                 }
                 break;
 
@@ -495,16 +613,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 if (notice.Data.TryGetProperty("port", out var hp) && hp.ValueKind == JsonValueKind.Number)
                 {
                     HttpProxyPort = hp.GetInt32();
-                    SetConnectProgress(45, "Local HTTP proxy ready");
                 }
-                break;
-
-            case "ConnectingServer":
-                SetConnectProgress(65, "Connecting to tunnel server...");
-                break;
-
-            case "EstablishedServer":
-                SetConnectProgress(80, "Handshake verified with server...");
                 break;
 
             case "ClientRegion":
@@ -515,16 +624,10 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 break;
 
             case "ConnectedServerRegion":
+
                 if (notice.Data.TryGetProperty("serverRegion", out var srv) && srv.ValueKind == JsonValueKind.String)
                 {
-                    var connected = srv.GetString() ?? "";
-                    ConnectedServerRegion = connected;
-                    var requested = _settings.Settings.EgressRegion;
-                    if (!string.IsNullOrEmpty(requested) && !string.Equals(requested, connected, StringComparison.OrdinalIgnoreCase))
-                    {
-                        AppendLog($"[Psiphon] Connected to server in region {connected} (requested: {requested}).");
-                    }
-                    RouteChanged?.Invoke(this, EventArgs.Empty);
+                    ConnectedServerRegion = srv.GetString() ?? "";
                 }
                 break;
 
@@ -540,7 +643,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                             if (!string.IsNullOrEmpty(s)) _availableRegions.Add(s);
                         }
                     }
-                    RouteChanged?.Invoke(this, EventArgs.Empty);
                 }
                 break;
 
@@ -608,7 +710,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                         MaybePersistFoundRoute();
                         RouteChanged?.Invoke(this, EventArgs.Empty);
                     }
-                    SetConnectProgress(90, "Tunnel route established");
                 }
                 break;
 
@@ -740,30 +841,28 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
             ["FeedbackEncryptionPublicKey"] = EmbeddedValues.FeedbackEncryptionPublicKey,
             ["EnableFeedbackUpload"] = true,
 
+            
+            
+            
+            
+            
             ["EstablishTunnelTimeoutSeconds"] = s.EstablishTunnelTimeoutSeconds ?? 300,
 
-            ["LocalHttpProxyPort"] = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalHttpProxyPort, "HTTP") : 0,
-            ["LocalSocksProxyPort"] = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalSocksProxyPort, "SOCKS") : 0,
+            ["LocalHttpProxyPort"] = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalHttpProxyPort) : 0,
+            ["LocalSocksProxyPort"] = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalSocksProxyPort) : 0,
         };
 
-        var authUser = s.LanAuthEnabled ? s.LanProxyUsername : null;
-        var authPass = s.LanAuthEnabled ? s.LanProxyPassword : null;
-        var lanBind = LanExposurePolicy.ResolveBindAddress(
-            s.AllowLanConnections,
-            authUser,
-            authPass,
-            engineEnforcesCredentials: true,
-            out var lanReason);
-
-        if (IPAddress.Any.Equals(lanBind))
+        if (s.AllowLanConnections)
         {
             cfg["ListenInterface"] = "any";
-            cfg["LocalProxyUsername"] = s.LanAuthEnabled ? s.LanProxyUsername : "";
-            cfg["LocalProxyPassword"] = s.LanAuthEnabled ? s.LanProxyPassword : "";
-        }
-        else if (!string.IsNullOrEmpty(lanReason))
-        {
-            AppendLog(lanReason);
+
+            if (s.LanAuthEnabled &&
+                !string.IsNullOrEmpty(s.LanProxyUsername) &&
+                !string.IsNullOrEmpty(s.LanProxyPassword))
+            {
+                cfg["LocalProxyUsername"] = s.LanProxyUsername;
+                cfg["LocalProxyPassword"] = s.LanProxyPassword;
+            }
         }
 
         if (!string.IsNullOrEmpty(s.EgressRegion))
@@ -801,7 +900,10 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         {
             AppendLog($"Using upstream proxy: {LogSanitizer.Scrub(upstreamProxyUrl)} "
                     + "— every tunnel connection is dialled through it.");
-            _ = PreflightUpstreamProxyAsync(upstreamProxyUrl);
+            if (string.IsNullOrEmpty(UpstreamProxyUrlOverride))
+            {
+                _ = PreflightUpstreamProxyAsync(upstreamProxyUrl);
+            }
         }
 
         ApplyAdvancedTunnelConfig(cfg, s);
@@ -813,20 +915,25 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
     {
         if (!string.IsNullOrEmpty(UpstreamProxyUrlOverride))
         {
-
+            
             cfg["LimitTunnelProtocols"] = new JsonArray(
-                "FRONTED-MEEK-OSSH",
-                "FRONTED-MEEK-HTTP-OSSH",
-                "TLS-OSSH",
-                "UNFRONTED-MEEK-HTTPS-OSSH",
+                "SSH", "OSSH", "TLS-OSSH",
                 "UNFRONTED-MEEK-OSSH",
-                "SHADOWSOCKS-OSSH",
-                "OSSH",
-                "SSH");
+                "UNFRONTED-MEEK-HTTPS-OSSH",
+                "UNFRONTED-MEEK-SESSION-TICKET-OSSH",
+                "QUIC-OSSH", "SHADOWSOCKS-OSSH",
+                "FRONTED-MEEK-OSSH",
+                "FRONTED-MEEK-CDN-OSSH",
+                "FRONTED-MEEK-HTTP-OSSH",
+                "FRONTED-MEEK-CDN-HTTP-OSSH",
+                "FRONTED-MEEK-QUIC-OSSH",
+                "FRONTED-MEEK-CDN-QUIC-OSSH");
+            cfg["DisableTactics"] = false;
             cfg["InproxyAllowClient"] = false;
             cfg["InproxyEnableProxy"] = false;
             cfg["InproxyBrokerSpecs"] = new JsonArray();
             cfg["InproxyTunnelProtocolSelectionProbability"] = 0.0;
+            cfg["InproxyTunnelProtocolPreferProbability"] = 0.0;
             cfg["HoldOffInproxyTunnelProbability"] = 1.0;
             return;
         }
@@ -839,7 +946,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         switch (s.ProtocolMode)
         {
             case "cdn_fronting":
-
                 cfg["LimitTunnelProtocols"] = new JsonArray(
                     "FRONTED-MEEK-CDN-OSSH");
                 cfg["DisableTactics"] = true;
@@ -859,7 +965,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
                 if (s.AutoFindIpAndSni && s.FrontedMeekCDNScanBuiltInSets is { Count: > 0 } customSets)
                 {
-
                     includeAkamai = customSets.Any(x => x != null && x.Contains("akamai", StringComparison.OrdinalIgnoreCase));
                     includeFastly = customSets.Any(x => x != null && x.Contains("fastly", StringComparison.OrdinalIgnoreCase));
                     includeBuiltInDefaults = includeAkamai || includeFastly;
@@ -948,7 +1053,6 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
             case "auto":
             default:
-
                 cfg["InproxyDelaySeconds"] = 15;
                 cfg["LimitTunnelProtocols"] = new JsonArray(
                     "SSH", "OSSH", "TLS-OSSH",
@@ -977,49 +1081,66 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         }
     }
 
-    private const string CachedTunnelExeName = "Se7enPro.Tunnel.exe";
+    private static string CachedTunnelExeName => OperatingSystem.IsWindows() ? "Se7enPro.Tunnel.exe" : "Se7enPro.Tunnel";
 
     private string ResolveTunnelCoreExe()
     {
-
         var appDir = AppContext.BaseDirectory;
+        var binName = OperatingSystem.IsWindows() ? "psiphon-tunnel-core.exe" : "psiphon-tunnel-core";
 
         var candidates = new[]
         {
+            Path.Combine(appDir, "Resources", binName),
+            Path.Combine(appDir, binName),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", binName),
+            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\..\..\Se7enPro\Resources", binName)),
+            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\..\Se7enPro\Resources", binName)),
+            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\Se7enPro\Resources", binName)),
+            Path.GetFullPath(Path.Combine(appDir, @"..\Resources", binName)),
             Path.Combine(appDir, "Resources", "psiphon-tunnel-core.exe"),
             Path.Combine(appDir, "psiphon-tunnel-core.exe"),
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "psiphon-tunnel-core.exe"),
-            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\..\..\Se7enPro\Resources\psiphon-tunnel-core.exe")),
-            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\..\Se7enPro\Resources\psiphon-tunnel-core.exe")),
-            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\Se7enPro\Resources\psiphon-tunnel-core.exe")),
-            Path.GetFullPath(Path.Combine(appDir, @"..\Resources\psiphon-tunnel-core.exe")),
         };
 
         var bundled = candidates.FirstOrDefault(File.Exists);
         if (bundled == null)
         {
-            bundled = Path.Combine(appDir, "Resources", "psiphon-tunnel-core.exe");
+            bundled = Path.Combine(appDir, "Resources", binName);
             if (!File.Exists(bundled))
             {
                 throw new FileNotFoundException(
-                    "psiphon-tunnel-core.exe not found next to Se7enPro",
+                    $"{binName} not found next to Se7enPro",
                     bundled);
             }
         }
 
         var copyTo = Path.Combine(_workDir!, CachedTunnelExeName);
 
-        foreach (var stale in Directory.EnumerateFiles(_workDir!, "*.exe"))
+        try
         {
-            if (string.Equals(Path.GetFileName(stale), CachedTunnelExeName,
-                              StringComparison.OrdinalIgnoreCase))
+            foreach (var stale in Directory.EnumerateFiles(_workDir!))
             {
-                continue;
+                var fileName = Path.GetFileName(stale);
+                if (!fileName.StartsWith("Se7enPro.Tunnel", StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(fileName, CachedTunnelExeName, StringComparison.OrdinalIgnoreCase)) continue;
+                try { File.Delete(stale); } catch { }
             }
-            try { File.Delete(stale); } catch {  }
         }
+        catch { }
 
-        FileCacheHelper.StageFileSafe(bundled, copyTo, _logger, new[] { CachedTunnelExeName, "psiphon-tunnel-core", "Se7enPro.Tunnel" });
+        if (!FileCacheHelper.IsCachedCopyUpToDate(bundled, copyTo))
+        {
+            try
+            {
+                File.Copy(bundled, copyTo, overwrite: true);
+            }
+            catch (IOException)
+            {
+                if (!File.Exists(copyTo))
+                {
+                    throw;
+                }
+            }
+        }
 
         return copyTo;
     }
@@ -1034,47 +1155,27 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
             Array.Clear(plain, 0, plain.Length);
             return dest;
         }
-        catch
+        catch (Exception ex)
         {
-            var plainTextFallback = Path.Combine(AppContext.BaseDirectory, "Resources", "server_entries.txt");
-            if (File.Exists(plainTextFallback))
-            {
-                var dest = Path.Combine(_workDir!, "server_entries.txt");
-                File.Copy(plainTextFallback, dest, overwrite: true);
-                return dest;
-            }
-            _logger.LogWarning("Embedded server list unavailable; tunnel-core will rely on remote server list fetch");
+            _logger.LogWarning(ex, "Embedded server list unavailable; tunnel-core will rely on remote server list fetch");
             return null;
         }
     }
 
-    private int SanitizeListenPort(int port, string label = "Proxy")
-    {
-        if (port <= 0) return 0;
-        if (port > 65535)
-        {
-            _logger.LogWarning("{Label} port {Port} exceeds maximum allowed TCP port 65535. Falling back to dynamic port.", label, port);
-            return 0;
-        }
-        return port;
-    }
+    private static int SanitizeListenPort(int port)
+        => port is >= 1 and <= 65535 ? port : 0;
 
+    
+    
+    
     private bool TryValidateConfiguredPorts(out string error)
     {
         error = "";
         var s = _settings.Settings;
+        var bindAddr = s.AllowLanConnections ? IPAddress.Any : IPAddress.Loopback;
 
-        var authUser = s.LanAuthEnabled ? s.LanProxyUsername : null;
-        var authPass = s.LanAuthEnabled ? s.LanProxyPassword : null;
-        var bindAddr = LanExposurePolicy.ResolveBindAddress(
-            s.AllowLanConnections,
-            authUser,
-            authPass,
-            engineEnforcesCredentials: true,
-            out _);
-
-        var socks = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalSocksProxyPort, "SOCKS") : 0;
-        var http = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalHttpProxyPort, "HTTP") : 0;
+        var socks = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalSocksProxyPort) : 0;
+        var http = s.UseCustomProxyPorts ? SanitizeListenPort(s.LocalHttpProxyPort) : 0;
 
         if (socks != 0 && http != 0 && socks == http)
         {
@@ -1096,35 +1197,56 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         return true;
     }
 
+    
+    
+    
+    
+    
     private static bool IsPortBindable(IPAddress addr, int port, out string reason)
     {
         reason = "";
+        TcpListener? listener = null;
         try
         {
-            var tcpListeners = System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners();
-            var conflict = Array.Find(tcpListeners, ep => ep.Port == port && (ep.Address.Equals(addr) || ep.Address.Equals(IPAddress.Any) || addr.Equals(IPAddress.Any)));
-            if (conflict != null)
-            {
-                reason = "already in use by another application";
-                return false;
-            }
+            listener = new TcpListener(addr, port);
+            listener.Start();
             return true;
         }
-        catch
+        catch (SocketException ex)
         {
-            return true;
+            reason = ex.SocketErrorCode == SocketError.AddressAlreadyInUse
+                ? "already in use"
+                : ex.SocketErrorCode.ToString();
+            return false;
+        }
+        catch (Exception ex)
+        {
+            reason = ex.Message;
+            return false;
+        }
+        finally
+        {
+            try { listener?.Stop(); } catch { }
         }
     }
 
+    
+    
     private void DisposeProcessQuietly(Process? proc)
     {
         if (proc is null) return;
         try { proc.CancelOutputRead(); } catch { }
         try { proc.CancelErrorRead(); } catch { }
+        
+        
+        
         try { proc.Dispose(); } catch { }
     }
 
-    private static string BuildUpstreamProxyUrl(Models.UserSettings s)
+    internal static bool BypassesUpstreamProxy(string? protocolMode) =>
+        protocolMode?.Trim().ToLowerInvariant() is "auto" or "cdn_fronting" or "conduit";
+
+    internal static string BuildUpstreamProxyUrl(Models.UserSettings s)
     {
         if (!s.UpstreamProxyEnabled || string.IsNullOrWhiteSpace(s.UpstreamProxy))
             return "";
@@ -1175,7 +1297,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         return $"{scheme}://{auth}{hostAndPort}";
     }
 
-    private async Task PreflightUpstreamProxyAsync(string proxyUrl)
+        private async Task PreflightUpstreamProxyAsync(string proxyUrl)
     {
         string host;
         string scheme;
@@ -1215,19 +1337,21 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
         if (problem is null) return;
 
-        AppendLog($"WARNING: upstream proxy {LogSanitizer.Scrub($"{host}:{port}")} is not usable â€” "
+        AppendLog($"WARNING: upstream proxy {LogSanitizer.Scrub($"{host}:{port}")} is not usable — "
                 + $"{problem}. Psiphon dials every connection through it, so the tunnel cannot "
                 + "establish in any protocol mode while it stays like this. Turn \"Use upstream "
                 + "proxy\" off (or clear the address) in Settings -> Upstream proxy and connect "
                 + "again.");
     }
 
-    private static async Task<string?> ProbeSocksProxyAsync(
+        private static async Task<string?> ProbeSocksProxyAsync(
         NetworkStream stream, string scheme, CancellationToken ct)
     {
         if (scheme is "socks4" or "socks4a")
         {
-
+            
+            
+            
             var name = Encoding.ASCII.GetBytes("www.google.com");
             var request = new byte[9 + name.Length + 1];
             request[0] = 4;
@@ -1244,6 +1368,8 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 : "it accepted the connection but never answered the SOCKS4 request";
         }
 
+        
+        
         await stream.WriteAsync(new byte[] { 5, 2, 0, 2 }, ct);
 
         var greeting = new byte[2];
@@ -1297,6 +1423,10 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
             if (proxyUri is null || proxyUri.Equals(probe) || systemProxy.IsBypassed(probe))
                 return "";
 
+            
+            
+            
+            
             if (IsLoopbackHost(proxyUri.Host)) return "";
 
             return $"http://{proxyUri.Host}:{proxyUri.Port}";
@@ -1316,7 +1446,9 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
 
     private void SetState(ConnectionState s)
     {
-
+        
+        
+        
         if (s == ConnectionState.Connected && !_userWantsConnection) return;
         if (State == s) return;
         State = s;
@@ -1357,6 +1489,31 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         }
         LogLineAppended?.Invoke(this, line);
     }
+
+        public void CancelConnecting()
+    {
+        try { _cts?.Cancel(); } catch { }
+        CancelPendingRestart();
+
+        
+        
+        var proc = _process;
+        if (proc is null) return;
+        try
+        {
+            if (!proc.HasExited)
+            {
+                _logger.LogInformation("Cancel requested; stopping the starting core");
+                proc.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            
+        }
+    }
+
+    public void CancelInFlightConnection() => CancelConnecting();
 
     public void Dispose()
     {

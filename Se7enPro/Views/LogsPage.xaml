@@ -1,0 +1,198 @@
+<UserControl x:Class="Se7enPro.Views.LogsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" xmlns:conv="clr-namespace:Se7enPro.Converters" xmlns:vm="clr-namespace:Se7enPro.ViewModels" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:LogsViewModel}">
+
+    <UserControl.Resources>
+        <conv:LogChannelToBrushConverter x:Key="LogChannelBrush" />
+        <conv:LogMessageToBrushConverter x:Key="LogMessageBrush" />
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
+    </UserControl.Resources>
+
+    <Grid Margin="24,0,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        
+        <Border Grid.Row="0" Background="{DynamicResource Surface.CardBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="12" Padding="10,8" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="8" />
+                    
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="8" />
+                    
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="6" />
+                    
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                
+                <TextBox Grid.Column="0" Style="{StaticResource UI.CustomTextBox}" Height="38" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{Binding SearchPlaceholder}" materialDesign:TextFieldAssist.HasLeadingIcon="True" materialDesign:TextFieldAssist.LeadingIcon="Magnify" AutomationProperties.Name="{Binding SearchPlaceholder}" VerticalAlignment="Center" />
+
+                
+                <Button Grid.Column="2" Command="{Binding ToggleAutoScrollCommand}" Height="38" Padding="12,0" VerticalAlignment="Center" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_Autoscroll}" FocusVisualStyle="{x:Null}">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="ChipBd" CornerRadius="10" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon x:Name="ChipIcon" Kind="FormatVerticalAlignBottom" Width="15" Height="15" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                                <TextBlock x:Name="ChipText" Text="{DynamicResource Loc_Autoscroll}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            
+                                            <DataTrigger Binding="{Binding AutoScroll}" Value="True">
+                                                <Setter TargetName="ChipBd" Property="Background" Value="#2200D4FF" />
+                                                <Setter TargetName="ChipBd" Property="BorderBrush" Value="#5500D4FF" />
+                                                <Setter TargetName="ChipBd" Property="BorderThickness" Value="1" />
+                                                <Setter TargetName="ChipIcon" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
+                                                <Setter TargetName="ChipText" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
+                                            </DataTrigger>
+                                            
+                                            <DataTrigger Binding="{Binding AutoScroll}" Value="False">
+                                                <Setter TargetName="ChipBd" Property="Background" Value="{DynamicResource BgInput}" />
+                                                <Setter TargetName="ChipBd" Property="BorderBrush" Value="{DynamicResource BorderBrushDefault}" />
+                                                <Setter TargetName="ChipBd" Property="BorderThickness" Value="1" />
+                                                <Setter TargetName="ChipIcon" Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                <Setter TargetName="ChipText" Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                            </DataTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ChipBd" Property="Opacity" Value="0.9" />
+                                                <Setter TargetName="ChipBd" Property="BorderBrush" Value="{DynamicResource BorderBrushHover}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
+                </Button>
+
+                
+                <ComboBox Grid.Column="4" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding EngineFilterOptions}" SelectedItem="{Binding SelectedEngineFilterItem, Mode=TwoWay}" Height="38" MinWidth="160" MaxDropDownHeight="320" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_Filterlogsbysubsystemorengine}" ToolTip="{DynamicResource Loc_Filterlogsbysubsystemorengine}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1">
+                                <materialDesign:PackIcon Kind="{Binding Icon}" Width="15" Height="15" Foreground="{StaticResource Brand.AccentBrush}" Margin="0,0,9,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                
+                <Button Grid.Column="6" Style="{StaticResource UI.GhostButton}" Width="38" Height="38" Padding="0" VerticalAlignment="Center" Command="{Binding CopyCommand}" ToolTip="{DynamicResource Loc_Copyallvisiblelogstoclipboard}" AutomationProperties.Name="{DynamicResource Loc_Copyallvisiblelogstoclipboard}">
+                    <materialDesign:PackIcon Kind="ContentCopy" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+
+                
+                <Button Grid.Column="8" Style="{StaticResource UI.GhostButton}" Width="38" Height="38" Padding="0" VerticalAlignment="Center" Command="{Binding ClearCommand}" ToolTip="{DynamicResource Loc_Clearallloglines}" AutomationProperties.Name="{DynamicResource Loc_Clearallloglines}">
+                    <materialDesign:PackIcon Kind="DeleteSweepOutline" Width="17" Height="17" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+        </Border>
+
+        
+        <Border Grid.Row="1" Background="{DynamicResource Surface.LogBoxBg}" BorderBrush="{DynamicResource Surface.LogBoxBorder}" BorderThickness="1" CornerRadius="14" Padding="4">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                
+                <Border Grid.Row="0" Margin="14,8,14,0" Padding="0,0,0,6" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Surface.LogBoxBorder}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="56" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="62" />
+                            <ColumnDefinition Width="9" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{DynamicResource Loc_TIME}" FontSize="9" FontWeight="SemiBold" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock Grid.Column="2" Text="{DynamicResource Loc_SOURCE}" FontSize="9" FontWeight="SemiBold" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextMutedBrush}" TextAlignment="Center" />
+                        <TextBlock Grid.Column="4" Text="{DynamicResource Loc_MESSAGE}" FontSize="9" FontWeight="SemiBold" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextMutedBrush}" />
+                    </Grid>
+                </Border>
+
+                
+                <TextBlock Grid.Row="1" Text="{DynamicResource Loc_Nologentriescapturedyet}" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding HasFilteredLines, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+
+                
+                <ListBox Grid.Row="1" x:Name="LogListBox" ItemsSource="{Binding FilteredLines}" Background="Transparent" BorderThickness="0" Padding="14,10" Visibility="{Binding HasFilteredLines, Converter={StaticResource BooleanToVisibilityConverter}}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="0,2.5" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <ContentPresenter />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="62" />
+                                    <ColumnDefinition Width="9" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="{Binding Time}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Top" />
+
+                                <Border Grid.Column="2" Height="17" CornerRadius="5" VerticalAlignment="Top" Padding="4,0">
+                                    <Border.Background>
+                                        <MultiBinding Converter="{StaticResource LogChannelBrush}" ConverterParameter="bg">
+                                            <Binding Path="Channel" />
+                                            <Binding Path="DataContext.IsDarkTheme" RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}" />
+                                        </MultiBinding>
+                                    </Border.Background>
+                                    <TextBlock Text="{Binding ChannelLabel}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="9.5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Foreground>
+                                            <MultiBinding Converter="{StaticResource LogChannelBrush}">
+                                                <Binding Path="Channel" />
+                                                <Binding Path="DataContext.IsDarkTheme" RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}" />
+                                            </MultiBinding>
+                                        </TextBlock.Foreground>
+                                    </TextBlock>
+                                </Border>
+
+                                <TextBlock Grid.Column="4" Text="{Binding Message}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="11.5" LineHeight="18" TextWrapping="Wrap" VerticalAlignment="Top">
+                                    <TextBlock.Foreground>
+                                        <MultiBinding Converter="{StaticResource LogMessageBrush}">
+                                            <Binding Path="Severity" />
+                                            <Binding Path="DataContext.IsDarkTheme" RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}" />
+                                            <Binding Path="Channel" />
+                                        </MultiBinding>
+                                    </TextBlock.Foreground>
+                                </TextBlock>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

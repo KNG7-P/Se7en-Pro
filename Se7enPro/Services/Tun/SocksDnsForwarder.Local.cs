@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -10,10 +10,9 @@ namespace Se7enPro.Services;
 
 internal sealed partial class SocksDnsForwarder
 {
-
-    private async Task<byte[]?> QueryLocalAsync(byte[] query, CancellationToken ct)
+        private async Task<byte[]?> QueryLocalAsync(byte[] query, CancellationToken ct)
     {
-        if (!IPAddress.TryParse(_split?.LocalDnsIp, out var localIp)) return null;
+        var localIp = IPAddress.Parse(_split!.LocalDnsIp!);
         for (var attempt = 0; attempt < 2; attempt++)
         {
             try
@@ -34,28 +33,19 @@ internal sealed partial class SocksDnsForwarder
         return null;
     }
 
-    internal static List<IPAddress> ExtractAnswerARecords(byte[] r) =>
-        ExtractAnswerRecords(r, wantV4: true, wantV6: false);
-
-    internal static List<IPAddress> ExtractAnswerAaaaRecords(byte[] r) =>
-        ExtractAnswerRecords(r, wantV4: false, wantV6: true);
-
-    internal static List<IPAddress> ExtractAnswerAddresses(byte[] r) =>
-        ExtractAnswerRecords(r, wantV4: true, wantV6: true);
-
-    private static List<IPAddress> ExtractAnswerRecords(byte[] r, bool wantV4, bool wantV6)
+        internal static List<IPAddress> ExtractAnswerARecords(byte[] r)
     {
         var result = new List<IPAddress>();
         if (r.Length < 12) return result;
 
         var ancount = (r[6] << 8) | r[7];
         var i = 12;
-        while (i < r.Length && r[i] != 0) i += 1 + r[i];
-        i += 5;
+        while (i < r.Length && r[i] != 0) i += 1 + r[i]; 
+        i += 5;                                          
 
         for (var n = 0; n < ancount && i + 10 <= r.Length; n++)
         {
-            while (i < r.Length)
+            while (i < r.Length) 
             {
                 var len = r[i];
                 if (len == 0) { i += 1; break; }
@@ -69,31 +59,25 @@ internal sealed partial class SocksDnsForwarder
             i += 10;
             if (i + rdlen > r.Length) break;
 
-            if (wantV4 && type == 1 && rdlen == 4)
+            if (type == 1 && rdlen == 4)
             {
                 result.Add(new IPAddress(new[] { r[i], r[i + 1], r[i + 2], r[i + 3] }));
-            }
-            else if (wantV6 && type == 28 && rdlen == 16)
-            {
-                var bytes = new byte[16];
-                Buffer.BlockCopy(r, i, bytes, 0, 16);
-                result.Add(new IPAddress(bytes));
             }
             i += rdlen;
         }
         return result;
     }
 
-    internal static byte[] BuildEmptyResponse(byte[] query, int questionLength)
+        internal static byte[] BuildEmptyResponse(byte[] query, int questionLength)
     {
         var resp = new byte[questionLength];
         Buffer.BlockCopy(query, 0, resp, 0, questionLength);
-        resp[2] |= 0x80;
-        resp[3] |= 0x80;
-        resp[3] = (byte)(resp[3] & 0xF0);
-        resp[6] = 0; resp[7] = 0;
-        resp[8] = 0; resp[9] = 0;
-        resp[10] = 0; resp[11] = 0;
+        resp[2] |= 0x80;                     
+        resp[3] |= 0x80;                     
+        resp[3] = (byte)(resp[3] & 0xF0);    
+        resp[6] = 0; resp[7] = 0;            
+        resp[8] = 0; resp[9] = 0;            
+        resp[10] = 0; resp[11] = 0;          
         return resp;
     }
 }

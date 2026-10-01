@@ -23,7 +23,7 @@ public static class LogSanitizer
         @"\b[A-Za-z0-9_\-+/]{40,}={0,2}\b",
         RegexOptions.Compiled);
 
-    public static string? FormatNotice(string noticeType, JsonElement data)
+        public static string? FormatNotice(string noticeType, JsonElement data)
     {
         switch (noticeType)
         {
@@ -97,7 +97,6 @@ public static class LogSanitizer
         var m = CdnScanActiveRegex.Match(msg);
         if (m.Success)
         {
-            _cdnScanActive = true;
             var mode = m.Groups[1].Value;
             var workers = m.Groups[2].Value;
             return $"CDN scan active - {mode} mode, {workers} workers";
@@ -109,19 +108,10 @@ public static class LogSanitizer
 
         m = CdnScanFoundRegex.Match(msg);
         if (m.Success)
-        {
-            var ip = m.Groups[1].Value;
-            var sni = m.Groups[2].Value;
-            return _cdnScanActive
-                ? $"CDN scan found: {ip} via {sni}"
-                : $"CDN Fronting edge: {ip} via {sni}";
-        }
+            return $"CDN scan found: {m.Groups[1].Value} via {m.Groups[2].Value}";
 
         if (msg.Equals("cdn fronting scan stopped", StringComparison.OrdinalIgnoreCase))
-        {
-            _cdnScanActive = false;
             return "CDN scan stopped";
-        }
 
         m = BeastModeRegex.Match(msg);
         if (m.Success)
@@ -136,9 +126,6 @@ public static class LogSanitizer
 
         return Scrub(msg);
     }
-
-    private static volatile bool _cdnScanActive;
-    public static void ResetScanState() => _cdnScanActive = false;
 
     private static readonly Regex CdnScanActiveRegex = new(
         @"cdn fronting scan active\s*\(mode:\s*(\w+),\s*workers:\s*(\d+)\)",
@@ -175,14 +162,69 @@ public static class LogSanitizer
         return el.TryGetInt32(out value);
     }
 
-    public static string Scrub(string line)
+    
+    
+    
+    
+    private static readonly Regex JsonSecretRegex = new(
+        "\"(?<k>password|passwd|psk|uuid|id|token|access_token|secret|private_key|privateKey|wg_private_key|auth)\"\\s*:\\s*\"(?<v>[^\"]{1,200})\"",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex UserInfoCredentialRegex = new(
+        @"\b(?<scheme>vless|vmess|trojan|ss|ssr|hysteria2|hy2)://(?<creds>[^\s/@]{2,200})@",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex UuidRegex = new(
+        @"\b[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\b",
+        RegexOptions.Compiled);
+
+    private static readonly Regex QuerySecretRegex = new(
+        @"(?<k>password|passwd|psk|token|secret|auth)=(?<v>[^&\s""']+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        public static string Scrub(string line)
     {
         if (string.IsNullOrEmpty(line)) return line;
 
-        var s = LongHexRegex.Replace(line, "<hex>");
-        s = LongBase64Regex.Replace(s, "<b64>");
-        s = Ipv4Regex.Replace(s, "<ip4>");
-        s = Ipv6Regex.Replace(s, "<ip6>");
+        var s = line;
+
+        
+        
+        
+        
+        
+        
+        if (s.IndexOf('"') >= 0)
+        {
+            s = JsonSecretRegex.Replace(s, m => $"\"{m.Groups["k"].Value}\":\"<redacted>\"");
+        }
+
+        if (s.IndexOf('=') >= 0)
+        {
+            s = QuerySecretRegex.Replace(s, m => $"{m.Groups["k"].Value}=<redacted>");
+        }
+
+        
+        if (s.IndexOf("://", StringComparison.Ordinal) >= 0)
+        {
+            s = UserInfoCredentialRegex.Replace(s, m => $"{m.Groups["scheme"].Value}://<redacted>@");
+        }
+
+        if (s.IndexOf('-') >= 0)
+        {
+            s = UuidRegex.Replace(s, "<uuid>");
+        }
+
+        if (s.Length >= 32)
+        {
+            s = LongHexRegex.Replace(s, "<hex>");
+        }
+
+        if (s.Length >= 40)
+        {
+            s = LongBase64Regex.Replace(s, "<b64>");
+        }
+
         return s;
     }
 }

@@ -13,8 +13,7 @@ namespace Se7enPro.Services;
 
 public sealed partial class WintunTunManager
 {
-
-    private async Task ReapplyRoutesAsync(int socksPort)
+        private async Task ReapplyRoutesAsync(int socksPort)
     {
         SplitRules.ClassifySplitEntries(_settings.Settings, out var domains, out _, out var procNames, out var procPaths);
         var matchSet = WidenDomainMatchSet(domains);
@@ -50,9 +49,6 @@ public sealed partial class WintunTunManager
                 if (!survivors.Contains(e)) doomed.Add(e);
             }
             _appliedRoutes.RemoveAll(e => !survivors.Contains(e));
-
-            _catchAllRoutes.Clear();
-            _catchAllSuspended = false;
         }
 
         foreach (var r in doomed.Distinct())
@@ -89,7 +85,7 @@ public sealed partial class WintunTunManager
         return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(raw)));
     }
 
-    internal static (int IfIndex, IPAddress Gateway)? FindRealDefaultRouteV4()
+        internal static (int IfIndex, IPAddress Gateway)? FindRealDefaultRouteV4()
     {
         try
         {
@@ -116,62 +112,10 @@ public sealed partial class WintunTunManager
         return null;
     }
 
-    internal static (int IfIndex, IPAddress Gateway)? FindRealDefaultRouteV6()
+        internal static bool HasGlobalIPv6()
     {
-        try
-        {
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                if (nic.NetworkInterfaceType is NetworkInterfaceType.Loopback
-                    or NetworkInterfaceType.Tunnel) continue;
-                if (WintunRouteApi.IsOwnTunAdapter(nic)) continue;
-
-                var props = nic.GetIPProperties();
-                var gw = props.GatewayAddresses
-                    .Select(g => g?.Address)
-                    .FirstOrDefault(a => a is not null
-                                         && a.AddressFamily == AddressFamily.InterNetworkV6
-                                         && !IPAddress.IPv6Any.Equals(a));
-                if (gw is null) continue;
-
-                var idx = props.GetIPv6Properties()?.Index;
-                if (idx is not null) return (idx.Value, gw);
-            }
-        }
-        catch { }
-        return null;
-    }
-
-    internal static IReadOnlyList<string> DetectUnderlyingDnsServersV6()
-    {
-        var result = new List<string>();
-        try
-        {
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                if (nic.NetworkInterfaceType is NetworkInterfaceType.Loopback
-                    or NetworkInterfaceType.Tunnel) continue;
-                if (WintunRouteApi.IsOwnTunAdapter(nic)) continue;
-
-                foreach (var dns in nic.GetIPProperties().DnsAddresses)
-                {
-                    if (dns.AddressFamily != AddressFamily.InterNetworkV6) continue;
-                    if (IPAddress.IsLoopback(dns)) continue;
-                    if (IPAddress.IPv6Any.Equals(dns)) continue;
-                    var text = dns.ToString();
-                    if (!result.Contains(text)) result.Add(text);
-                }
-            }
-        }
-        catch { }
-        return result;
-    }
-
-    internal static bool HasGlobalIPv6()
-    {
-
+        
+        
         static bool IsGlobal(IPAddress a)
         {
             var b = a.GetAddressBytes();

@@ -4,11 +4,17 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Markup;
 using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Services;
+using Se7enPro.ViewModels;
+using Se7enPro.Views;
 
 namespace Se7enPro;
 
@@ -16,129 +22,90 @@ public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
 
-    private const string SingleInstanceMutexName = "Global\\Se7enPro_SingleInstance";
-    private const string ShowWindowEventName = "Global\\Se7enPro_ShowWindowEvent";
-
-    private const string DaemonMutexName = "Global\\Se7enPro_DaemonInstance";
+    
+    
+    
+    
+    
+    
+    private const string SingleInstanceMutexName = @"Local\Se7enPro_SingleInstance";
+    private const string ShowWindowEventName = @"Local\Se7enPro_ShowWindowEvent";
 
     private Mutex? _singleInstanceMutex;
-    private Mutex? _daemonMutex;
     private EventWaitHandle? _showWindowEvent;
     private Thread? _showWindowListener;
     private volatile bool _shuttingDown;
 
     static App()
     {
-
+        
         System.Windows.Media.Animation.Timeline.DesiredFrameRateProperty.OverrideMetadata(
             typeof(System.Windows.Media.Animation.Timeline),
-            new FrameworkPropertyMetadata(60));
+            new FrameworkPropertyMetadata(30));
     }
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        var diagPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Se7en", "startup_diag.log");
+        
+        
+        Se7enPro.Services.Ui.Adapter = new Se7enPro.Services.WpfUiAdapter();
+
+        
+        
+        
+        LoadAppFonts();
+
+        bool isNew;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(diagPath)!);
-            File.AppendAllText(diagPath, $"[{DateTime.Now:O}] Entered OnStartup with args: '{string.Join(" ", e.Args)}'\n");
+            _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out isNew);
         }
-        catch { }
-
-        try
+        catch (AbandonedMutexException)
         {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-
-        bool isDaemon = e.Args.Any(a =>
-            a.Equals("--daemon", StringComparison.OrdinalIgnoreCase) ||
-            a.Equals("--headless", StringComparison.OrdinalIgnoreCase) ||
-            a.Equals("-daemon", StringComparison.OrdinalIgnoreCase) ||
-            a.Equals("/daemon", StringComparison.OrdinalIgnoreCase));
-
-        if (!isDaemon)
+            
+            
+            isNew = true;
+        }
+        catch (Exception)
         {
-            bool isNew;
-            try
-            {
-                _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out isNew);
-            }
-            catch (AbandonedMutexException)
-            {
-                isNew = true;
-            }
-            catch (UnauthorizedAccessException)
-            {
+            
+            isNew = true;
+        }
 
-                isNew = false;
-            }
-            catch (Exception)
+        if (!isNew)
+        {
+            
+            
+            if (TrySignalRunningInstance())
             {
-                isNew = true;
-            }
-
-            if (!isNew)
-            {
-                try
-                {
-                    if (EventWaitHandle.TryOpenExisting(ShowWindowEventName, out var existing))
-                    {
-                        existing.Set();
-                        existing.Dispose();
-                    }
-                }
-                catch
-                {
-                }
                 Shutdown(0);
                 return;
             }
 
+            
+            
+            
+        }
+
+        try
+        {
             _showWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
-            _showWindowListener = new Thread(ShowWindowListenerLoop)
-            {
-                IsBackground = true,
-                Name = "ShowWindowSignalListener",
-            };
-            _showWindowListener.Start();
         }
-        else
+        catch (Exception ex)
         {
-
-            bool isNewDaemon;
-            try
-            {
-                _daemonMutex = new Mutex(true, DaemonMutexName, out isNewDaemon);
-            }
-            catch (AbandonedMutexException)
-            {
-                isNewDaemon = true;
-            }
-            catch (UnauthorizedAccessException)
-            {
-
-                isNewDaemon = false;
-            }
-            catch (Exception)
-            {
-                isNewDaemon = true;
-            }
-
-            if (!isNewDaemon)
-            {
-                try { File.AppendAllText(diagPath, $"[{DateTime.Now:O}] Another daemon instance is running; exiting new one.\n"); } catch { }
-                Shutdown(0);
-                return;
-            }
-
-            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
-            {
-                try { _daemonMutex?.ReleaseMutex(); } catch { }
-                try { _daemonMutex?.Dispose(); } catch { }
-            };
-
-            AdminElevation.ReleaseDaemonMutexAction = ReleaseDaemonMutex;
-            AdminElevation.ReacquireDaemonMutexAction = ReacquireDaemonMutex;
+            
+            
+            
+            _showWindowEvent = null;
+            System.Diagnostics.Debug.WriteLine($"Show-window event unavailable: {ex.Message}");
         }
+
+        _showWindowListener = new Thread(ShowWindowListenerLoop)
+        {
+            IsBackground = true,
+            Name = "ShowWindowSignalListener",
+        };
+        _showWindowListener.Start();
 
         base.OnStartup(e);
 
@@ -155,25 +122,52 @@ public partial class App : Application
 
         var settings = Services.GetRequiredService<ISettingsService>();
         settings.Load();
+        Services.GetRequiredService<IThemeService>().ApplyTheme(settings.Settings.Theme);
+        ApplyLanguage(settings.Settings.Language);
 
         Services.GetRequiredService<IChildProcessGuard>();
 
-        _ = System.Threading.Tasks.Task.Run(() =>
+        
+        
+        
+        
+        Services.GetRequiredService<IKillSwitchService>();
+
+        
+        
+        void RunDeferredStartup()
         {
-            try
+            _ = System.Threading.Tasks.Task.Run(async () =>
             {
-                Services.GetRequiredService<IStartupReaper>().ReapStaleProcesses();
-                Services.GetRequiredService<ISystemProxyService>().RestoreIfCrashed();
-                Services.GetRequiredService<IStartupRegistration>().SyncFromSetting(settings.Settings.StartWithWindows);
-                EnsureDefenderExclusion(AppDomain.CurrentDomain.BaseDirectory);
-            }
-            catch { }
-        });
+                try
+                {
+                    Services.GetRequiredService<IStartupReaper>().ReapStaleProcesses();
+                    Services.GetRequiredService<ISystemProxyService>().RestoreIfCrashed();
+                    Services.GetRequiredService<IStartupRegistration>().SyncFromSetting(settings.Settings.StartWithWindows);
+                    var shard = Services.GetService<ShardEngine>();
+                    if (shard is not null)
+                    {
+                        await shard.RefreshSubscriptionAsync(force: false);
+                    }
+                    
+                    
+                    
+                    
+                    
+                }
+                catch { }
+            });
+        }
 
         if (settings.Settings.AutoConnect)
         {
             _ = StartAutoConnectAsync();
         }
+
+        EventManager.RegisterClassHandler(
+            typeof(ComboBox),
+            UIElement.PreviewMouseWheelEvent,
+            new MouseWheelEventHandler(OnComboBoxPreviewMouseWheel));
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
@@ -182,74 +176,43 @@ public partial class App : Application
 
         int renderTier = RenderCapability.Tier >> 16;
         var logger = Services.GetService<ILogger<App>>();
-        logger?.LogInformation("UI Engine initialized. RenderTier: {Tier} (Tier 2 = Full Hardware GPU Acceleration), GC Memory: {Memory:N0} KB",
+        logger?.LogInformation("UI Engine initialized. RenderTier: {Tier} (Tier 2 = Full Hardware GPU Acceleration), GC Memory: {Memory:N0} KB", 
             renderTier, GC.GetTotalMemory(false) / 1024);
 
-        var ipc = Services.GetRequiredService<IpcDaemonService>();
-        ipc.Start();
+        var mainWindow = new MainWindow();
+        MainWindow = mainWindow;
 
-        string? flutterExe = null;
-        var appDir = AppDomain.CurrentDomain.BaseDirectory;
-        var candidates = new[]
+        bool startMinimized = e.Args.Any(a =>
+            a.Equals("--autostart", StringComparison.OrdinalIgnoreCase) ||
+            a.Equals("--minimized", StringComparison.OrdinalIgnoreCase) ||
+            a.Equals("/minimized", StringComparison.OrdinalIgnoreCase) ||
+            a.Equals("-minimized", StringComparison.OrdinalIgnoreCase));
+
+        if (startMinimized)
         {
-            Path.Combine(appDir, "Se7enPro.exe"),
-            Path.Combine(appDir, "se7en.exe"),
-            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\..\..\Se7enFlutter\build\windows\x64\runner\Release\Se7enPro.exe")),
-            Path.GetFullPath(Path.Combine(appDir, @"..\..\..\..\..\Se7enFlutter\build\windows\x64\runner\Release\se7en.exe")),
-        };
-
-        foreach (var cand in candidates)
-        {
-            if (File.Exists(cand))
-            {
-
-                var isOwnExe = string.Equals(cand, Process.GetCurrentProcess().MainModule?.FileName, StringComparison.OrdinalIgnoreCase);
-                if (!isOwnExe)
-                {
-                    flutterExe = cand;
-                    break;
-                }
-            }
+            var tray = Services.GetRequiredService<ITrayIconService>();
+            tray.Initialize();
+            tray.HideToTray();
+            RunDeferredStartup();
         }
-
-        ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        logger?.LogInformation("Running in Headless Backend Mode for Flutter UI.");
-
-        var flutterProcName = Path.GetFileNameWithoutExtension(flutterExe ?? "Se7enPro");
-        if (flutterExe != null && Process.GetProcessesByName(flutterProcName).Length == 0)
+        else
         {
-            try
+            
+            
+            
+            
+            bool startupWorkQueued = false;
+            void OnFirstFrame(object? sender, EventArgs args)
             {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = flutterExe,
-                    WorkingDirectory = Path.GetDirectoryName(flutterExe)!,
-                    UseShellExecute = true,
-                };
-                var flutterProc = Process.Start(psi);
-                if (flutterProc != null)
-                {
-                    flutterProc.EnableRaisingEvents = true;
-                    flutterProc.Exited += (_, _) =>
-                    {
-                        logger?.LogInformation("Flutter frontend closed; shutting down backend.");
-                        Current?.Dispatcher.BeginInvoke(() => Current?.Shutdown(0));
-                    };
-                }
+                if (startupWorkQueued) return;
+                startupWorkQueued = true;
+                mainWindow.ContentRendered -= OnFirstFrame;
+                RunDeferredStartup();
             }
-            catch (Exception ex)
-            {
-                logger?.LogWarning(ex, "Failed to launch Flutter frontend {Exe}", flutterExe);
-            }
-        }
+            mainWindow.ContentRendered += OnFirstFrame;
 
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-        return;
-        }
-        catch (Exception ex)
-        {
-            try { File.AppendAllText(diagPath, $"[{DateTime.Now:O}] FATAL in OnStartup: {ex}\n"); } catch { }
+            mainWindow.Show();
+            mainWindow.Activate();
         }
     }
 
@@ -275,26 +238,33 @@ public partial class App : Application
         }
     }
 
-    public static void ReleaseDaemonMutex()
+        private static bool TrySignalRunningInstance()
     {
-        if (Current is App app)
-        {
-            try { app._daemonMutex?.ReleaseMutex(); } catch { }
-            try { app._daemonMutex?.Dispose(); } catch { }
-            app._daemonMutex = null;
-        }
-    }
-
-    public static void ReacquireDaemonMutex()
-    {
-        if (Current is App app && app._daemonMutex is null)
+        for (var attempt = 0; attempt < 4; attempt++)
         {
             try
             {
-                app._daemonMutex = new Mutex(true, DaemonMutexName, out _);
+                if (EventWaitHandle.TryOpenExisting(ShowWindowEventName, out var existing))
+                {
+                    using (existing)
+                    {
+                        existing.Set();
+                    }
+                    return true;
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                
+                
+                System.Diagnostics.Debug.WriteLine($"Show-window signal failed: {ex.Message}");
+                return true;
+            }
+
+            Thread.Sleep(120);
         }
+
+        return false;
     }
 
     private void ShowWindowListenerLoop()
@@ -318,7 +288,25 @@ public partial class App : Application
 
             try
             {
+                Dispatcher.Invoke(() =>
+                {
+                    var tray = Services?.GetService<ITrayIconService>();
+                    if (tray is not null)
+                    {
+                        tray.ShowWindow();
+                        return;
+                    }
 
+                    var win = Current?.MainWindow;
+                    if (win is null) return;
+                    if (!win.IsVisible) win.Show();
+                    if (win.WindowState == WindowState.Minimized) win.WindowState = WindowState.Normal;
+                    win.ShowInTaskbar = true;
+                    win.Activate();
+                    win.Topmost = true;
+                    win.Topmost = false;
+                    win.Focus();
+                });
             }
             catch
             {
@@ -335,22 +323,34 @@ public partial class App : Application
         });
 
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<ITrayIconService, TrayIconService>();
         services.AddSingleton<IStartupRegistration, StartupRegistration>();
         services.AddSingleton<ISystemProxyService, SystemProxyService>();
         services.AddSingleton<IChildProcessGuard, ChildProcessGuard>();
         services.AddSingleton<IStartupReaper, StartupReaper>();
-
+        
+        
+        
         services.AddSingleton<TunnelCoreManager>();
+        services.AddSingleton<IdentityProvisioner>();
         services.AddSingleton<AetherEngine>();
         services.AddSingleton<TorEngine>();
-        services.AddSingleton<V2RayEngine>();
         services.AddSingleton<ShardEngine>();
+        services.AddSingleton<V2RayEngine>();
         services.AddSingleton<ITunnelCoreManager, ConnectionManager>();
         services.AddSingleton<ITunManager, WintunTunManager>();
         services.AddSingleton<IKillSwitchService, KillSwitchService>();
-        services.AddSingleton<IIpHealthChecker, IpHealthChecker>();
+        services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<ICoreUpdateService, CoreUpdateService>();
-        services.AddSingleton<IpcDaemonService>();
+        services.AddSingleton<IAppUpdateService, AppUpdateService>();
+
+        services.AddSingleton<MainViewModel>();
+        services.AddSingleton<HomeViewModel>();
+        services.AddSingleton<SplitTunnelViewModel>();
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<LogsViewModel>();
+        services.AddSingleton<AboutViewModel>();
     }
 
     private static async System.Threading.Tasks.Task StartAutoConnectAsync()
@@ -361,7 +361,10 @@ public partial class App : Application
             var tunnel = Services?.GetService<ITunnelCoreManager>();
             if (tunnel is not null)
             {
-                await tunnel.StartAsync();
+                
+                
+                
+                await System.Threading.Tasks.Task.Run(() => tunnel.StartAsync());
             }
         }
         catch
@@ -369,40 +372,103 @@ public partial class App : Application
         }
     }
 
+    private void ApplyLanguage(string lang) => Loc.Apply(lang);
+
     private int _cleanupRan;
+
+        private static void LoadAppFonts()
+    {
+        try
+        {
+            var fontsDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
+            if (!Directory.Exists(fontsDir))
+            {
+                return;
+            }
+
+            var inter = new FontFamily(Path.Combine(fontsDir, "#Inter"));
+            var mono = new FontFamily(Path.Combine(fontsDir, "#JetBrains Mono"));
+
+            var app = Application.Current;
+            if (app is null)
+            {
+                return;
+            }
+
+            app.Resources["UI.FontFamily"] = inter;
+            app.Resources["BrandFont"] = inter;
+            app.Resources["UI.MonoFontFamily"] = mono;
+        }
+        catch
+        {
+            
+            
+        }
+    }
 
     private void RunCleanup()
     {
         if (Interlocked.Exchange(ref _cleanupRan, 1) != 0) return;
 
-        try
+        
+        
+        
+        
+        
+        
+        
+        
+        TryCleanup("kill switch", () =>
         {
+            Services?.GetService<IKillSwitchService>()?.Disarm();
+        });
 
+        TryCleanup("tun teardown", () =>
+        {
             var tun = Services?.GetService<ITunManager>();
             if (tun is not null)
             {
-                tun.DisposeAsync().AsTask()
-                   .WaitAsync(TimeSpan.FromSeconds(6)).GetAwaiter().GetResult();
+                Task.Run(() => tun.DisposeAsync().AsTask())
+                   .WaitAsync(TimeSpan.FromSeconds(8)).GetAwaiter().GetResult();
             }
+        });
 
-            Services?.GetService<ITunnelCoreManager>()?.StopAsync()
-                     .WaitAsync(TimeSpan.FromSeconds(6)).GetAwaiter().GetResult();
-
-            Services?.GetService<ISystemProxyService>()?.Clear();
-        }
-        catch
+        TryCleanup("engine stop", () =>
         {
+            var tunnel = Services?.GetService<ITunnelCoreManager>();
+            if (tunnel is not null)
+            {
+                Task.Run(() => tunnel.StopAsync())
+                    .WaitAsync(TimeSpan.FromSeconds(6)).GetAwaiter().GetResult();
+            }
+        });
 
-        }
+        
+        
+        
+        TryCleanup("system proxy", () =>
+        {
+            var proxy = Services?.GetService<ISystemProxyService>();
+            if (proxy?.IsApplied == true) proxy.Clear();
+        });
 
-        try { Services?.GetService<IKillSwitchService>()?.Disarm(); }
+        try { Services?.GetService<ITrayIconService>()?.Dispose(); }
         catch { }
 
         try { (Services?.GetService<IChildProcessGuard>() as IDisposable)?.Dispose(); }
         catch { }
+    }
 
-        try { (Services?.GetService<IpcDaemonService>() as IAsyncDisposable)?.DisposeAsync().AsTask().Wait(1000); }
-        catch { }
+        private static void TryCleanup(string what, Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[shutdown] {what} failed: {ex.Message}");
+        }
     }
 
     private void OnSessionEnding(object sender, SessionEndingCancelEventArgs e)
@@ -422,10 +488,29 @@ public partial class App : Application
         try { _singleInstanceMutex?.ReleaseMutex(); } catch { }
         _singleInstanceMutex?.Dispose();
 
-        try { _daemonMutex?.ReleaseMutex(); } catch { }
-        _daemonMutex?.Dispose();
-        _daemonMutex = null;
+        
+        
+        if (_relaunchOnExit)
+        {
+            try
+            {
+                var exe = Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(exe))
+                {
+                    Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+                }
+            }
+            catch { }
+        }
+
         base.OnExit(e);
+    }
+
+    private bool _relaunchOnExit;
+
+        public static void RequestRelaunchOnExit()
+    {
+        if (Current is App app) app._relaunchOnExit = true;
     }
 
     private void OnDispatcherUnhandledException(
@@ -443,6 +528,33 @@ public partial class App : Application
             ShowFatal(ex);
         }
     }
+
+    private static void OnComboBoxPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ComboBox cb || cb.IsDropDownOpen) return;
+        e.Handled = true;
+        var ancestor = FindAncestorScrollViewer(cb);
+        if (ancestor is null) return;
+        var args = new MouseWheelEventArgs(e.MouseDevice!, e.Timestamp, e.Delta)
+        {
+            RoutedEvent = UIElement.MouseWheelEvent,
+            Source = cb,
+        };
+        ancestor.RaiseEvent(args);
+    }
+
+    private static ScrollViewer? FindAncestorScrollViewer(DependencyObject? from)
+    {
+        for (var node = from is null ? null : VisualTreeHelper.GetParent(from);
+             node is not null;
+             node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is ScrollViewer sv) return sv;
+        }
+        return null;
+    }
+
+    private static int _fatalDialogsShown;
 
     private static void ShowFatal(Exception ex)
     {
@@ -462,33 +574,17 @@ public partial class App : Application
 
         }
 
+        
+        
+        
+        
+        
+        if (Interlocked.Increment(ref _fatalDialogsShown) > 1) return;
+
         MessageBox.Show(
             $"An unexpected error occurred:\n\n{ex.Message}",
             "Se7en Pro",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
-    }
-
-    private static void EnsureDefenderExclusion(string appDir)
-    {
-        try
-        {
-            if (!AdminElevation.IsAdministrator()) return;
-            if (string.IsNullOrWhiteSpace(appDir) || !Directory.Exists(appDir)) return;
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Add-MpPreference -ExclusionPath '{appDir.TrimEnd('\\')}' -ErrorAction SilentlyContinue\"",
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                UseShellExecute = false,
-            };
-            using var proc = Process.Start(psi);
-            proc?.WaitForExit(3000);
-        }
-        catch
-        {
-        }
     }
 }
