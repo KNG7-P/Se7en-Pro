@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 # Compiles every push and pull request WITHOUT access to any secret. This is
 # the guard that a fork can pass: it proves the tree still builds with the
@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -77,7 +77,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
