@@ -3,4 +3,4 @@
 # The only Python requirement in this repository: AES-256-GCM for the
 # build-time secret injector. Everything else the build needs comes from the
 # .NET SDK or from chocolatey (Inno Setup) on the runner.
-cryptography>=42.0.0
+cryptography>=50.0.1
