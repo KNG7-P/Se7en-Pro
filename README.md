@@ -19,7 +19,7 @@
 
 ---
 
-## 🏗️ Architecture (v1.0.5)
+## 🏗️ Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -28,8 +28,8 @@
 │               MVVM · Telemetry · Routing · Responsive Tray             │
 ├───────────────────┬───────────────────┬────────────────┬───────────────┤
 │      Aether       │      Psiphon      │      Tor       │     SHARD     │
-│   (MASQUE QUIC /  │   (TunnelCore)    │  (Onion Mesh   │ (TLS Frag /   │
-│ WireGuard Default)│                   │   Lyrebird PT) │  IP Shredder) │
+│  (MASQUE HTTP/3 / │   (TunnelCore)    │  (Onion Mesh   │ (TLS Frag /   │
+│  WireGuard Warp)  │                   │   Lyrebird PT) │  IP Shredder) │
 ├───────────────────┴───────────────────┴────────────────┴───────────────┤
 │                     Sing-box & Xray Multi-Hop Hub                      │
 │             (VLESS · VMess · Trojan · Shadowsocks Multiplex)           │
@@ -44,21 +44,21 @@
 ## 🇬🇧 English
 
 ### 📌 About The Project
-**Se7en Pro** is an open-source, next-generation Windows anti-censorship orchestrator and multi-protocol VPN suite.
+**Se7en Pro** is an open-source, next-generation Windows anti-censorship orchestrator and multi-protocol VPN suite built on a modern, high-performance **single-process native WPF (.NET 8)** architecture featuring **Material Design 3**.
 
-In **v1.0.5**, the architecture has been streamlined into a unified, high-performance **single-process native WPF (.NET 8) client** featuring **Material Design 3**. This replaces the multi-process daemon architecture, completely eliminating IPC latency and synchronization overhead while delivering near-instant startup via **ReadyToRun (PGO)** pre-compilation and reduced memory consumption.
+Engineered for extreme performance, security, and resilience, Se7en Pro features near-instant startup via **ReadyToRun (PGO)** pre-compilation, fluid 60fps animations, and minimal memory footprint.
 
-Se7en Pro unifies state-of-the-art circumvention protocols — Cloudflare MASQUE (with QUIC / HTTP-3 enabled by default), WireGuard Warp (default primary connection), TLS ClientHello packet shredding (SHARD), Psiphon Network with CDN fronting, Tor Onion mesh with pluggable transports, and Xray/Sing-box chained multi-hop transports — into an intuitive, transparent desktop client.
+Se7en Pro unifies state-of-the-art circumvention protocols — WireGuard Warp (primary connection protocol), Cloudflare MASQUE (HTTP/3 QUIC & HTTP/2), TLS ClientHello packet shredding (SHARD), Psiphon Network with CDN fronting, Tor Onion mesh with pluggable transports, and Xray/Sing-box chained multi-hop transports — into an intuitive, transparent desktop client.
 
-The repository follows strict security decoupling: **no private credentials, server lists, or sponsor keys are stored in source code or Git history**. Build secrets are injected securely via GitHub Actions Secrets using AES-256-GCM encryption, allowing forks and public checkouts to build and pass CI seamlessly with safe placeholders.
+The repository follows strict security decoupling: **no private credentials, server lists, or sponsor keys are stored in source code or Git history**. Build secrets are injected securely via GitHub Actions Secrets using AES-256-GCM encryption, allowing forks and public checkouts to build cleanly with safe placeholders.
 
 ---
 
 ### ✨ Core Features & Supported Protocols
 
 #### 🌐 1. Supported Protocols & Multi-Engine Hub
-* **WireGuard Warp (Default Protocol)**: High-speed, modern kernel-level tunnel set as the primary out-of-the-box connection method.
-* **Aether Core (v2.0.0)**: Supports **MASQUE** with **HTTP/3 (QUIC over UDP) enabled by default**, HTTP/2 (TCP) fallback, and Warp-on-Warp chaining.
+* **WireGuard Warp (Primary Protocol)**: High-speed, modern kernel-level tunnel set as the primary out-of-the-box connection method.
+* **Aether Core (v2.0.0)**: Advanced MASQUE transport supporting HTTP/3 (QUIC over UDP) and HTTP/2 (TCP) with automatic fallback and Warp-on-Warp chaining.
 * **SHARD Engine**: Advanced TLS ClientHello fragmentation and IP-level packet shredding to defeat Deep Packet Inspection (DPI) with automatic latency-based node discovery.
 * **Psiphon Network**: Hardened `psiphon-tunnel-core` integration with multi-CDN fronting (Akamai, Fastly, Cloudflare), custom SNI override, and clean edge-IP dials.
 * **Tor Expert Bundle**: Native Tor daemon integration with official Pluggable Transports (**Lyrebird** for obfs4 / Snowflake / WebTunnel / Conjure), strict country egress routing, and onion mesh circuits.
@@ -74,10 +74,10 @@ The repository follows strict security decoupling: **no private credentials, ser
 * **Kill Switch & Route Isolation**: Prevents IP leakage upon unexpected connection termination.
 * **LAN Sharing**: Optional local network proxy sharing with customizable authentication.
 
-#### 🎨 3. Modern Material Design 3 Interface & Startup Performance
-* **Single-Process WPF Client**: Fluid 60fps animations, optimized hot paths, zero IPC overhead.
-* **ReadyToRun Startup Acceleration**: Eliminates first-launch black screen delays with ahead-of-time IL-to-native compilation.
-* **Tri-Language Support**: Fully localized in **English**, **Russian (Русский)**, and **Chinese (中文)**.
+#### 🎨 3. Modern Material Design 3 Interface & Performance
+* **Single-Process WPF Client**: Fluid 60fps animations, optimized hot paths, zero overhead.
+* **ReadyToRun Startup Acceleration**: Eliminates startup delays with ahead-of-time IL-to-native compilation.
+* **Multi-Language Support**: Fully localized in **English**, **Russian (Русский)**, and **Chinese (中文)**.
 * **Live Telemetry & Logs**: Real-time throughput graphs, round-trip latency, session counters, and searchable categorized log console.
 
 ---
@@ -114,8 +114,8 @@ The repository is safe to fork and publish. To inject private Psiphon network cr
 # 1. Quick Developer Build (Debug/Release)
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# 2. Complete Distribution Suite (Installers + Portables for x64 and x86)
-powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir dist
+# 2. Complete Distribution Suite (Installers & Portables with/without bundled .NET for x64 and x86)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 ---
@@ -139,21 +139,21 @@ The **source code** in this repository is licensed under the [MIT License](LICEN
 ## 🇮🇷 فارسی
 
 ### 📌 درباره پروژه
-**سون پرو (Se7en Pro)** یک نرم‌افزار متن‌باز، نوین و بسیار قدرتمند برای عبور از سانسور اینترنت و مدیریت اتصالات در سیستم‌عامل ویندوز است.
+**سون پرو (Se7en Pro)** یک نرم‌افزار متن‌باز، نوین و بسیار قدرتمند برای عبور از سانسور اینترنت و مدیریت اتصالات در سیستم‌عامل ویندوز است که بر پایه معماری بهینه‌شده **تک‌پروسس بومی WPF (.NET 8)** و طراحی مدرن **Material Design 3** پیاده‌سازی شده است.
 
-در **نسخه 1.0.5**، ساختار برنامه به یک معماری یکپارچه و بهینه‌شده **تک‌پروسس بومی WPF (.NET 8)** بر پایه طراحی **Material Design 3** ارتقا یافته است. این تغییر باعث حذف پیچیدگی‌های دیمون جداگانه و لایه‌های IPC شده و به لطف تکنولوژی پیش‌کامپایل **ReadyToRun (PGO)**، تاخیر اجرای برنامه به حداقل رسیده و مصرف حافظه رم و پردازنده به شکل محسوسی کاهش یافته است.
+این نرم‌افزار با بهره‌گیری از تکنولوژی پیش‌کامپایل **ReadyToRun (PGO)**، شروع سریع و مصرف بهینه حافظه رم و پردازنده، تجربه‌ای روان و پایدار ارائه می‌دهد.
 
-سون پرو پروتکل‌های متعدد پیشرفته‌ای نظیر Cloudflare MASQUE (با فعال بودن پیش‌فرض QUIC/HTTP-3)، پروتکل WireGuard Warp (به عنوان اتصال پیش‌فرض اصلی برنامه)، تکنولوژی خردسازی بسته‌های TLS (پروتکل SHARD)، هسته ارتقایافته سایفون، شبکه تور و ترانزیت‌های چندمرحله‌ای Sing-box و Xray را در قالب یک ابزار یکپارچه و قدرتمند در اختیار شما قرار می‌دهد.
+سون پرو مجموعه‌ای از پیشرفته‌ترین پروتکل‌های ارتباطی نظیر WireGuard Warp (به عنوان اتصال اصلی)، پروتکل Cloudflare MASQUE (با پشتیبانی از استانداردهای HTTP/3 QUIC و HTTP/2)، فناوری خردسازی بسته‌های TLS (پروتکل SHARD)، هسته ارتقایافته سایفون، شبکه تور و ترانزیت‌های چندمرحله‌ای Sing-box و Xray را در قالب کلاینتی یکپارچه ارائه می‌دهد.
 
-این مخزن به گونه‌ای معماری شده که **فاقد هرگونه شناسه، کلید محرمانه یا لیست سرور اختصاصی در متن کدها یا تاریخچه گیت** است. داده‌های حساس در زمان بیلد از طریق GitHub Actions Secrets به صورت خودکار با الگوریتم قدرتمند **AES-256-GCM** رمزگذاری شده و داخل باینری قرار می‌گیرند.
+این مخزن به گونه‌ای معماری شده که **فاقد هرگونه شناسه، کلید محرمانه یا لیست سرور اختصاصی در متن کدها یا تاریخچه گیت** است. داده‌های حساس در زمان بیلد از طریق GitHub Actions Secrets با الگوریتم قدرتمند **AES-256-GCM** رمزگذاری شده و داخل باینری قرار می‌گیرند.
 
 ---
 
 ### ✨ قابلیت‌های کلیدی و معماری پروژه
 
 #### 🌐 ۱. پشتیبانی از پروتکل‌ها و هسته‌های ارتباطی
-* **پروتکل WireGuard Warp (پیش‌فرض برنامه)**: اتصال پیش‌فرض فوق‌العاده پرسرعت و پایدار در سطح کرنل.
-* **هسته Aether (نسخه 2.0.0)**: پشتیبانی از پروتکل **MASQUE با فعال بودن پیش‌فرض HTTP/3 (QUIC over UDP)** به همراه امکان برگشت به HTTP/2 (TCP) و قابلیت Warp-on-Warp.
+* **پروتکل WireGuard Warp (پروتکل اصلی)**: اتصال پرسرعت و پایدار در سطح کرنل سیستم‌عامل.
+* **هسته Aether (نسخه 2.0.0)**: پشتیبانی پیشرفته از پروتکل **MASQUE** بر بستر HTTP/3 (QUIC over UDP) و HTTP/2 (TCP) به همراه امکان برگشت خودکار و قابلیت Warp-on-Warp.
 * **پروتکل قدرتمند SHARD**: فرگمنت پیشرفته بسته‌های TLS ClientHello و تکه‌تکه‌کردن ترافیک برای دورزدن فیلترینگ عمیق (DPI) همراه با اسکنر خودکار نزدیک‌ترین آی‌پی‌های لبه.
 * **شبکه سایفون (Psiphon Core)**: هسته اختصاصی سایفون با پشتیبانی کامل از CDN Fronting (سرویس‌های Akamai، Fastly و Cloudflare) و امکان وارد کردن SNI و IP تمیز.
 * **شبکه تور (Tor Expert Bundle)**: ادغام کامل هسته Tor با ترنسپورت‌های رسمی Lyrebird (پل‌های obfs4، Snowflake، WebTunnel و Conjure)، قابلیت انتخاب کشور خروجی و ارتباط شبکه‌ای پیازی.
@@ -168,8 +168,8 @@ The **source code** in this repository is licensed under the [MIT License](LICEN
 * **کیل سوییچ و اشتراک LAN**: جلوگیری فوری از نشت IP در صورت قطع ناگهانی تانل و امکان اشتراک‌گذاری پروکسی در شبکه محلی.
 
 #### 🎨 ۳. رابط کاربری مدرن Material Design 3 و عملکرد
-* **کلاینت بومی و سبک**: انیمیشن‌های روان، پرفورمنس بهینه در چرخه‌های رندرینگ و حذف پردازش‌های زائد پس‌زمینه.
-* **استارتاپ آنی**: حذف صفحه سیاه آغازین با فعال‌سازی PublishReadyToRun در دات‌نت ۸.
+* **کلاینت بومی و سبک**: انیمیشن‌های روان، مصرف بهینه و سرعت پاسخ‌دهی بالا.
+* **استارتاپ سریع**: بهینه‌سازی بارگذاری اولیه با کامپایل Native از طریق PublishReadyToRun.
 * **پشتیبانی از ۳ زبان در برنامه**: ترجمه کامل به زبان‌های **انگلیسی**، **روسی (Русский)** و **چینی (中文)**.
 * **کنسول لاگ زنده و تلکتری**: مانیتورینگ زنده سرعت ارسال/دریافت، پینگ، آمار داده‌های مصرفی و ترمینال لاگین دسته‌بندی‌شده.
 
@@ -193,8 +193,8 @@ The **source code** in this repository is licensed under the [MIT License](LICEN
 # ۱. بیلد سریع سورس کد (نسخه 64 بیتی)
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# ۲. ساخت پکیج‌های کامل رسمی (فایل‌های نصبی و پرتابل ۳۲ و ۶۴ بیتی در پوشه dist)
-powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir dist
+# ۲. ساخت پکیج‌های کامل رسمی (شامل فایل‌های نصبی و پرتابل ۳۲ و ۶۴ بیتی با و بدون دات‌نت)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 ---
@@ -208,11 +208,11 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir
 ## 🇷🇺 Русский
 
 ### 📌 О проекте
-**Se7en Pro** — это современный инструмент с открытым исходным кодом для обхода интернет-цензуры и универсальный VPN-клиент для Windows.
+**Se7en Pro** — это современный инструмент с открытым исходным кодом для обхода интернет-цензуры и универсальный VPN-клиент для Windows на базе нативной **однопроцессной архитектуры WPF (.NET 8)** с дизайном **Material Design 3**.
 
-В **версии 1.0.5** проект переведен на оптимизированную **однопроцессную нативную архитектуру WPF (.NET 8)** с дизайном **Material Design 3**. Это устранило задержки межпроцессного взаимодействия (IPC) и обеспечило мгновенный запуск благодаря прекомпиляции **ReadyToRun (PGO)** при минимальном потреблении оперативной памяти.
+Приложение спроектировано для обеспечения максимальной скорости, безопасности и стабильности, обладает быстрым запуском за счет предварительной компиляции **ReadyToRun (PGO)** и минимальным потреблением системных ресурсов.
 
-Клиент объединяет передовые протоколы маскировки: **WireGuard Warp** (основной протокол по умолчанию), Cloudflare **MASQUE с поддержкой HTTP/3 (QUIC over UDP) по умолчанию**, фрагментацию пакетов TLS ClientHello (SHARD), сеть Psiphon с CDN Fronting, сеть Tor с подключаемыми транспортами, а также многозвенные цепочки Sing-box и Xray.
+Клиент объединяет передовые протоколы маскировки: WireGuard Warp (основной протокол), Cloudflare MASQUE (HTTP/3 QUIC и HTTP/2), фрагментацию пакетов TLS ClientHello (SHARD), сеть Psiphon с CDN Fronting, сеть Tor с подключаемыми транспортами, а также многозвенные цепочки Sing-box и Xray.
 
 В репозитории соблюдены строгие стандарты безопасности: **никаких приватных ключей, списков серверов или спонсорских данных в кодовой базе или истории Git**. Секреты внедряются на этапе сборки через GitHub Actions Secrets с шифрованием **AES-256-GCM**.
 
@@ -221,8 +221,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir
 ### ✨ Ключевые возможности и протоколы
 
 #### 🌐 1. Многопротокольный хаб
-* **WireGuard Warp (По умолчанию)**: Современный высокоскоростной протокол, установленный как метод соединения из коробки.
-* **Ядро Aether (v2.0.0)**: MASQUE с **включенным по умолчанию HTTP/3 (QUIC)**, поддержкой отката на HTTP/2 (TCP) и цепочками Warp-on-Warp.
+* **WireGuard Warp (Основной протокол)**: Современный высокоскоростной протокол на уровне ядра операционной системы.
+* **Ядро Aether (v2.0.0)**: Поддержка протокола MASQUE (HTTP/3 QUIC over UDP и HTTP/2 TCP) с автоматическим откатом и цепочками Warp-on-Warp.
 * **Движок SHARD**: Фрагментация пакетов TLS ClientHello и разделение TCP-потоков для обхода глубокого анализа пакетов (DPI).
 * **Сеть Psiphon**: Полноценная интеграция `psiphon-tunnel-core` с поддержкой CDN Fronting (Akamai, Fastly, Cloudflare) и пула чистых IP.
 * **Пакет Tor Expert Bundle**: Нативная интеграция Tor с транспортами **Lyrebird** (obfs4, Snowflake, WebTunnel, Conjure) и выбором страны выхода.
@@ -249,8 +249,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir
 # Быстрая сборка x64
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# Полная сборка релизных пакетов (установщики и портативные архивы x64/x86)
-powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir dist
+# Полная сборка релизных пакетов (установщики и портативные архивы с .NET и без .NET для x64/x86)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 ---
@@ -258,11 +258,11 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir
 ## 🇨🇳 中文
 
 ### 📌 项目简介
-**Se7en Pro** 是一款现代、开源且强大的 Windows 桌面多协议抗封锁工具与全能 VPN 客户端。
+**Se7en Pro** 是一款现代、开源且强大的 Windows 桌面多协议抗封锁工具与全能 VPN 客户端，基于高性能 **原生单进程 WPF (.NET 8)** 架构与现代 **Material Design 3** 风格开发。
 
-在 **v1.0.5** 版本中，项目已全新重构为 **原生单进程 WPF (.NET 8)** 架构，采用优雅的 **Material Design 3** 设计语言。彻底告别多进程守护与 IPC 通信延迟，借助 **ReadyToRun (PGO)** 预编译技术实现毫秒级快速启动，显著降低系统内存与 CPU 负载。
+软件具备出色的运行效率、安全性与抗审查韧性，借助 **ReadyToRun (PGO)** 预编译技术实现毫秒级快速启动，界面帧率平稳流畅，内存占用极低。
 
-Se7en Pro 集成了多项尖端网络抗封锁协议：包括 **WireGuard Warp（开箱即用的默认连接协议）**、Cloudflare **MASQUE（默认开启 HTTP/3 QUIC 传输）**、TLS 报文分片与分包打碎（SHARD 协议）、集成多 CDN 域前置的 Psiphon 核心、Tor 洋葱网络以及基于 Sing-box / Xray 的多跳链式代理。
+Se7en Pro 集成了多项尖端网络抗封锁协议：包括 **WireGuard Warp（主连接协议）**、Cloudflare **MASQUE（支持 HTTP/3 QUIC 与 HTTP/2）**、TLS 报文分片与分包打碎（SHARD 协议）、集成多 CDN 域前置的 Psiphon 核心、Tor 洋葱网络以及基于 Sing-box / Xray 的多跳链式代理。
 
 本仓库遵循严格的安全解耦设计：**源代码与 Git 历史中绝不包含任何硬编码私有密钥、服务器列表或赞助商凭据**。构建秘密通过 GitHub Actions Secrets 在自动化流水线中经 **AES-256-GCM** 加密后安全注入。
 
@@ -271,8 +271,8 @@ Se7en Pro 集成了多项尖端网络抗封锁协议：包括 **WireGuard Warp�
 ### ✨ 核心特性与支持协议
 
 #### 🌐 1. 多协议引擎中心
-* **WireGuard Warp（默认主协议）**：内核级虚拟网卡转发，速度快、延迟低、连接稳固。
-* **Aether 核心 (v2.0.0)**：支持 MASQUE 协议，**默认开启 HTTP/3 (基于 UDP 的 QUIC)**，并支持自动回退至 HTTP/2 (TCP) 及 Warp-on-Warp 嵌套。
+* **WireGuard Warp（主协议）**：内核级虚拟网卡转发，速度快、延迟低、连接稳固。
+* **Aether 核心 (v2.0.0)**：支持 MASQUE 协议（HTTP/3 基于 UDP 的 QUIC 及 HTTP/2 TCP 传输），支持自动回退与 Warp-on-Warp 嵌套。
 * **SHARD 协议引擎**：先进的 TLS ClientHello 深度分片与报文碎化技术，有效规避 DPI 深度包检测。
 * **Psiphon 核心网络**：升级版 `psiphon-tunnel-core`，集成 Akamai、Fastly、Cloudflare 等 CDN 前置节点调度与纯净 IP 优选。
 * **Tor 专家包**：集成官方可插拔传输工具 (**Lyrebird**，支持 obfs4、Snowflake、WebTunnel 及 Conjure)，支持出口国家定向。
@@ -299,8 +299,8 @@ Se7en Pro 集成了多项尖端网络抗封锁协议：包括 **WireGuard Warp�
 # 1. 快速编译 x64 发行版
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# 2. 一键编译完整发布包 (包含 x64/x86 安装程序与免安装便携版)
-powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -OutDir dist
+# 2. 一键编译完整发布包 (包含 x64/x86 安装程序与便携版，支持含 .NET 及不含 .NET 版本)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 ---

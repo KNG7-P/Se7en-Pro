@@ -25,6 +25,8 @@
     <FileVersion>1.0.5.0</FileVersion>
     <Product>Se7en Pro</Product>
     <Company>Se7en Pro</Company>
+    <Authors>Se7en Pro</Authors>
+    <PublisherName>Se7en Pro</PublisherName>
     <Description>Se7en Pro - modern Windows client</Description>
 
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>

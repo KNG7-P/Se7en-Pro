@@ -5,7 +5,7 @@
   #define MyAppVersion "1.0.5"
 #endif
 #define MyAppPublisher "Se7en Pro"
-#define MyAppURL "https://github.com/KNG7-P/Se7en-Pro"
+#define MyAppURL "https://github.com/yesmaynameisO/Se7en-Pro"
 #define MyAppExeName "Se7enPro.exe"
 
 #ifndef SourcePath

@@ -79,19 +79,23 @@ Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
 
 ### 4. Full Distribution Packaging (Local)
 
-To build full installers and portable ZIP packages locally:
+To build full installers and portable ZIP packages locally (both self-contained and framework-dependent variants for x64 and x86):
 
 ```powershell
-# Build all architectures (x64 and x86) with installers and portables:
-.\tools\build-all.ps1 -Arch all -OutDir dist
+# Build all architectures (x64 and x86) with installers and portables (all variants):
+.\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 Outputs generated in `dist/`:
-- `Se7enPro_v1.0.5_Setup_x64.exe`
-- `Se7enPro_v1.0.5_Setup_x86.exe`
-- `Se7enPro_v1.0.5_Portable_x64.zip`
-- `Se7enPro_v1.0.5_Portable_x86.zip`
-- `SHA256SUMS.txt`
+- `Se7enPro_v1.0.5_Setup_x64.exe` (Self-contained 64-bit installer, includes .NET)
+- `Se7enPro_v1.0.5_Setup_x64_without_dotnet.exe` (Framework-dependent 64-bit installer)
+- `Se7enPro_v1.0.5_Setup_x86.exe` (Self-contained 32-bit installer, includes .NET)
+- `Se7enPro_v1.0.5_Setup_x86_without_dotnet.exe` (Framework-dependent 32-bit installer)
+- `Se7enPro_v1.0.5_Portable_x64.zip` (Self-contained 64-bit portable archive)
+- `Se7enPro_v1.0.5_Portable_x64_without_dotnet.zip` (Framework-dependent 64-bit portable archive)
+- `Se7enPro_v1.0.5_Portable_x86.zip` (Self-contained 32-bit portable archive)
+- `Se7enPro_v1.0.5_Portable_x86_without_dotnet.zip` (Framework-dependent 32-bit portable archive)
+- `SHA256SUMS.txt` (Cryptographic verification checksums)
 
 ---
 
@@ -104,7 +108,7 @@ Outputs generated in `dist/`:
 git tag -a v1.0.5 -m "Se7en Pro v1.0.5"
 git push origin v1.0.5
 ```
-GitHub Actions automatically builds, verifies secret encryption, generates installers and portables, calculates SHA-256 sums, and publishes the GitHub Release.
+GitHub Actions automatically builds all 8 package variants, verifies secret encryption, calculates SHA-256 sums, and publishes the official release.
 
 ---
 
@@ -179,18 +183,22 @@ Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
 
 ### ۴. ساخت پکیج‌های کامل رسمی به صورت لوکال
 
-برای ساخت تمامی فایل‌های نصبی Inno Setup و فایل‌های پرتابل ZIP در سیستم خود:
+برای ساخت تمامی فایل‌های نصبی Inno Setup و فایل‌های پرتابل ZIP در سیستم خود (شامل نسخه‌های همراه با دات‌نت و بدون دات‌نت برای هر دو معماری ۳۲ و ۶۴ بیتی):
 
 ```powershell
-# بیلد کامل هر دو معماری x64 و x86 همراه با نصاب‌ها و نسخه‌های پرتابل:
-.\tools\build-all.ps1 -Arch all -OutDir dist
+# بیلد کامل با تمام متغیرها (۸ پکیج نصبی و پرتابل):
+.\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 فایل‌های تولیدشده در پوشه `dist/`:
-- `Se7enPro_v1.0.5_Setup_x64.exe` (فایل نصبی ۶۴ بیتی)
-- `Se7enPro_v1.0.5_Setup_x86.exe` (فایل نصبی ۳۲ بیتی)
-- `Se7enPro_v1.0.5_Portable_x64.zip` (نسخه پرتابل ۶۴ بیتی)
-- `Se7enPro_v1.0.5_Portable_x86.zip` (نسخه پرتابل ۳۲ بیتی)
+- `Se7enPro_v1.0.5_Setup_x64.exe` (فایل نصبی ۶۴ بیتی مستقل همراه با دات‌نت)
+- `Se7enPro_v1.0.5_Setup_x64_without_dotnet.exe` (فایل نصبی ۶۴ بیتی وابسته به ران‌تایم دات‌نت)
+- `Se7enPro_v1.0.5_Setup_x86.exe` (فایل نصبی ۳۲ بیتی مستقل همراه با دات‌نت)
+- `Se7enPro_v1.0.5_Setup_x86_without_dotnet.exe` (فایل نصبی ۳۲ بیتی وابسته به ران‌تایم دات‌نت)
+- `Se7enPro_v1.0.5_Portable_x64.zip` (نسخه پرتابل ۶۴ بیتی همراه با دات‌نت)
+- `Se7enPro_v1.0.5_Portable_x64_without_dotnet.zip` (نسخه پرتابل ۶۴ بیتی بدون دات‌نت)
+- `Se7enPro_v1.0.5_Portable_x86.zip` (نسخه پرتابل ۳۲ بیتی همراه با دات‌نت)
+- `Se7enPro_v1.0.5_Portable_x86_without_dotnet.zip` (نسخه پرتابل ۳۲ بیتی بدون دات‌نت)
 - `SHA256SUMS.txt` (چک‌سام هش‌ها)
 
 ---
@@ -204,7 +212,7 @@ Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
 git tag -a v1.0.5 -m "Se7en Pro v1.0.5"
 git push origin v1.0.5
 ```
-اکشن گیت‌هاب به طور خودکار بیلد را آغاز کرده، سکرت‌ها را رمزنگاری می‌کند، فایل‌های نصبی و پرتابل را می‌سازد و نسخه را در صفحه Releases منتشر می‌نماید.
+اکشن گیت‌هاب به طور خودکار بیلد هر ۸ پکیج را آغاز کرده، سکرت‌ها را رمزنگاری می‌کند و همه فایل‌ها را در صفحه Releases منتشر می‌نماید.
 
 ---
 
@@ -277,9 +285,20 @@ Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
 ### 4. Полная локальная сборка дистрибутивов
 
 ```powershell
-# Сборка x64 и x86 со всеми установщиками и портативными версиями:
-.\tools\build-all.ps1 -Arch all -OutDir dist
+# Сборка x64 и x86 со всеми установщиками и портативными версиями (с .NET и без .NET):
+.\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
+
+Файлы в директории `dist/`:
+- `Se7enPro_v1.0.5_Setup_x64.exe`
+- `Se7enPro_v1.0.5_Setup_x64_without_dotnet.exe`
+- `Se7enPro_v1.0.5_Setup_x86.exe`
+- `Se7enPro_v1.0.5_Setup_x86_without_dotnet.exe`
+- `Se7enPro_v1.0.5_Portable_x64.zip`
+- `Se7enPro_v1.0.5_Portable_x64_without_dotnet.zip`
+- `Se7enPro_v1.0.5_Portable_x86.zip`
+- `Se7enPro_v1.0.5_Portable_x86_without_dotnet.zip`
+- `SHA256SUMS.txt`
 
 ---
 
@@ -330,9 +349,6 @@ dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x86
 ```
 
-输出可执行程序路径：
-`Se7enPro\bin\Release\net8.0-windows10.0.19041.0\win-x64\Se7enPro.exe`
-
 ---
 
 ### 3. 配置 Psiphon 商业接入密钥
@@ -367,15 +383,19 @@ Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
 ### 4. 本地完整发布包打包
 
 ```powershell
-# 一键生成 x64 和 x86 的安装程序与免安装绿色版 ZIP：
-.\tools\build-all.ps1 -Arch all -OutDir dist
+# 一键生成全部 8 种安装程序与便携版（含 .NET 与不含 .NET 版本）：
+.\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
-产物生成在 `dist/` 文件夹中：
+产物列表：
 - `Se7enPro_v1.0.5_Setup_x64.exe`
+- `Se7enPro_v1.0.5_Setup_x64_without_dotnet.exe`
 - `Se7enPro_v1.0.5_Setup_x86.exe`
+- `Se7enPro_v1.0.5_Setup_x86_without_dotnet.exe`
 - `Se7enPro_v1.0.5_Portable_x64.zip`
+- `Se7enPro_v1.0.5_Portable_x64_without_dotnet.zip`
 - `Se7enPro_v1.0.5_Portable_x86.zip`
+- `Se7enPro_v1.0.5_Portable_x86_without_dotnet.zip`
 - `SHA256SUMS.txt`
 
 ---
@@ -389,4 +409,3 @@ Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
 git tag -a v1.0.5 -m "Se7en Pro v1.0.5"
 git push origin v1.0.5
 ```
-GitHub Actions 将自动执行单元测试、加密凭据、编译产物、计算校验和并正式发布至 GitHub Releases 页面。

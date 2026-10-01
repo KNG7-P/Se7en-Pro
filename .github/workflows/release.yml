@@ -165,7 +165,7 @@ jobs:
 
       - name: Build release packages
         shell: pwsh
-        run: ./tools/build-all.ps1 -Arch all -OutDir dist
+        run: ./tools/build-all.ps1 -Arch all -AllVariants -OutDir dist
 
       - name: Checksum the assets
         shell: pwsh
