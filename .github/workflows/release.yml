@@ -1,0 +1,260 @@
+name: Release
+
+# Publishes a release when a v* tag is pushed.
+#
+# Secrets are read from the repository's Actions secrets and injected into the
+# build by tools/generate_build_secrets.py. No secret value is ever written to
+# the repository, to a build log, or to a release asset: only the AES-256-GCM
+# ciphertext baked into the executable and Resources/server_entries.bin ships.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   SE7EN_PROPAGATION_CHANNEL_ID
+#   SE7EN_SPONSOR_ID
+#   SE7EN_CLIENT_VERSION
+#   SE7EN_CLIENT_PLATFORM
+#   SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY
+#   SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY
+#   SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY
+#   SE7EN_REMOTE_SERVER_LIST_URLS_JSON
+#   SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON
+#   SE7EN_FEEDBACK_UPLOAD_URLS_JSON
+#
+# Optional:
+#   SE7EN_SERVER_ENTRIES_B64   base64 of a plaintext server_entries.txt. The
+#                              plaintext is ~2 MB, too large for a normal
+#                              secret, so it is stored base64-encoded. When it
+#                              is unset the client fetches the remote server
+#                              list on first run instead of embedding one.
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v1.0.5)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: windows-2025
+    timeout-minutes: 90
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve version
+        id: meta
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = if ($env:INPUT_TAG) { $env:INPUT_TAG } else { $env:GITHUB_REF_NAME }
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+)') {
+            Write-Host "Tag '$tag' is not a vMAJOR.MINOR.PATCH tag." -ForegroundColor Red
+            exit 1
+          }
+          $version = $Matches[1]
+          [xml]$xml = Get-Content 'Se7enPro/Se7enPro.csproj'
+          $declared = ($xml.Project.PropertyGroup | Where-Object { $_.Version }).Version
+          if ($declared -ne $version) {
+            Write-Host "Tag says $version but the csproj declares $declared." -ForegroundColor Red
+            Write-Host 'Bump <Version>, <AssemblyVersion> and <FileVersion> to match.' -ForegroundColor Red
+            exit 1
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Releasing v$version"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install cryptography
+        run: python -m pip install --disable-pip-version-check cryptography
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe"
+          )
+          $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($found) {
+            Write-Host "Inno Setup already present: $found"
+            exit 0
+          }
+          choco install innosetup --no-progress -y --limit-output
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'Inno Setup install failed; portable archives only.' -ForegroundColor Yellow
+          }
+
+      - name: Fail early if any required secret is missing
+        shell: pwsh
+        env:
+          SE7EN_PROPAGATION_CHANNEL_ID: ${{ secrets.SE7EN_PROPAGATION_CHANNEL_ID }}
+          SE7EN_SPONSOR_ID: ${{ secrets.SE7EN_SPONSOR_ID }}
+          SE7EN_CLIENT_VERSION: ${{ secrets.SE7EN_CLIENT_VERSION }}
+          SE7EN_CLIENT_PLATFORM: ${{ secrets.SE7EN_CLIENT_PLATFORM }}
+          SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY: ${{ secrets.SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY }}
+          SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY: ${{ secrets.SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY }}
+          SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY: ${{ secrets.SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY }}
+          SE7EN_REMOTE_SERVER_LIST_URLS_JSON: ${{ secrets.SE7EN_REMOTE_SERVER_LIST_URLS_JSON }}
+          SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON: ${{ secrets.SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON }}
+          SE7EN_FEEDBACK_UPLOAD_URLS_JSON: ${{ secrets.SE7EN_FEEDBACK_UPLOAD_URLS_JSON }}
+        run: python tools/generate_build_secrets.py --check
+
+      - name: Inject secrets and encrypt the optional server list
+        shell: pwsh
+        env:
+          SE7EN_PROPAGATION_CHANNEL_ID: ${{ secrets.SE7EN_PROPAGATION_CHANNEL_ID }}
+          SE7EN_SPONSOR_ID: ${{ secrets.SE7EN_SPONSOR_ID }}
+          SE7EN_CLIENT_VERSION: ${{ secrets.SE7EN_CLIENT_VERSION }}
+          SE7EN_CLIENT_PLATFORM: ${{ secrets.SE7EN_CLIENT_PLATFORM }}
+          SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY: ${{ secrets.SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY }}
+          SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY: ${{ secrets.SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY }}
+          SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY: ${{ secrets.SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY }}
+          SE7EN_REMOTE_SERVER_LIST_URLS_JSON: ${{ secrets.SE7EN_REMOTE_SERVER_LIST_URLS_JSON }}
+          SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON: ${{ secrets.SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON }}
+          SE7EN_FEEDBACK_UPLOAD_URLS_JSON: ${{ secrets.SE7EN_FEEDBACK_UPLOAD_URLS_JSON }}
+          SE7EN_SERVER_ENTRIES_B64: ${{ secrets.SE7EN_SERVER_ENTRIES_B64 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SE7EN_SERVER_ENTRIES_B64) {
+            $bytes = [Convert]::FromBase64String($env:SE7EN_SERVER_ENTRIES_B64)
+            $tmp = Join-Path $env:RUNNER_TEMP 'server_entries.txt'
+            [System.IO.File]::WriteAllBytes($tmp, $bytes)
+            Remove-Item Env:SE7EN_SERVER_ENTRIES_B64
+            $env:SE7EN_SERVER_ENTRIES = $tmp
+            Write-Host "server_entries.txt staged ($($bytes.Length) bytes)"
+          }
+          python tools/generate_build_secrets.py
+          if (-not (Test-Path 'Se7enPro/Services/BuildSecrets.g.cs')) {
+            Write-Host 'Generator produced no BuildSecrets.g.cs' -ForegroundColor Red
+            exit 1
+          }
+          # Prove the placeholder branch is not what we are about to ship.
+          $defs = dotnet msbuild Se7enPro/Se7enPro.csproj -getProperty:DefineConstants -nologo | Out-String
+          if ($defs -notmatch 'SE7EN_SECRETS') {
+            Write-Host 'SE7EN_SECRETS is not defined, so the real values would NOT be compiled.' -ForegroundColor Red
+            exit 1
+          }
+          Write-Host 'Injected branch is active.'
+
+      - name: Build release packages
+        shell: pwsh
+        run: ./tools/build-all.ps1 -Arch all -AllVariants -OutDir dist
+
+      - name: Checksum the assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assets = @(Get-ChildItem dist -File | Where-Object { $_.Extension -in '.zip', '.exe' })
+          if (-not $assets) { throw 'No release assets were produced.' }
+          $lines = $assets | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          }
+          $lines | Out-File 'dist/SHA256SUMS.txt' -Encoding ascii
+          $lines | ForEach-Object { Write-Host $_ }
+
+      - name: Confirm no plaintext secret leaked into any asset
+        shell: pwsh
+        env:
+          SE7EN_PROPAGATION_CHANNEL_ID: ${{ secrets.SE7EN_PROPAGATION_CHANNEL_ID }}
+          SE7EN_SPONSOR_ID: ${{ secrets.SE7EN_SPONSOR_ID }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $needles = @($env:SE7EN_PROPAGATION_CHANNEL_ID, $env:SE7EN_SPONSOR_ID) |
+            Where-Object { $_ -and $_.Length -ge 8 }
+          if (-not $needles) { Write-Host 'Nothing to scan for.'; exit 0 }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          foreach ($zip in (Get-ChildItem dist -Filter *.zip)) {
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
+            try {
+              foreach ($entry in $archive.Entries) {
+                if ($entry.Length -eq 0) { continue }
+                $stream = $entry.Open()
+                $buffer = New-Object System.IO.MemoryStream
+                $stream.CopyTo($buffer)
+                $stream.Dispose()
+                $latin = [System.Text.Encoding]::Latin1.GetString($buffer.ToArray())
+                foreach ($n in $needles) {
+                  if ($latin.Contains($n)) {
+                    Write-Host "LEAK: a secret value appears verbatim in $($entry.FullName)" -ForegroundColor Red
+                    exit 1
+                  }
+                }
+              }
+            }
+            finally { $archive.Dispose() }
+          }
+          Write-Host 'No plaintext secret found in any archive.'
+
+      - name: Publish the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $body = @("Se7en Pro v$env:VERSION", '', (Get-Content CHANGELOG.md -Raw).Trim(), '',
+                    '### Verify a download', '```',
+                    'Get-FileHash .\Se7enPro_v<version>_Portable_x64.zip -Algorithm SHA256',
+                    'Select-String -Path .\SHA256SUMS.txt "Portable_x64.zip"',
+                    '```') -join "`n"
+
+          # Run from inside dist and pass bare file names. gh stores the label
+          # it is given as the asset name, and a Windows path would arrive as
+          # 'dist\SHA256SUMS.txt' with a backslash in it, which then 404s on
+          # download.
+          $assets = @(Get-ChildItem dist -File |
+            Where-Object { $_.Extension -in '.zip', '.exe', '.txt' } |
+            ForEach-Object { $_.Name })
+
+          if (-not $assets) { throw 'nothing to publish' }
+
+          Push-Location dist
+          try {
+            gh release create $env:TAG @assets `
+              --title "Se7en Pro v$env:VERSION" `
+              --notes $body `
+              --verify-tag `
+              --latest
+          }
+          finally {
+            Pop-Location
+          }
+
+          # Confirm every asset is actually reachable, not merely uploaded.
+          Start-Sleep -Seconds 5
+          $published = @(gh release view $env:TAG --json assets --jq '.assets[].name')
+          foreach ($name in $assets) {
+            if ($published -notcontains $name) {
+              Write-Host "asset '$name' did not appear on the release" -ForegroundColor Red
+              exit 1
+            }
+          }
+          Write-Host "Published $env:TAG with $($published.Count) verified assets"

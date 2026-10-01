@@ -71,7 +71,9 @@ public sealed class ShardEngine : LocalSocksEngineBase
         443, 2053, 2083, 2087, 2096, 8443
     };
 
+    public event EventHandler<ShardPoolInfo>? PoolUpdated;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
+
     private DateTime _lastCheckUtc = DateTime.MinValue;
     private int _cachedNodeCount = 45;
     private int _cachedPathCount = 270;
@@ -86,11 +88,27 @@ public sealed class ShardEngine : LocalSocksEngineBase
     {
         AdvanceRotationCursor();
         _logger.LogInformation("Rotating SHARD candidate cursor (new offset: {Offset})", _rotationOffset);
-        if (State == ConnectionState.Connected || State == ConnectionState.Connecting)
+        if (State != ConnectionState.Connected && State != ConnectionState.Connecting)
         {
-            RestartCore("User rotated node / requested new exit IP", resetFailureCount: true);
+            return Task.CompletedTask;
         }
-        return Task.CompletedTask;
+
+        
+        
+        
+        
+        return Task.Run(async () =>
+        {
+            try
+            {
+                await StopAsync();
+                await StartAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to restart SHARD core after rotation");
+            }
+        });
     }
 
     public ShardEngine(
@@ -104,47 +122,16 @@ public sealed class ShardEngine : LocalSocksEngineBase
 
     public override ConnectionMethod Method => ConnectionMethod.Shard;
 
-    public override IReadOnlyList<string> CoreProcessNames { get; } = new[]
-    {
-        EngineProcessNames.Shard,
-        "xray.exe"
-    };
+    public override IReadOnlyList<string> CoreProcessNames { get; } = OperatingSystem.IsWindows()
+        ? new[] { EngineProcessNames.Shard, "xray.exe" }
+        : new[] { EngineProcessNames.Shard, "xray", "xray.exe" };
 
     protected override string EngineDisplayName => "SHARD";
 
     protected override string WorkSubdirectory => "shard";
 
     protected override TimeSpan ReadyTimeout => TimeSpan.FromSeconds(35);
-
-    protected override IReadOnlyList<int> ReservedEnginePorts => new[] { DefaultListenPort };
-
-    protected override bool ShouldSuppressCoreLogLine(string line)
-    {
-        if (string.IsNullOrWhiteSpace(line)) return true;
-        if (line.Contains("The feature WebSocket transport", StringComparison.OrdinalIgnoreCase) &&
-            line.Contains("is deprecated", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-        if (line.Contains("proxy/http: failed to read http request", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-        if (line.Contains("invalid port", StringComparison.OrdinalIgnoreCase) &&
-            line.Contains("after host", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-        if (line.Contains("app/proxyman/inbound: connection ends", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-        if (line.Contains("infra/conf/serial: Reading config", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-        return false;
-    }
+    private static readonly IReadOnlyList<int> ReservedEnginePorts = new[] { DefaultListenPort };
 
     private string LocalCacheDir
     {
@@ -186,20 +173,21 @@ public sealed class ShardEngine : LocalSocksEngineBase
                 _lastCheckUtc = File.GetLastWriteTimeUtc(ConfigCachePath);
             }
 
-            var needsSync = !File.Exists(ConfigCachePath) || (DateTime.UtcNow - _lastCheckUtc).TotalHours >= 6;
-            if (needsSync)
+            PoolUpdated?.Invoke(this, GetPoolSummary());
+
+            
+            if (!File.Exists(ConfigCachePath) || (DateTime.UtcNow - _lastCheckUtc).TotalHours >= 6)
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await Task.Delay(2500);
-                        _logger.LogInformation("Background auto-syncing SHARD pool from cloud...");
+                        await Task.Delay(2000);
                         await RefreshSubscriptionAsync(force: false);
                     }
-                    catch (Exception syncEx)
+                    catch (Exception ex)
                     {
-                        _logger.LogWarning(syncEx, "Background SHARD auto-sync failed on startup.");
+                        _logger.LogWarning(ex, "Background auto-refresh of SHARD subscription failed");
                     }
                 });
             }
@@ -226,13 +214,24 @@ public sealed class ShardEngine : LocalSocksEngineBase
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 Se7enPro/1.0");
 
             var success = false;
-
+            
             try
             {
                 var policyJson = await client.GetStringAsync(PolicyUrl);
-                if (!string.IsNullOrWhiteSpace(policyJson))
+                
+                
+                
+                
+                
+                
+                if (!string.IsNullOrWhiteSpace(policyJson) && TryReadPolicyEdges(policyJson, out _))
                 {
                     await File.WriteAllTextAsync(PolicyCachePath, policyJson);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Remote SHARD policy did not contain a usable 'edges' array; keeping the existing one.");
                 }
             }
             catch (Exception ex)
@@ -240,6 +239,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
                 _logger.LogWarning(ex, "Could not refresh SHARD remote policy; keeping existing.");
             }
 
+            
             try
             {
                 var configsText = await client.GetStringAsync(SubscriptionUrl);
@@ -271,7 +271,9 @@ public sealed class ShardEngine : LocalSocksEngineBase
             var custom = _settings.Settings.ShardCustomCfIp?.Trim() ?? "";
             var edgeCount = !string.IsNullOrEmpty(custom) ? 1 : Math.Max(1, GetEdgeIps().Count);
             _cachedPathCount = _cachedNodeCount * edgeCount;
-            return new ShardPoolInfo(_cachedNodeCount, _cachedPathCount, _lastCheckUtc, success);
+            var summary = new ShardPoolInfo(_cachedNodeCount, _cachedPathCount, _lastCheckUtc, success);
+            PoolUpdated?.Invoke(this, summary);
+            return summary;
         }
         finally
         {
@@ -279,28 +281,42 @@ public sealed class ShardEngine : LocalSocksEngineBase
         }
     }
 
+    private static bool TryReadPolicyEdges(string content, out List<string> edges)
+    {
+        edges = new List<string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(content);
+            if (doc.RootElement.TryGetProperty("edges", out var edgesProp) &&
+                edgesProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in edgesProp.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.String) continue;
+                    var ip = item.GetString()?.Trim();
+                    if (!string.IsNullOrEmpty(ip) && IPAddress.TryParse(ip, out _))
+                    {
+                        edges.Add(ip);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            edges.Clear();
+        }
+
+        return edges.Count > 0;
+    }
+
     private List<string> GetEdgeIps()
     {
         try
         {
             var path = File.Exists(PolicyCachePath) ? PolicyCachePath : DefaultPolicyPath;
-            if (File.Exists(path))
+            if (File.Exists(path) && TryReadPolicyEdges(File.ReadAllText(path), out var list))
             {
-                var content = File.ReadAllText(path);
-                using var doc = JsonDocument.Parse(content);
-                if (doc.RootElement.TryGetProperty("edges", out var edgesProp) && edgesProp.ValueKind == JsonValueKind.Array)
-                {
-                    var list = new List<string>();
-                    foreach (var item in edgesProp.EnumerateArray())
-                    {
-                        var ip = item.GetString()?.Trim();
-                        if (!string.IsNullOrEmpty(ip) && IPAddress.TryParse(ip, out _))
-                        {
-                            list.Add(ip);
-                        }
-                    }
-                    if (list.Count > 0) return list;
-                }
+                return list;
             }
         }
         catch { }
@@ -453,10 +469,25 @@ public sealed class ShardEngine : LocalSocksEngineBase
         return dict;
     }
 
+        private string? NormalizeCustomCdnIp()
+    {
+        var raw = _settings.Settings.ShardCustomCfIp?.Trim() ?? "";
+        if (raw.Length == 0) return null;
+
+        if (raw.Contains('/') || raw.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length != 1)
+        {
+            _logger.LogWarning(
+                "Ignoring SHARD custom Cloudflare IP \"{Raw}\": expected a single IP or hostname", raw);
+            return null;
+        }
+
+        return raw;
+    }
+
     private List<ShardNode> ExpandNodes(List<ShardNode> nodes)
     {
-        var customIp = _settings.Settings.ShardCustomCfIp?.Trim() ?? "";
-        if (!string.IsNullOrEmpty(customIp) && !customIp.Contains(' ') && !customIp.Contains('/'))
+        var customIp = NormalizeCustomCdnIp();
+        if (customIp is not null)
         {
             _logger.LogInformation("Applying user custom Cloudflare IP/host to all SHARD configs: {CustomIp}", customIp);
             return nodes.Select(n => n with { Address = customIp }).ToList();
@@ -490,7 +521,16 @@ public sealed class ShardEngine : LocalSocksEngineBase
     protected override PreparedLaunch Prepare(string workDir, int socksPort, int httpPort)
     {
         var resShard = System.IO.Path.Combine(AppDir, "Resources", "shard");
-        var sourceExe = System.IO.Path.Combine(resShard, "xray.exe");
+        var binName = OperatingSystem.IsWindows() ? "xray.exe" : "xray";
+        var sourceExe = System.IO.Path.Combine(resShard, binName);
+        if (!File.Exists(sourceExe))
+        {
+            sourceExe = System.IO.Path.Combine(AppDir, "Resources", "xray", binName);
+        }
+        if (!File.Exists(sourceExe))
+        {
+            sourceExe = System.IO.Path.Combine(resShard, "xray.exe");
+        }
         if (!File.Exists(sourceExe))
         {
             sourceExe = System.IO.Path.Combine(AppDir, "Resources", "xray", "xray.exe");
@@ -498,14 +538,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
 
         var exePath = StageFile(sourceExe, System.IO.Path.Combine(workDir, EngineProcessNames.Shard));
 
-        if (!File.Exists(ConfigCachePath))
-        {
-            Log("[SHARD] First-run detected — auto-fetching node pool from cloud...");
-            SetConnectProgress(5, "Fetching latest SHARD nodes...");
-            try { RefreshSubscriptionAsync(force: true).GetAwaiter().GetResult(); }
-            catch (Exception ex) { _logger.LogWarning(ex, "SHARD auto-refresh failed; falling back to built-in seed."); }
-        }
-
+        
         var rawNodes = LoadNodesFromCacheOrSeed();
         if (rawNodes.Count == 0)
         {
@@ -514,24 +547,27 @@ public sealed class ShardEngine : LocalSocksEngineBase
 
         var candidates = ExpandNodes(rawNodes);
 
-        Log($"[SHARD] Loaded {candidates.Count} expanded edge routes; racing fastest candidate...");
-        SetConnectProgress(10, "Discovering SHARD edge candidates...");
+        Log($"[SHARD] Loaded {candidates.Count} candidate edge routes; discovering fastest route...");
+        SetConnectProgress(15, Loc.Of("Selecting SHARD edge route..."));
 
-        var winner = RaceCandidates(exePath, workDir, candidates);
-        _logger.LogInformation("Selected winning SHARD node: {Proto} to {Address}:{Port} (Host: {Host})",
+        
+        var winner = SelectBestCandidate(candidates);
+        _logger.LogInformation("Selected SHARD node: {Proto} to {Address}:{Port} (Host: {Host})",
             winner.Protocol, winner.Address, winner.Port, winner.Host);
-        Log($"[SHARD] Selected fastest edge: {winner.Address}:{winner.Port} ({winner.Protocol.ToUpperInvariant()}) via {winner.Host}");
-        SetConnectProgress(35, "Configuring SHARD live tunnel...");
+        Log($"[SHARD] Selected edge endpoint: {winner.Address}:{winner.Port} ({winner.Protocol.ToUpperInvariant()}) via {winner.Host}");
+        SetConnectProgress(35, Loc.Of("Configuring SHARD live tunnel..."));
 
         CurrentRouteIp = winner.Address;
         CurrentRouteSni = !string.IsNullOrEmpty(winner.ServerName) ? winner.ServerName : winner.Host;
 
+        
         var configJson = BuildLiveConfig(winner, socksPort, httpPort);
         var configPath = System.IO.Path.Combine(workDir, "config.json");
         File.WriteAllText(configPath, configJson, new UTF8Encoding(false));
 
         var env = new Dictionary<string, string>();
-        var xrayAssetDir = System.IO.Path.Combine(AppDir, "Resources", "xray");
+        var xrayAssetDir = System.IO.Path.Combine(AppDir, "Resources", "shard");
+        if (!Directory.Exists(xrayAssetDir)) xrayAssetDir = System.IO.Path.Combine(AppDir, "Resources", "xray");
         if (Directory.Exists(xrayAssetDir)) env["XRAY_LOCATION_ASSET"] = xrayAssetDir;
 
         return new PreparedLaunch(
@@ -539,7 +575,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
             new[] { "run", "-c", configPath },
             workDir,
             HttpProxyPort: httpPort,
-            CoreTargetSocksPort: socksPort,
+            SocksPortOverride: socksPort,
             EnvironmentVariables: env
         );
     }
@@ -572,15 +608,20 @@ public sealed class ShardEngine : LocalSocksEngineBase
         return outList;
     }
 
-    private ShardNode RaceCandidates(string exePath, string workDir, List<ShardNode> candidates)
+    private ShardNode SelectBestCandidate(List<ShardNode> candidates)
     {
+        var customIp = NormalizeCustomCdnIp();
+        if (customIp is not null && candidates.Count > 0)
+        {
+            var offset = _rotationOffset % candidates.Count;
+            return candidates[offset] with { Address = customIp };
+        }
+
         var diversified = Diversify(candidates);
         if (diversified.Count == 0) return candidates[0];
 
-        var offset = _settings.Settings.ShardRotateIp ? (_rotationOffset % diversified.Count) : 0;
-        var rotated = new List<ShardNode>(diversified.Count);
-        rotated.AddRange(diversified.Skip(offset));
-        rotated.AddRange(diversified.Take(offset));
+        var offsetIdx = _settings.Settings.ShardRotateIp ? (_rotationOffset % diversified.Count) : 0;
+        var rotated = diversified.Skip(offsetIdx).Concat(diversified.Take(offsetIdx)).ToList();
 
         var previousIp = CurrentRouteIp;
         if (!string.IsNullOrEmpty(previousIp) && _rotationOffset > 0)
@@ -590,278 +631,40 @@ public sealed class ShardEngine : LocalSocksEngineBase
             rotated = diffIp.Concat(sameIp).ToList();
         }
 
-        for (var sliceIndex = 0; sliceIndex < MaxRaceSlices; sliceIndex++)
-        {
-            var slice = rotated.Skip(sliceIndex * RaceWidth).Take(RaceWidth).ToList();
-            if (slice.Count == 0) break;
-
-            Log($"[SHARD] Benchmarking {slice.Count} candidate nodes (batch {sliceIndex + 1}/{MaxRaceSlices})...");
-            SetConnectProgress(15 + (sliceIndex * 8), $"Benchmarking SHARD edge nodes (batch {sliceIndex + 1})...");
-
-            var winner = RaceSlice(exePath, workDir, slice, sliceIndex);
-            if (winner != null)
-            {
-                return winner;
-            }
-        }
-
-        _logger.LogWarning("No candidate answered probe across {Slices} slices; falling back to first candidate.", MaxRaceSlices);
-        return rotated[0];
-    }
-
-    private ShardNode? RaceSlice(string exePath, string workDir, List<ShardNode> slice, int sliceIndex)
-    {
-        if (slice.Count == 1) return slice[0];
+        
+        var testSlice = rotated.Take(4).ToList();
+        if (testSlice.Count == 1) return testSlice[0];
 
         try
         {
-            var probeConfigJson = BuildProbeConfig(slice, ProbeBasePort);
-            var probeConfigPath = System.IO.Path.Combine(workDir, $"probe_{sliceIndex}.json");
-            File.WriteAllText(probeConfigPath, probeConfigJson, new UTF8Encoding(false));
-
-            var psi = new ProcessStartInfo
+            using var cts = new CancellationTokenSource(300);
+            var tasks = testSlice.Select(async node =>
             {
-                FileName = exePath,
-                Arguments = $"run -c \"{probeConfigPath}\"",
-                WorkingDirectory = workDir,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            var xrayAssetDir = System.IO.Path.Combine(AppDir, "Resources", "xray");
-            if (Directory.Exists(xrayAssetDir)) psi.EnvironmentVariables["XRAY_LOCATION_ASSET"] = xrayAssetDir;
-
-            using var probeProc = Process.Start(psi);
-            if (probeProc == null) return null;
-
-            try
-            {
-
                 var sw = Stopwatch.StartNew();
-                while (sw.ElapsedMilliseconds < 2000)
-                {
-                    if (probeProc.HasExited) break;
-                    try
-                    {
-                        using var s = new TcpClient();
-                        s.Connect(IPAddress.Loopback, ProbeBasePort);
-                        break;
-                    }
-                    catch
-                    {
-                        Thread.Sleep(50);
-                    }
-                }
-
-                if (!probeProc.HasExited)
-                {
-                    var winnerIndex = ProbeEndpoints(slice.Count, ProbeBasePort, ProbeTimeoutMs);
-                    if (winnerIndex >= 0 && winnerIndex < slice.Count)
-                    {
-                        _logger.LogInformation("SHARD probe race winner in slice {SliceIndex}, index {Index}: {Address}:{Port}",
-                            sliceIndex, winnerIndex, slice[winnerIndex].Address, slice[winnerIndex].Port);
-                        return slice[winnerIndex];
-                    }
-                }
-            }
-            finally
-            {
                 try
                 {
-                    if (!probeProc.HasExited)
-                    {
-                        probeProc.Kill();
-                        probeProc.WaitForExit(1000);
-                    }
+                    using var tcp = new TcpClient();
+                    await tcp.ConnectAsync(node.Address, node.Port, cts.Token);
+                    return (Node: node, LatencyMs: sw.ElapsedMilliseconds, Success: true);
                 }
-                catch { }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "SHARD probe race encountered an error on slice {SliceIndex}", sliceIndex);
-        }
-
-        return null;
-    }
-
-    private static int ProbeEndpoints(int count, int basePort, int timeoutMs)
-    {
-        using var cts = new CancellationTokenSource(timeoutMs);
-        var tasks = new List<Task<int>>();
-
-        for (var i = 0; i < count; i++)
-        {
-            var port = basePort + i;
-            var index = i;
-            tasks.Add(Task.Run(async () =>
-            {
-                var ok = await ProbeSinglePortAsync(port, timeoutMs, cts.Token);
-                return ok ? index : -1;
-            }, cts.Token));
-        }
-
-        while (tasks.Count > 0)
-        {
-            var completed = Task.WhenAny(tasks).GetAwaiter().GetResult();
-            tasks.Remove(completed);
-            try
-            {
-                var result = completed.GetAwaiter().GetResult();
-                if (result >= 0)
+                catch
                 {
-                    cts.Cancel();
-                    return result;
+                    return (Node: node, LatencyMs: 9999L, Success: false);
                 }
-            }
-            catch { }
-        }
+            }).ToList();
 
-        return -1;
-    }
-
-    private static async Task<bool> ProbeSinglePortAsync(int socksPort, int timeoutMs, CancellationToken ct)
-    {
-        var targets = new (string host, string path, int port)[]
-        {
-            ("cp.cloudflare.com", "/generate_204", 80),
-            ("www.gstatic.com", "/generate_204", 80),
-        };
-
-        foreach (var (host, path, port) in targets)
-        {
-            try
+            var results = Task.WhenAll(tasks).GetAwaiter().GetResult();
+            var best = results.Where(r => r.Success).OrderBy(r => r.LatencyMs).FirstOrDefault();
+            if (best.Node != null)
             {
-                using var client = new TcpClient();
-                using var timeoutCts = new CancellationTokenSource(timeoutMs);
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-
-                await client.ConnectAsync(IPAddress.Loopback, socksPort, linked.Token);
-                var stream = client.GetStream();
-
-                await stream.WriteAsync(new byte[] { 0x05, 0x01, 0x00 }, linked.Token);
-                var authResp = new byte[2];
-                if (!await ReadExactAsync(stream, authResp, 0, 2, linked.Token)) return false;
-                if (authResp[0] != 0x05 || authResp[1] != 0x00) return false;
-
-                var hostBytes = Encoding.ASCII.GetBytes(host);
-                var connectReq = new List<byte> { 0x05, 0x01, 0x00, 0x03, (byte)hostBytes.Length };
-                connectReq.AddRange(hostBytes);
-                connectReq.Add((byte)(port >> 8));
-                connectReq.Add((byte)(port & 0xFF));
-
-                await stream.WriteAsync(connectReq.ToArray(), linked.Token);
-
-                var head = new byte[4];
-                if (!await ReadExactAsync(stream, head, 0, 4, linked.Token)) return false;
-                if (head[1] != 0x00) return false;
-
-                var atyp = head[3];
-                int remainToDrain;
-                if (atyp == 0x01) remainToDrain = 4 + 2;
-                else if (atyp == 0x03)
-                {
-                    var lenBuf = new byte[1];
-                    if (!await ReadExactAsync(stream, lenBuf, 0, 1, linked.Token)) return false;
-                    remainToDrain = lenBuf[0] + 2;
-                }
-                else if (atyp == 0x04) remainToDrain = 16 + 2;
-                else return false;
-
-                var drainBuf = new byte[remainToDrain];
-                if (!await ReadExactAsync(stream, drainBuf, 0, remainToDrain, linked.Token)) return false;
-
-                var httpReq = $"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n";
-                var reqBytes = Encoding.ASCII.GetBytes(httpReq);
-                await stream.WriteAsync(reqBytes, linked.Token);
-
-                var respBuffer = new byte[256];
-                var read = await stream.ReadAsync(respBuffer, linked.Token);
-                if (read <= 0) continue;
-
-                var respStr = Encoding.ASCII.GetString(respBuffer, 0, read);
-                if (respStr.Contains(" 204") || respStr.Contains(" 200")) return true;
-            }
-            catch
-            {
-
+                _logger.LogInformation("Selected fastest edge IP {Address}:{Port} (latency {Latency}ms)",
+                    best.Node.Address, best.Node.Port, best.LatencyMs);
+                return best.Node;
             }
         }
+        catch { }
 
-        return false;
-    }
-
-    private static async Task<bool> ReadExactAsync(Stream stream, byte[] buffer, int offset, int count, CancellationToken ct)
-    {
-        var total = 0;
-        while (total < count)
-        {
-            var r = await stream.ReadAsync(buffer.AsMemory(offset + total, count - total), ct);
-            if (r <= 0) return false;
-            total += r;
-        }
-        return true;
-    }
-
-    private string BuildProbeConfig(List<ShardNode> nodes, int basePort)
-    {
-        var inbounds = new JsonArray();
-        var outbounds = new JsonArray
-        {
-            new JsonObject
-            {
-                ["tag"] = "blackhole",
-                ["protocol"] = "blackhole"
-            }
-        };
-        var rules = new JsonArray();
-
-        for (var i = 0; i < nodes.Count; i++)
-        {
-            var node = nodes[i];
-            var inTag = $"in-{i}";
-            var outTag = $"out-{i}";
-
-            inbounds.Add(new JsonObject
-            {
-                ["tag"] = inTag,
-                ["listen"] = "127.0.0.1",
-                ["port"] = basePort + i,
-                ["protocol"] = "socks",
-                ["settings"] = new JsonObject
-                {
-                    ["auth"] = "noauth",
-                    ["udp"] = false
-                }
-            });
-
-            outbounds.Add(BuildOutbound(node, outTag, mux: false));
-
-            rules.Add(new JsonObject
-            {
-                ["type"] = "field",
-                ["inboundTag"] = new JsonArray { inTag },
-                ["outboundTag"] = outTag
-            });
-        }
-
-        var root = new JsonObject
-        {
-            ["log"] = new JsonObject
-            {
-                ["loglevel"] = "none",
-                ["access"] = "none"
-            },
-            ["inbounds"] = inbounds,
-            ["outbounds"] = outbounds,
-            ["routing"] = new JsonObject
-            {
-                ["rules"] = rules
-            }
-        };
-
-        return root.ToJsonString();
+        return rotated[0];
     }
 
     private string BuildLiveConfig(ShardNode node, int socksPort, int httpPort)
@@ -919,7 +722,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
 
         if (isSmartSplit)
         {
-
+            
             outbounds.Add(new JsonObject
             {
                 ["tag"] = "direct-frag",
@@ -968,12 +771,14 @@ public sealed class ShardEngine : LocalSocksEngineBase
                 }
             });
 
+            
             outbounds.Add(new JsonObject
             {
                 ["tag"] = "direct-plain",
                 ["protocol"] = "freedom"
             });
 
+            
             outbounds.Add(new JsonObject
             {
                 ["tag"] = "dns-out",
@@ -1090,7 +895,8 @@ public sealed class ShardEngine : LocalSocksEngineBase
                 ["domainStrategy"] = "IPIfNonMatch",
                 ["rules"] = new JsonArray
                 {
-
+                    
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
@@ -1098,28 +904,28 @@ public sealed class ShardEngine : LocalSocksEngineBase
                         ["port"] = "53",
                         ["outboundTag"] = "proxy"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
                         ["inboundTag"] = new JsonArray { "shard-dns" },
                         ["outboundTag"] = "proxy"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
                         ["inboundTag"] = new JsonArray { "doh" },
                         ["outboundTag"] = "proxy"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
                         ["port"] = "53",
                         ["outboundTag"] = "dns-out"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
@@ -1132,14 +938,14 @@ public sealed class ShardEngine : LocalSocksEngineBase
                         ["ip"] = new JsonArray { "geoip:ir", "geoip:private" },
                         ["outboundTag"] = "direct-plain"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
                         ["ip"] = new JsonArray { "10.10.34.0/24" },
                         ["outboundTag"] = "blackhole"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
@@ -1191,7 +997,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
                         },
                         ["outboundTag"] = "proxy"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
@@ -1204,7 +1010,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
                         },
                         ["outboundTag"] = "proxy"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
@@ -1212,14 +1018,14 @@ public sealed class ShardEngine : LocalSocksEngineBase
                         ["port"] = "443",
                         ["outboundTag"] = "direct-frag"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",
                         ["network"] = "tcp",
                         ["outboundTag"] = "direct-plain"
                     },
-
+                    
                     new JsonObject
                     {
                         ["type"] = "field",

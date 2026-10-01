@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -29,12 +30,13 @@ public sealed partial class WintunTunManager
 
         if (task is not null)
         {
-            try { await task.WaitAsync(TimeSpan.FromSeconds(5)); }
+            try { await task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
             catch (TimeoutException) { WriteDiag("supervisor did not exit within 5s after cancel"); }
             catch { }
         }
+        try { cts?.Dispose(); } catch { }
 
-        await KillTunAsync();
+        await KillTunAsync().ConfigureAwait(false);
         _activeSocksPort = 0;
         _activeSplitHash = "";
         WriteDiag($"stop completed in {(DateTime.UtcNow - startedAt).TotalMilliseconds:0} ms");
@@ -55,7 +57,7 @@ public sealed partial class WintunTunManager
         catch (OperationCanceledException) { }
     }
 
-    private async Task KillTunAsync()
+        private async Task KillTunAsync()
     {
         Process? proc;
         StreamWriter? writer;
@@ -70,7 +72,6 @@ public sealed partial class WintunTunManager
         WintunRouteApi.RouteEntry[] routes;
         SocksDnsForwarder? forwarder;
         bool dnsSet;
-        bool quicBlock;
         CancellationTokenSource? refresherCts;
         Task? refresherTask;
         CancellationTokenSource? processSplitCts;
@@ -79,15 +80,11 @@ public sealed partial class WintunTunManager
         {
             routes = _appliedRoutes.ToArray();
             _appliedRoutes.Clear();
-            _catchAllRoutes.Clear();
-            _catchAllSuspended = false;
             _dynamicRoutes.Clear();
             forwarder = _dnsForwarder;
             _dnsForwarder = null;
             dnsSet = _adapterDnsSet;
             _adapterDnsSet = false;
-            quicBlock = _quicBlockInstalled;
-            _quicBlockInstalled = false;
             refresherCts = _refresherCts;
             refresherTask = _refresherTask;
             _refresherCts = null;
@@ -98,19 +95,29 @@ public sealed partial class WintunTunManager
             _processSplitTask = null;
         }
         _realRouteKnown = false;
-
-        CancelCatchAllGraceTimer();
+        
+        
+        
+        
+        
+        _realIfIndex = 0;
+        _realGateway = IPAddress.Any;
+        _tunIfIndex = 0;
 
         try { refresherCts?.Cancel(); } catch { }
         try { processSplitCts?.Cancel(); } catch { }
         if (refresherTask is not null)
         {
-            try { await refresherTask.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+            try { await refresherTask.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); } catch { }
         }
         if (processSplitTask is not null)
         {
-            try { await processSplitTask.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+            try { await processSplitTask.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); } catch { }
         }
+        
+        
+        try { refresherCts?.Dispose(); } catch { }
+        try { processSplitCts?.Dispose(); } catch { }
 
         foreach (var r in routes)
         {
@@ -125,16 +132,6 @@ public sealed partial class WintunTunManager
             try { await WintunDnsShell.ClearAdapterDnsAsync(TunInterfaceName); } catch { }
         }
         WintunRouteApi.FlushDnsCache();
-
-        if (quicBlock)
-        {
-
-            try { await WintunFirewallShell.RemoveQuicBlockAsync(CancellationToken.None); }
-            catch (Exception ex) { _logger.LogWarning(ex, "QUIC fail-fast rule removal failed"); }
-        }
-
-        try { await WintunFirewallShell.RemoveDnsLeakBlockAsync(CancellationToken.None); } catch { }
-        WintunDnsShell.SetSmartNameResolution(disable: false);
 
         if (proc is not null)
         {
@@ -151,6 +148,8 @@ public sealed partial class WintunTunManager
             finally { proc.Dispose(); }
         }
 
+        
+        
         for (var i = 0; i < (int)(AdapterDownWait.TotalSeconds * 10); i++)
         {
             if (!WintunRouteApi.IsAdapterUp(TunInterfaceName)) break;
@@ -162,8 +161,9 @@ public sealed partial class WintunTunManager
         RestoreSystemProxyAfterTun();
     }
 
-    private void SuppressSystemProxy()
+        private void SuppressSystemProxy()
     {
+        if (!_settings.Settings.SetSystemProxy) return;
         try
         {
             _systemProxy.Clear();
@@ -179,7 +179,7 @@ public sealed partial class WintunTunManager
         }
     }
 
-    private void RestoreSystemProxyAfterTun()
+        private void RestoreSystemProxyAfterTun()
     {
         if (!_proxySuppressedByTun) return;
         _proxySuppressedByTun = false;
@@ -217,11 +217,22 @@ public sealed partial class WintunTunManager
         try { cts?.Cancel(); } catch { }
         if (task is not null)
         {
-            try { await task.WaitAsync(TimeSpan.FromSeconds(5)); } catch { }
+            
+            
+            
+            
+            
+            
+            
+            
+            try { await task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); } catch { }
         }
-        await KillTunAsync();
+        try { await KillTunAsync().ConfigureAwait(false); } catch { }
         cts?.Dispose();
-        _reconcileGate.Dispose();
+
+        
+        
+        
     }
 
     private void SetState(TunState s, string? error)

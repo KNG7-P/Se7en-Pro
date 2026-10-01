@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -34,6 +33,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private readonly List<string> _recentLog = new();
 
     private IConnectionEngine _active;
+    private bool _systemProxyApplied;
 
     public ConnectionManager(
         ILogger<ConnectionManager> logger,
@@ -58,26 +58,32 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
         _active = SelectEngineForCurrentSettings();
         Attach(_active);
-        _settings.SettingsChanged += OnSettingsChanged;
-    }
 
-    private void OnSettingsChanged(object? sender, EventArgs e)
-    {
-        if (State == ConnectionState.Connected)
+        _settings.SettingsChanged += (_, _) =>
         {
-            ApplySystemProxy(State);
-        }
-        else if (State == ConnectionState.Disconnected)
-        {
-            var desired = SelectEngineForCurrentSettings();
-            if (!ReferenceEquals(_active, desired))
+            if (State is ConnectionState.Disconnected or ConnectionState.Error)
             {
-                SwitchActiveTo(desired);
+                var desired = SelectEngineForCurrentSettings();
+                if (!ReferenceEquals(_active, desired))
+                {
+                    SwitchActiveTo(desired);
+                }
             }
-        }
+        };
     }
 
-    public ConnectionState State => _active.State;
+    
+
+    private ConnectionState? _stateOverride;
+
+    
+    
+    
+    
+    public ConnectionState State
+    {
+        get { lock (_sync) return _stateOverride ?? _active.State; }
+    }
     public int SocksProxyPort => _active.SocksProxyPort;
     public int HttpProxyPort => _active.HttpProxyPort;
     public string ClientRegion => _active.ClientRegion;
@@ -88,33 +94,29 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private long _cachedBytesReceived;
     private CancellationTokenSource? _statsCts;
     private NetworkInterface? _cachedTunNic;
-    private long _lastNicScanTick;
+    private int _isHandlingDrop;
+
+    
+    
+    
+    private bool _userWantsConnection;
 
     public long BytesSent => Math.Max(_cachedBytesSent, _active.BytesSent);
     public long BytesReceived => Math.Max(_cachedBytesReceived, _active.BytesReceived);
 
-    public double DownSpeedBytesPerSec { get; private set; }
-    public double UpSpeedBytesPerSec { get; private set; }
-    private long _lastSpeedRx;
-    private long _lastSpeedTx;
-    private DateTime _lastSpeedCalcUtc = DateTime.UtcNow;
-    private DateTime _lastActiveSpeedUtc = DateTime.UtcNow;
-    private bool _hadSpeed;
-
     private void StartStatsMonitor()
     {
         StopStatsMonitor();
-        _lastSpeedCalcUtc = DateTime.UtcNow;
-        _lastActiveSpeedUtc = DateTime.UtcNow;
-        _cachedBytesSent = BytesSent;
-        _cachedBytesReceived = BytesReceived;
-        _lastSpeedRx = BytesReceived;
-        _lastSpeedTx = BytesSent;
         _statsCts = new CancellationTokenSource();
         var ct = _statsCts.Token;
 
         _ = Task.Run(async () =>
         {
+            var lastTrafficActivityUtc = DateTime.UtcNow;
+            var lastProbeUtc = DateTime.MinValue;
+            long lastKnownBytes = BytesSent + BytesReceived;
+            int consecutiveProbeFailures = 0;
+
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -122,151 +124,263 @@ public sealed class ConnectionManager : ITunnelCoreManager
                     if (State == ConnectionState.Connected)
                     {
                         UpdateInterfaceStats();
+
+                        var currentBytes = BytesSent + BytesReceived;
+                        if (currentBytes > lastKnownBytes)
+                        {
+                            lastKnownBytes = currentBytes;
+                            lastTrafficActivityUtc = DateTime.UtcNow;
+                            consecutiveProbeFailures = 0;
+                        }
+                        else if (DateTime.UtcNow - lastTrafficActivityUtc >= TimeSpan.FromSeconds(5))
+                        {
+                            if (DateTime.UtcNow - lastProbeUtc >= TimeSpan.FromSeconds(4))
+                            {
+                                lastProbeUtc = DateTime.UtcNow;
+                                var socksPort = _active.SocksProxyPort;
+                                if (socksPort > 0)
+                                {
+                                    bool healthy = await CheckTunnelHealthAsync(socksPort, ct);
+                                    if (healthy)
+                                    {
+                                        consecutiveProbeFailures = 0;
+                                        lastTrafficActivityUtc = DateTime.UtcNow;
+                                    }
+                                    else
+                                    {
+                                        consecutiveProbeFailures++;
+                                        _logger.LogWarning("Tunnel health probe failed ({Count}/2)", consecutiveProbeFailures);
+                                        if (consecutiveProbeFailures >= 2 &&
+                                            Interlocked.CompareExchange(ref _isHandlingDrop, 1, 0) == 0)
+                                        {
+                                            _ = Task.Run(HandleConnectionDropAsync);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 catch { }
 
-                try { await Task.Delay(500, ct); }
+                try { await Task.Delay(1000, ct); }
                 catch (OperationCanceledException) { break; }
             }
         }, ct);
     }
 
-    private long _lastEventTick;
-
     private void StopStatsMonitor()
     {
-        _statsCts?.Cancel();
-        _statsCts = null;
+        
+        
+        
+        
+        var old = Interlocked.Exchange(ref _statsCts, null);
+        try { old?.Cancel(); } catch { }
+        try { old?.Dispose(); } catch { }
         _cachedTunNic = null;
-        _lastNicScanTick = 0;
-        _lastEventTick = 0;
         _cachedBytesSent = 0;
         _cachedBytesReceived = 0;
-        _lastSpeedRx = 0;
-        _lastSpeedTx = 0;
-        DownSpeedBytesPerSec = 0;
-        UpSpeedBytesPerSec = 0;
-        _hadSpeed = false;
+        _statsSource = "";
+        _statsFailureLogged = false;
+        Interlocked.Exchange(ref _isHandlingDrop, 0);
     }
 
     private void UpdateInterfaceStats()
     {
         try
         {
-            NetworkInterface? nic = null;
-            var isTunActive = _settings.Settings.SystemWideTunneling && AdminElevation.IsAdministrator();
-            if (isTunActive)
+            
+            
+            
+            
+            
+            
+            var tunOwned = AdminElevation.IsAdministrator() && _settings.Settings.SystemWideTunneling;
+            var nic = _cachedTunNic;
+            if (!tunOwned)
             {
+                if (nic is not null) _cachedTunNic = null;
+            }
+            else if (nic is null || nic.OperationalStatus != OperationalStatus.Up)
+            {
+                
+                
+                
+                _cachedTunNic = NetworkInterface.GetAllNetworkInterfaces()
+                    .FirstOrDefault(n => n.OperationalStatus == OperationalStatus.Up &&
+                        n.Name == "se7en_tun");
                 nic = _cachedTunNic;
-                if (nic is null || (nic.OperationalStatus != OperationalStatus.Up && nic.OperationalStatus != OperationalStatus.Unknown))
-                {
-                    var nowTick = Environment.TickCount64;
-
-                    if (nowTick - _lastNicScanTick >= 10000)
-                    {
-                        _lastNicScanTick = nowTick;
-                        _cachedTunNic = NetworkInterface.GetAllNetworkInterfaces()
-                            .Where(n => n.OperationalStatus is OperationalStatus.Up or OperationalStatus.Unknown)
-                            .FirstOrDefault(WintunRouteApi.IsOwnTunAdapter)
-                            ?? NetworkInterface.GetAllNetworkInterfaces().FirstOrDefault(WintunRouteApi.IsOwnTunAdapter);
-                        nic = _cachedTunNic;
-                    }
-                }
             }
 
-            long rx = 0;
-            long tx = 0;
-            if (nic is not null)
+            if (tunOwned && nic is not null)
             {
-                try
-                {
-                    var stats = nic.GetIPStatistics();
-                    rx = stats.BytesReceived;
-                    tx = stats.BytesSent;
-                }
-                catch { }
+                var stats = nic.GetIPStatistics();
+                var rx = stats.BytesReceived;
+                var tx = stats.BytesSent;
+                ResetStatsCacheIfSourceChanged("nic");
+
+                
+                
+                
+                
+                
+                
+                var moved = false;
+                if (rx > _cachedBytesReceived) { _cachedBytesReceived = rx; moved = true; }
+                if (tx > _cachedBytesSent) { _cachedBytesSent = tx; moved = true; }
+                if (moved) BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
+                return;
             }
 
             var activeSent = _active.BytesSent;
             var activeRecv = _active.BytesReceived;
-
-            var bestRx = Math.Max(rx, activeRecv);
-            var bestTx = Math.Max(tx, activeSent);
-
-            var changed = false;
-            if (bestRx > _cachedBytesReceived)
+            ResetStatsCacheIfSourceChanged("engine");
+            var engineMoved = false;
+            if (activeSent > _cachedBytesSent) { _cachedBytesSent = activeSent; engineMoved = true; }
+            if (activeRecv > _cachedBytesReceived) { _cachedBytesReceived = activeRecv; engineMoved = true; }
+            if (engineMoved) BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            
+            
+            if (!_statsFailureLogged)
             {
-                _cachedBytesReceived = bestRx;
-                changed = true;
+                _statsFailureLogged = true;
+                _logger.LogWarning(ex, "Traffic counters stopped updating");
             }
-            if (bestTx > _cachedBytesSent)
+        }
+    }
+
+    private string _statsSource = "";
+
+    
+    
+    
+    private void ResetStatsCacheIfSourceChanged(string source)
+    {
+        if (_statsSource == source) return;
+        _statsSource = source;
+        _cachedBytesSent = 0;
+        _cachedBytesReceived = 0;
+    }
+
+    private static async Task<bool> CheckTunnelHealthAsync(int socksPort, CancellationToken ct)
+    {
+        if (socksPort <= 0) return false;
+        try
+        {
+            if (await SocksProbe.ProbeConnectAsync(socksPort, "cp.cloudflare.com", 80, ct, TimeSpan.FromSeconds(3)))
             {
-                _cachedBytesSent = bestTx;
-                changed = true;
-            }
-
-            var now = DateTime.UtcNow;
-            var dt = (now - _lastSpeedCalcUtc).TotalSeconds;
-            if (dt >= 0.50)
-            {
-                var dRx = Math.Max(0, bestRx - _lastSpeedRx);
-                var dTx = Math.Max(0, bestTx - _lastSpeedTx);
-                var instDown = dRx / dt;
-                var instUp = dTx / dt;
-
-                if (dRx > 0)
-                {
-                    DownSpeedBytesPerSec = (DownSpeedBytesPerSec <= 0) ? instDown : (DownSpeedBytesPerSec * 0.35 + instDown * 0.65);
-                    _lastActiveSpeedUtc = now;
-                }
-                else
-                {
-                    var silence = (now - _lastActiveSpeedUtc).TotalSeconds;
-                    if (silence > 1.2)
-                    {
-                        DownSpeedBytesPerSec *= 0.65;
-                        if (DownSpeedBytesPerSec < 64) DownSpeedBytesPerSec = 0;
-                    }
-                }
-
-                if (dTx > 0)
-                {
-                    UpSpeedBytesPerSec = (UpSpeedBytesPerSec <= 0) ? instUp : (UpSpeedBytesPerSec * 0.35 + instUp * 0.65);
-                    _lastActiveSpeedUtc = now;
-                }
-                else
-                {
-                    var silence = (now - _lastActiveSpeedUtc).TotalSeconds;
-                    if (silence > 1.2)
-                    {
-                        UpSpeedBytesPerSec *= 0.65;
-                        if (UpSpeedBytesPerSec < 64) UpSpeedBytesPerSec = 0;
-                    }
-                }
-
-                _lastSpeedRx = bestRx;
-                _lastSpeedTx = bestTx;
-                _lastSpeedCalcUtc = now;
-            }
-
-            var speedActive = DownSpeedBytesPerSec > 0 || UpSpeedBytesPerSec > 0;
-            var nowTick64 = Environment.TickCount64;
-            if ((changed || speedActive || _hadSpeed) && (nowTick64 - _lastEventTick >= 500))
-            {
-                _lastEventTick = nowTick64;
-                _hadSpeed = speedActive;
-                BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
+                return true;
             }
         }
         catch { }
+
+        if (ct.IsCancellationRequested) return false;
+
+        try
+        {
+            if (await SocksProbe.ProbeConnectAsync(socksPort, "www.google.com", 80, ct, TimeSpan.FromSeconds(3)))
+            {
+                return true;
+            }
+        }
+        catch { }
+
+        return false;
     }
+
+    private async Task HandleConnectionDropAsync()
+    {
+        
+        
+        
+        
+        await _lifecycleGate.WaitAsync();
+        try
+        {
+            _logger.LogWarning("Connection drop detected; switching state to reconnecting...");
+            OnEngineLogLineAppended(_active, "[Health] Connection drop detected. Reconnecting...");
+
+            _stateOverride = ConnectionState.Connecting;
+            StateChanged?.Invoke(this, ConnectionState.Connecting);
+
+            await StopAllEnginesAsync();
+            ClearSystemProxyIfApplied();
+
+            bool reconnected = false;
+            for (int attempt = 1; attempt <= 2; attempt++)
+            {
+                
+                
+                if (!IsUserStillWantsConnection()) return;
+
+                try
+                {
+                    OnEngineLogLineAppended(_active, $"[Health] Reconnect attempt {attempt}/2...");
+
+                    var desired = SelectEngineForCurrentSettings();
+                    SwitchActiveTo(desired);
+                    await _active.StartAsync();
+
+                    if (_active.State == ConnectionState.Connected)
+                    {
+                        reconnected = true;
+                        _stateOverride = null;
+                        StateChanged?.Invoke(this, ConnectionState.Connected);
+                        OnEngineLogLineAppended(_active, "[Health] Successfully reconnected.");
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[Health] Reconnect attempt {Attempt} failed", attempt);
+                }
+
+                if (!IsUserStillWantsConnection()) return;
+                await Task.Delay(2000);
+            }
+
+            if (!reconnected)
+            {
+                _stateOverride = ConnectionState.Error;
+                ClearSystemProxyIfApplied();
+                OnEngineLogLineAppended(_active, "[Health] Reconnection failed. Tunnel disconnected with error.");
+                StateChanged?.Invoke(this, ConnectionState.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Health] Error handling connection drop");
+            _stateOverride = ConnectionState.Error;
+            ClearSystemProxyIfApplied();
+            StateChanged?.Invoke(this, ConnectionState.Error);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _isHandlingDrop, 0);
+            _lifecycleGate.Release();
+        }
+    }
+
+        private bool IsUserStillWantsConnection()
+    {
+        lock (_sync)
+        {
+            return _userWantsConnection;
+        }
+    }
+
+    private bool _statsFailureLogged;
 
     public IReadOnlyList<string> AvailableEgressRegions => _active.AvailableEgressRegions;
     public int ConnectProgressPercent => _active.ConnectProgressPercent;
     public string ConnectProgressText => _active.ConnectProgressText;
 
-    public ConnectionMethod ActiveMethod => _active.Method;
+        public ConnectionMethod ActiveMethod => _active.Method;
 
     public IReadOnlyList<string> RecentLog
     {
@@ -276,11 +390,19 @@ public sealed class ConnectionManager : ITunnelCoreManager
     public event EventHandler<ConnectionState>? StateChanged;
     public event EventHandler<Notice>? NoticeReceived;
     public event EventHandler<string>? LogLineAppended;
+    public event EventHandler<bool>? ConnectionIntentChanged;
     public event EventHandler? BytesTransferredChanged;
     public event EventHandler? LogCleared;
     public event EventHandler? RouteChanged;
     public event EventHandler? ConnectProgressChanged;
 
+    
+
+    
+    
+    
+    
+    
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private CancellationTokenSource? _inFlightStartCts;
 
@@ -295,13 +417,20 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     public async Task StartAsync()
     {
+        _stateOverride = null;
+        RaiseConnectionIntent(wantsConnection: true);
         CancellationTokenSource inFlightCts;
+        CancellationTokenSource? previousCts;
         lock (_sync)
         {
-            _inFlightStartCts?.Cancel();
+            previousCts = _inFlightStartCts;
             _inFlightStartCts = new CancellationTokenSource();
             inFlightCts = _inFlightStartCts;
         }
+        
+        
+        try { previousCts?.Cancel(); } catch { }
+        try { previousCts?.Dispose(); } catch { }
 
         await _lifecycleGate.WaitAsync();
         try
@@ -312,40 +441,33 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
             if (!ReferenceEquals(_active, desired))
             {
-
+                
+                
                 await SafeStopAsync(_active);
                 SwitchActiveTo(desired);
             }
 
             if (inFlightCts.IsCancellationRequested) return;
 
-            OnEngineLogLineAppended(_active, $"[Core] Connecting to {_active.Method.ToDisplayName()}...");
-            StateChanged?.Invoke(this, ConnectionState.Connecting);
-
-            try
+            await _active.StartAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            ClearSystemProxyIfApplied();
+            StateChanged?.Invoke(this, ConnectionState.Disconnected);
+        }
+        catch (Exception ex)
+        {
+            if (inFlightCts.IsCancellationRequested)
             {
-                await _active.StartAsync();
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("Startup cancelled for {Method}", _active.Method);
                 ClearSystemProxyIfApplied();
                 StateChanged?.Invoke(this, ConnectionState.Disconnected);
+                return;
             }
-            catch (Exception ex)
-            {
-                if (inFlightCts.IsCancellationRequested)
-                {
-                    _logger.LogInformation("Startup cancelled with exception for {Method}", _active.Method);
-                    ClearSystemProxyIfApplied();
-                    StateChanged?.Invoke(this, ConnectionState.Disconnected);
-                    return;
-                }
-                _logger.LogError(ex, "Failed to start active engine {Method}", _active.Method);
-                OnEngineLogLineAppended(_active, $"[Core] Startup error: {ex.Message}");
-                ClearSystemProxyIfApplied();
-                StateChanged?.Invoke(this, ConnectionState.Error);
-            }
+            _logger.LogError(ex, "Failed to start active engine {Method}", _active.Method);
+            OnEngineLogLineAppended(_active, $"[Core] Startup error: {ex.Message}");
+            ClearSystemProxyIfApplied();
+            StateChanged?.Invoke(this, ConnectionState.Error);
         }
         finally
         {
@@ -355,6 +477,11 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     public async Task StopAsync()
     {
+        _stateOverride = null;
+        
+        
+        
+        RaiseConnectionIntent(wantsConnection: false);
         CancelInFlightConnection();
 
         await _lifecycleGate.WaitAsync();
@@ -369,16 +496,30 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }
     }
 
+    private void RaiseConnectionIntent(bool wantsConnection)
+    {
+        lock (_sync)
+        {
+            if (_userWantsConnection == wantsConnection) return;
+            _userWantsConnection = wantsConnection;
+        }
+        try
+        {
+            ConnectionIntentChanged?.Invoke(this, wantsConnection);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ConnectionIntentChanged handler failed");
+        }
+    }
+
     public async Task RestartAsync()
     {
-        var wasActiveOrConnecting = _active.State is ConnectionState.Connecting or ConnectionState.Connected or ConnectionState.Error;
-        CancelInFlightConnection();
-
         await _lifecycleGate.WaitAsync();
         try
         {
             var desired = SelectEngineForCurrentSettings();
-            var running = wasActiveOrConnecting || _active.State is ConnectionState.Connecting or ConnectionState.Connected or ConnectionState.Error;
+            var running = _active.State is ConnectionState.Connecting or ConnectionState.Connected;
 
             if (!running)
             {
@@ -390,27 +531,20 @@ public sealed class ConnectionManager : ITunnelCoreManager
                 _active.Method, desired.Method);
 
             await StopAllEnginesAsync();
-            ClearSystemProxyIfApplied();
-            await Task.Delay(350);
-
+            
+            
+            desired = SelectEngineForCurrentSettings();
             SwitchActiveTo(desired);
-            try
-            {
-                await _active.StartAsync();
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("Restart cancelled for {Method}", _active.Method);
-                ClearSystemProxyIfApplied();
-                StateChanged?.Invoke(this, ConnectionState.Disconnected);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Restart failed starting {Method}", _active.Method);
-                OnEngineLogLineAppended(_active, $"[Core] Restart error: {ex.Message}");
-                ClearSystemProxyIfApplied();
-                StateChanged?.Invoke(this, ConnectionState.Error);
-            }
+            await _active.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            
+            
+            
+            _logger.LogError(ex, "Restart failed");
+            ClearSystemProxyIfApplied();
+            StateChanged?.Invoke(this, ConnectionState.Error);
         }
         finally
         {
@@ -420,22 +554,6 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     private async Task StopAllEnginesAsync()
     {
-        CancelInFlightConnection();
-        try { _psiphon.CancelConnecting(); } catch { }
-        try { _aether.CancelConnecting(); } catch { }
-        try { _tor.CancelConnecting(); } catch { }
-        try { _v2ray.CancelConnecting(); } catch { }
-        try { _shard.CancelConnecting(); } catch { }
-        try { _psiphonOverWarp?.CancelConnecting(); } catch { }
-        try { _torOverWarp?.CancelConnecting(); } catch { }
-        try { _psiphonOverV2Ray?.CancelConnecting(); } catch { }
-        try { _torOverV2Ray?.CancelConnecting(); } catch { }
-
-        TunnelCoreManager.ClearUpstreamProxyUrlOverride();
-        TorEngine.ClearSocks5ProxyOverride();
-
-        AetherEngine.ClearOverrides();
-
         var tasks = new List<Task>
         {
             SafeStopAsync(_psiphon),
@@ -450,6 +568,16 @@ public sealed class ConnectionManager : ITunnelCoreManager
         if (_torOverV2Ray is not null) tasks.Add(SafeStopAsync(_torOverV2Ray));
 
         await Task.WhenAll(tasks);
+
+        
+        
+        
+        TunnelCoreManager.UpstreamProxyUrlOverride = null;
+        TorEngine.Socks5ProxyOverride = null;
+        AetherEngine.SocksPortOverride = null;
+        AetherEngine.MethodOverride = null;
+        V2RayEngine.ClearSocksPortOverride();
+        V2RayEngine.ClearUserUpstreamOverride();
     }
 
     private static async Task SafeStopAsync(IConnectionEngine engine)
@@ -457,58 +585,78 @@ public sealed class ConnectionManager : ITunnelCoreManager
         try { await engine.StopAsync(); } catch {  }
     }
 
-    private int _currentlyAppliedProxyPort;
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     private void ApplySystemProxy(ConnectionState state)
     {
         try
         {
             var isTunActive = _settings.Settings.SystemWideTunneling && AdminElevation.IsAdministrator();
-            if (!_settings.Settings.SetSystemProxy || isTunActive) { ClearSystemProxyIfApplied(); return; }
+            if (!_settings.Settings.SetSystemProxy || isTunActive)
+            {
+                ClearSystemProxyIfApplied();
+                return;
+            }
+
             if (state == ConnectionState.Connected)
             {
-                var port = _active.HttpProxyPort > 0 ? _active.HttpProxyPort : _active.SocksProxyPort;
-                if (port <= 0) { _logger.LogWarning("{Method} exposes no proxy port; system proxy not set", _active.Method); return; }
-                if (_currentlyAppliedProxyPort != port)
+                var port = _active.HttpProxyPort;
+                if (port <= 0)
                 {
-                    _systemProxy.Set(port);
-                    _currentlyAppliedProxyPort = port;
-                    OnEngineLogLineAppended(_active, $"System proxy → 127.0.0.1:{port}");
+                    _logger.LogWarning(
+                        "{Method} exposes no HTTP proxy port; system proxy not set",
+                        _active.Method);
+                    return;
                 }
+                _systemProxy.Set(port);
+                _systemProxyApplied = true;
+                WintunRouteApi.ResetLocalLoopbackConnections(port, _active.SocksProxyPort, 1819, 1820, 1821, 1824, 1825);
+                OnEngineLogLineAppended(_active,
+                    $"System proxy pointed at 127.0.0.1:{port} — apps that honor it now go "
+                  + "through the tunnel.");
             }
-            else
+            else if (state is ConnectionState.Disconnected or ConnectionState.Error)
             {
                 ClearSystemProxyIfApplied();
             }
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "Failed to update the Windows system proxy"); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update the Windows system proxy");
+        }
     }
 
     private void ClearSystemProxyIfApplied()
     {
-        try
-        {
-            if (_currentlyAppliedProxyPort != 0)
-            {
-                _systemProxy.Clear();
-                _currentlyAppliedProxyPort = 0;
-            }
-            else
-            {
-
-                _systemProxy.RestoreIfCrashed();
-            }
-        }
+        if (!_systemProxyApplied) return;
+        _systemProxyApplied = false;
+        try { _systemProxy.Clear(); }
         catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear the Windows system proxy"); }
+    }
+
+    
+
+        private ConnectionMethod ResolveMethod()
+    {
+        AetherEngine.MethodOverride = null;
+        return ConnectionMethodExtensions.ParseConnectionMethod(_settings.Settings.ConnectionMethod);
     }
 
     private IConnectionEngine SelectEngineForCurrentSettings()
     {
-        var method = ConnectionMethodExtensions.ParseConnectionMethod(_settings.Settings.ConnectionMethod);
+        var method = ResolveMethod();
         return method switch
         {
             ConnectionMethod.Tor => _tor,
-            ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp or ConnectionMethod.MasqueOnMasque => _aether,
+            ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp => _aether,
             ConnectionMethod.PsiphonOverWarp => _psiphonOverWarp ??= new ChainedEngine(
                 _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, ConnectionMethod.PsiphonOverWarp),
             ConnectionMethod.TorOverWarp => _torOverWarp ??= new ChainedEngine(
@@ -526,21 +674,19 @@ public sealed class ConnectionManager : ITunnelCoreManager
     {
         if (ReferenceEquals(_active, engine)) return;
 
+        
+        
         ClearSystemProxyIfApplied();
 
         Detach(_active);
         _active = engine;
         Attach(_active);
 
-        var switchMsg = $"[Core] Switched active protocol to {engine.Method.ToDisplayName()}";
-        lock (_sync)
-        {
-            _recentLog.Clear();
-            _recentLog.Add($"{DateTime.Now:HH:mm:ss} {switchMsg}");
-        }
+        
+        lock (_sync) _recentLog.Clear();
         LogCleared?.Invoke(this, EventArgs.Empty);
-        LogLineAppended?.Invoke(this, switchMsg);
 
+        
         StateChanged?.Invoke(this, _active.State);
         BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
         RouteChanged?.Invoke(this, EventArgs.Empty);
@@ -573,9 +719,12 @@ public sealed class ConnectionManager : ITunnelCoreManager
         ConnectProgressChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    
+    
     private void OnEngineStateChanged(object? sender, ConnectionState state)
     {
         if (!ReferenceEquals(sender, _active)) return;
+        _stateOverride = null;
         if (state == ConnectionState.Connected)
         {
             StartStatsMonitor();
@@ -611,7 +760,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private void OnEngineBytesChanged(object? sender, EventArgs e)
     {
         if (!ReferenceEquals(sender, _active)) return;
-        UpdateInterfaceStats();
+        BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnEngineRouteChanged(object? sender, EventArgs e)

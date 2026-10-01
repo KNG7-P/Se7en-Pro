@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>Se7enPro.Services</RootNamespace>
+    
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    
+    <Compile Include="..\..\Se7enPro\Services\Tun\**\*.cs" LinkBase="Engine" />
+    <Compile Include="..\..\Se7enPro\Services\ITunManager.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\ITunnelCoreManager.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\IChildProcessGuard.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\ISettingsService.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\ISystemProxyService.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\FileCacheHelper.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\AdminElevation.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\ConnectionMethod.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\LocalizedItem.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\Loc.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Models\UserSettings.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Models\Notice.cs" LinkBase="Contracts" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    
+    <None Include="..\..\Se7enPro\Resources\tun2socks\tun2socks.exe" Link="Resources\tun2socks\tun2socks.exe" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\Se7enPro\Resources\tun2socks\wintun.dll" Link="Resources\tun2socks\wintun.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

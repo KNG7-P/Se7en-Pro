@@ -11,18 +11,28 @@ namespace Se7enPro.Services;
 
 public sealed partial class WintunTunManager
 {
-    private static readonly (string Addr, byte Prefix)[] NonRoutableV4Ranges =
+        private static bool IsLocalProxyPort(int port) => port is
+        10808 or 10809 or   
+        1819 or 1820 or 1821 or 1824 or 1825 or   
+        1080 or 8118;      
+
+    
+    
+    
+    
+    
+    private static readonly (byte[] Bytes, byte Prefix)[] NonRoutableV4Ranges =
     {
-        ("0.0.0.0", 8),
-        ("10.0.0.0", 8),
-        ("127.0.0.0", 8),
-        ("169.254.0.0", 16),
-        ("172.16.0.0", 12),
-        ("192.168.0.0", 16),
-        ("198.18.0.0", 15),
-        ("100.64.0.0", 10),
-        ("224.0.0.0", 4),
-        ("255.255.255.255", 32),
+        (IPAddress.Parse("0.0.0.0").GetAddressBytes(), 8),
+        (IPAddress.Parse("10.0.0.0").GetAddressBytes(), 8),
+        (IPAddress.Parse("127.0.0.0").GetAddressBytes(), 8),
+        (IPAddress.Parse("169.254.0.0").GetAddressBytes(), 16),
+        (IPAddress.Parse("172.16.0.0").GetAddressBytes(), 12),
+        (IPAddress.Parse("192.168.0.0").GetAddressBytes(), 16),
+        (IPAddress.Parse("198.18.0.0").GetAddressBytes(), 15),   
+        (IPAddress.Parse("100.64.0.0").GetAddressBytes(), 10),
+        (IPAddress.Parse("224.0.0.0").GetAddressBytes(), 4),     
+        (IPAddress.Parse("255.255.255.255").GetAddressBytes(), 32),
     };
 
     private static bool IsValidPublicInternetIpv4(IPAddress ip)
@@ -30,9 +40,8 @@ public sealed partial class WintunTunManager
         if (ip.AddressFamily != AddressFamily.InterNetwork) return false;
         var bytes = ip.GetAddressBytes();
 
-        foreach (var (rangeAddr, prefix) in NonRoutableV4Ranges)
+        foreach (var (rangeBytes, prefix) in NonRoutableV4Ranges)
         {
-            var rangeBytes = IPAddress.Parse(rangeAddr).GetAddressBytes();
             var fullBytes = prefix / 8;
             var remBits = prefix % 8;
             var match = true;
@@ -55,13 +64,8 @@ public sealed partial class WintunTunManager
         return true;
     }
 
-    private void SweepProcessConnectionsNow()
+        private void SweepProcessConnectionsNow()
     {
-        if (_realRouteKnown)
-        {
-            ScanAndPinEngineConnections(_realIfIndex, _realGateway);
-        }
-
         var s = _settings.Settings;
         if (!s.SplitTunnelEnabled) return;
 
@@ -73,7 +77,7 @@ public sealed partial class WintunTunManager
         ScanAndPinProcessConnections(procNames, procPaths, include, pidCache);
     }
 
-    private async Task RunProcessSplitMonitorAsync(CancellationToken ct)
+        private async Task RunProcessSplitMonitorAsync(CancellationToken ct)
     {
         var pidCache = new Dictionary<int, (string? Path, string? Name)>();
         var sweepCount = 0;
@@ -83,41 +87,20 @@ public sealed partial class WintunTunManager
             try
             {
                 var s = _settings.Settings;
-                var splitActive = s.SplitTunnelEnabled;
-                List<string>? procNames = null;
-                List<string>? procPaths = null;
-                bool include = false;
-
-                if (splitActive)
+                if (s.SplitTunnelEnabled)
                 {
-                    SplitRules.ClassifySplitEntries(s, out _, out _, out procNames, out procPaths);
-                    include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-                }
-
-                var hasSplitProcs = splitActive && ((procNames != null && procNames.Count > 0) || (procPaths != null && procPaths.Count > 0));
-
-                if (_realRouteKnown || (hasSplitProcs && (include || _realRouteKnown)))
-                {
-
-                    var connections = WintunRouteApi.GetActiveTcpConnections();
-                    if (connections.Count > 0)
+                    SplitRules.ClassifySplitEntries(s, out _, out _, out var procNames, out var procPaths);
+                    if (procNames.Count > 0 || procPaths.Count > 0)
                     {
-                        if (_realRouteKnown)
-                        {
-                            ScanAndPinEngineConnections(_realIfIndex, _realGateway, pidCache, connections);
-                        }
-
-                        if (hasSplitProcs && procNames != null && procPaths != null)
-                        {
-                            ScanAndPinProcessConnections(procNames, procPaths, include, pidCache, connections);
-                        }
+                        var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
+                        ScanAndPinProcessConnections(procNames, procPaths, include, pidCache);
                     }
                 }
 
                 sweepCount++;
-                if (sweepCount >= 60)
+                if (sweepCount >= 100)
                 {
-
+                    
                     pidCache.Clear();
                     sweepCount = 0;
                 }
@@ -129,7 +112,9 @@ public sealed partial class WintunTunManager
 
             try
             {
-                await Task.Delay(1000, ct);
+                var s = _settings.Settings;
+                var hasActiveRules = s.SplitTunnelEnabled;
+                await Task.Delay(hasActiveRules ? 1000 : 5000, ct);
             }
             catch (OperationCanceledException)
             {
@@ -138,88 +123,16 @@ public sealed partial class WintunTunManager
         }
     }
 
-    private void ScanAndPinEngineConnections(
-        int realIfIndex,
-        IPAddress realGateway,
-        Dictionary<int, (string? Path, string? Name)>? pidCache = null,
-        IReadOnlyList<WintunRouteApi.ActiveTcpConn>? connections = null)
-    {
-        if (realIfIndex == 0 || IPAddress.Any.Equals(realGateway)) return;
-
-        connections ??= WintunRouteApi.GetActiveTcpConnections();
-        if (connections.Count == 0) return;
-
-        pidCache ??= new Dictionary<int, (string? Path, string? Name)>();
-
-        foreach (var conn in connections)
-        {
-            var pid = conn.Pid;
-            if (!pidCache.TryGetValue(pid, out var procInfo))
-            {
-                var fullPath = WintunRouteApi.TryGetProcessPath(pid);
-                var fileName = string.IsNullOrEmpty(fullPath) ? null : Path.GetFileName(fullPath);
-                procInfo = (fullPath, fileName);
-                pidCache[pid] = procInfo;
-            }
-
-            if (string.IsNullOrEmpty(procInfo.Name)) continue;
-
-            var isEngine = EngineProcessNames.All.Any(engineName =>
-                string.Equals(procInfo.Name, engineName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetFileNameWithoutExtension(procInfo.Name), engineName, StringComparison.OrdinalIgnoreCase));
-
-            if (!isEngine) continue;
-
-            var remoteIp = conn.RemoteIp;
-            if (!IsValidPublicInternetIpv4(remoteIp)) continue;
-
-            var ipKey = remoteIp.ToString();
-            var needsAdd = false;
-            lock (_routeLock)
-            {
-                if (!_dynamicRoutes.ContainsKey(ipKey))
-                {
-                    needsAdd = true;
-                }
-            }
-
-            if (!needsAdd) continue;
-
-            try
-            {
-                var entry = WintunRouteApi.AddRoute(realIfIndex, remoteIp, 32, realGateway);
-                if (entry is null) continue;
-
-                lock (_routeLock)
-                {
-                    if (!_dynamicRoutes.ContainsKey(ipKey))
-                    {
-                        _appliedRoutes.Add(entry);
-                        _dynamicRoutes[ipKey] = (entry, $"engine:{procInfo.Name}");
-                    }
-                }
-
-                WriteDiag($"engine process: '{procInfo.Name}' (pid {pid}) -> {remoteIp}; host route pinned to real gateway {realGateway}");
-
-            }
-            catch (Exception ex)
-            {
-                WriteDiag($"engine process route for {remoteIp} ({procInfo.Name}) not pinned: {ex.Message}");
-            }
-        }
-    }
-
     private void ScanAndPinProcessConnections(
         List<string> procNames,
         List<string> procPaths,
         bool include,
-        Dictionary<int, (string? Path, string? Name)> pidCache,
-        IReadOnlyList<WintunRouteApi.ActiveTcpConn>? connections = null)
+        Dictionary<int, (string? Path, string? Name)> pidCache)
     {
         if (!include && !_realRouteKnown) return;
         if (include && _tunIfIndex == 0) return;
 
-        connections ??= WintunRouteApi.GetActiveTcpConnections();
+        var connections = WintunRouteApi.GetActiveTcpConnections();
         if (connections.Count == 0) return;
 
         foreach (var conn in connections)
@@ -240,9 +153,21 @@ public sealed partial class WintunTunManager
 
             var remoteIp = conn.RemoteIp;
 
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
             if (!include && IPAddress.IsLoopback(remoteIp))
             {
-                if (!EngineProcessNames.All.Contains(procInfo.Name, StringComparer.OrdinalIgnoreCase))
+                var remotePort = (ushort)IPAddress.NetworkToHostOrder((short)conn.Raw.RemotePort);
+                if (IsLocalProxyPort(remotePort) &&
+                    !EngineProcessNames.All.Contains(procInfo.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     WintunRouteApi.TryCloseTcpConnection(conn.Raw);
                 }
@@ -268,7 +193,6 @@ public sealed partial class WintunTunManager
                 var entry = include
                     ? WintunRouteApi.AddRoute(_tunIfIndex, remoteIp, 32, TunAddressV4)
                     : WintunRouteApi.AddRoute(_realIfIndex, remoteIp, 32, _realGateway);
-                if (entry is null) continue;
 
                 var added = false;
                 lock (_routeLock)
@@ -283,8 +207,17 @@ public sealed partial class WintunTunManager
 
                 if (added)
                 {
-
-                    if (!include)
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    var isCoreProcess = EngineProcessNames.All.Contains(
+                        procInfo.Name, StringComparer.OrdinalIgnoreCase);
+                    if (!include || !isCoreProcess)
                     {
                         WintunRouteApi.TryCloseTcpConnection(conn.Raw);
                     }

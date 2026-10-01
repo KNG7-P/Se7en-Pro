@@ -13,18 +13,15 @@ namespace Se7enPro.Services;
 
 public sealed class InstalledAppInfo
 {
+        public string Name { get; init; } = "";
 
-    public string Name { get; init; } = "";
+        public string ExePath { get; init; } = "";
 
-    public string ExePath { get; init; } = "";
+        public string FileName { get; init; } = "";
 
-    public string FileName { get; init; } = "";
+        public bool IsRunning { get; init; }
 
-    public bool IsRunning { get; init; }
-
-    public ImageSource? Icon { get; set; }
-
-    public string? IconBase64 { get; set; }
+        public ImageSource? Icon { get; set; }
 
     public string SearchText => $"{Name}\n{FileName}\n{ExePath}";
 }
@@ -34,7 +31,7 @@ public static class InstalledAppsProvider
     private const int MaxResults = 600;
     private const int ShallowScanDepth = 3;
 
-    private static readonly string[] NoisePrefixes =
+        private static readonly string[] NoisePrefixes =
     {
         "unins", "setup", "install", "update", "vcredist", "vc_redist",
         "crashpad", "crashreport", "werfault", "dxsetup", "dotnetfx",
@@ -42,7 +39,8 @@ public static class InstalledAppsProvider
 
     public static Task<List<InstalledAppInfo>> LoadAsync(CancellationToken ct = default)
     {
-
+        
+        
         var tcs = new TaskCompletionSource<List<InstalledAppInfo>>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -64,7 +62,8 @@ public static class InstalledAppsProvider
 
     private static List<InstalledAppInfo> Load(CancellationToken ct)
     {
-
+        
+        
         var byPath = new Dictionary<string, InstalledAppInfo>(StringComparer.OrdinalIgnoreCase);
 
         var running = CollectRunningExePaths(ct);
@@ -96,6 +95,8 @@ public static class InstalledAppsProvider
         LoadIcons(list, ct);
         return list;
     }
+
+    
 
     private static void AddCandidate(
         Dictionary<string, InstalledAppInfo> byPath,
@@ -142,11 +143,13 @@ public static class InstalledAppsProvider
         }
         catch
         {
-
+            
         }
 
         return Path.GetFileNameWithoutExtension(fileName);
     }
+
+    
 
     private static HashSet<string> CollectRunningExePaths(CancellationToken ct)
     {
@@ -165,7 +168,7 @@ public static class InstalledAppsProvider
             }
             catch
             {
-
+                
             }
             finally { p.Dispose(); }
         }
@@ -290,6 +293,8 @@ public static class InstalledAppsProvider
             && p.StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
+    
+
     private static void LoadIcons(List<InstalledAppInfo> apps, CancellationToken ct)
     {
         var options = new ParallelOptions
@@ -300,44 +305,33 @@ public static class InstalledAppsProvider
 
         try
         {
-            Parallel.ForEach(apps, options, app =>
-            {
-                var (source, base64) = TryExtractIconAndBase64(app.ExePath);
-                app.Icon = source;
-                app.IconBase64 = base64;
-            });
+            Parallel.ForEach(apps, options, app => app.Icon = TryExtractIcon(app.ExePath));
         }
         catch (OperationCanceledException) { throw; }
         catch
         {
-
+            
         }
     }
 
-    private static (ImageSource? Source, string? Base64) TryExtractIconAndBase64(string exePath)
+    private static ImageSource? TryExtractIcon(string exePath)
     {
         System.Drawing.Icon? icon = null;
         try
         {
             icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
-            if (icon is null) return (null, null);
+            if (icon is null) return null;
 
             var source = Imaging.CreateBitmapSourceFromHIcon(
                 icon.Handle,
                 System.Windows.Int32Rect.Empty,
                 BitmapSizeOptions.FromEmptyOptions());
             source.Freeze();
-
-            using var bmp = icon.ToBitmap();
-            using var ms = new MemoryStream();
-            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            var base64 = Convert.ToBase64String(ms.ToArray());
-
-            return (source, base64);
+            return source;
         }
         catch
         {
-            return (null, null);
+            return null;
         }
         finally
         {

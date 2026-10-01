@@ -1,0 +1,365 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    
+    
+    
+
+    
+    <Color x:Key="Brand.Bg">#FF080A12</Color>
+    <Color x:Key="Brand.BgDeep">#FF04050A</Color>
+    <Color x:Key="Brand.Sidebar">#FF0E1019</Color>
+    <Color x:Key="Brand.TitleBar">#FF0B0D15</Color>
+    <Color x:Key="Brand.Card">#FF14161F</Color>
+    <Color x:Key="Brand.CardElevated">#FF1B1D28</Color>
+    <Color x:Key="Brand.Input">#FF0C0E16</Color>
+    <Color x:Key="Brand.Border">#FF242634</Color>
+    <Color x:Key="Brand.BorderHover">#FF363A4E</Color>
+    <Color x:Key="Brand.TextPrimary">#FFF3F4FB</Color>
+    <Color x:Key="Brand.TextSecondary">#FF9EA2B8</Color>
+    <Color x:Key="Brand.TextMuted">#FF666B82</Color>
+    <Color x:Key="Brand.SubtleBg">#FF10121B</Color>
+    <Color x:Key="Brand.HoverBg">#FF1A1D28</Color>
+    <Color x:Key="Brand.SelectedBg">#FF20233A</Color>
+    <Color x:Key="Brand.LogBox">#FF14141E</Color>
+
+    
+    <Color x:Key="Brand.PrimaryColor">#FF7C3AED</Color>
+    <Color x:Key="Brand.PrimaryDarkColor">#FF5B21B6</Color>
+    <Color x:Key="Brand.AccentCyan">#FF00D4FF</Color>
+    <Color x:Key="Brand.AccentPurple">#FFA78BFA</Color>
+    <Color x:Key="Brand.Success">#FF10B981</Color>
+    <Color x:Key="Brand.SuccessDeep">#FF059669</Color>
+    <Color x:Key="Brand.Danger">#FFEF4444</Color>
+    <Color x:Key="Brand.Warning">#FFF59E0B</Color>
+    <Color x:Key="Brand.Info">#FF60A5FA</Color>
+    <Color x:Key="Brand.TelegramColor">#FF229ED9</Color>
+    <Color x:Key="Brand.TelegramDarkColor">#FF167BB0</Color>
+    
+    <Color x:Key="Brand.OnAccent">#FFFFFFFF</Color>
+    <Color x:Key="Brand.OnCyan">#FF080A12</Color>
+
+    
+    <Color x:Key="Brand.Violet">#FF8B5CF6</Color>
+    <Color x:Key="Brand.Indigo">#FF6366F1</Color>
+    <Color x:Key="Brand.Aqua">#FF22D3EE</Color>
+    <Color x:Key="Brand.Teal">#FF2DD4BF</Color>
+    <Color x:Key="Brand.Emerald">#FF34D399</Color>
+    <Color x:Key="Brand.Pink">#FFEC4899</Color>
+    <Color x:Key="Brand.Amber">#FFFB923C</Color>
+
+    
+    <Color x:Key="Brand.Glass">#14FFFFFF</Color>
+    <Color x:Key="Brand.GlassStrong">#1FFFFFFF</Color>
+    <Color x:Key="Brand.GlassBorder">#24FFFFFF</Color>
+    <Color x:Key="Brand.Scrim">#B305060C</Color>
+
+    
+    <Color x:Key="Brand.AccentColor">#FF00D4FF</Color>
+    <Color x:Key="Brand.SuccessColor">#FF10B981</Color>
+    <Color x:Key="Brand.WarningColor">#FFF59E0B</Color>
+    <Color x:Key="Brand.ErrorColor">#FFEF4444</Color>
+
+    
+    <SolidColorBrush x:Key="BgMain" Color="{StaticResource Brand.Bg}" />
+    <SolidColorBrush x:Key="BgSidebar" Color="{StaticResource Brand.Sidebar}" />
+    <SolidColorBrush x:Key="BgCard" Color="{StaticResource Brand.Card}" />
+    <SolidColorBrush x:Key="BgCardElevated" Color="{StaticResource Brand.CardElevated}" />
+    <SolidColorBrush x:Key="BgInput" Color="{StaticResource Brand.Input}" />
+    <SolidColorBrush x:Key="BorderBrushDefault" Color="{StaticResource Brand.Border}" />
+    <SolidColorBrush x:Key="BorderBrushHover" Color="{StaticResource Brand.BorderHover}" />
+    <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource Brand.TextPrimary}" />
+    <SolidColorBrush x:Key="TextSecondary" Color="{StaticResource Brand.TextSecondary}" />
+    <SolidColorBrush x:Key="TextMuted" Color="{StaticResource Brand.TextMuted}" />
+    <SolidColorBrush x:Key="AccentCyanBrush" Color="{StaticResource Brand.AccentCyan}" />
+    <SolidColorBrush x:Key="AccentPurpleBrush" Color="{StaticResource Brand.AccentPurple}" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource Brand.Success}" />
+    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Brand.Danger}" />
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Brand.Warning}" />
+    <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource Brand.Info}" />
+
+    
+    <SolidColorBrush x:Key="Brand.PrimaryBrush" Color="{StaticResource Brand.PrimaryColor}" />
+    <SolidColorBrush x:Key="Brand.PrimaryDarkBrush" Color="{StaticResource Brand.PrimaryDarkColor}" />
+    <SolidColorBrush x:Key="Brand.AccentBrush" Color="{StaticResource Brand.AccentCyan}" />
+    <SolidColorBrush x:Key="Brand.SuccessBrush" Color="{StaticResource Brand.Success}" />
+    <SolidColorBrush x:Key="Brand.WarningBrush" Color="{StaticResource Brand.Warning}" />
+    <SolidColorBrush x:Key="Brand.ErrorBrush" Color="{StaticResource Brand.Danger}" />
+    <SolidColorBrush x:Key="Brand.DangerBrush" Color="{StaticResource Brand.Danger}" />
+    <SolidColorBrush x:Key="Brand.TelegramBrush" Color="{StaticResource Brand.TelegramColor}" />
+
+
+    
+    <SolidColorBrush x:Key="Brand.VioletBrush" Color="{StaticResource Brand.Violet}" />
+    <SolidColorBrush x:Key="Brand.IndigoBrush" Color="{StaticResource Brand.Indigo}" />
+    <SolidColorBrush x:Key="Brand.AquaBrush" Color="{StaticResource Brand.Aqua}" />
+    <SolidColorBrush x:Key="Brand.TealBrush" Color="{StaticResource Brand.Teal}" />
+    <SolidColorBrush x:Key="Brand.EmeraldBrush" Color="{StaticResource Brand.Emerald}" />
+    <SolidColorBrush x:Key="Brand.PinkBrush" Color="{StaticResource Brand.Pink}" />
+    <SolidColorBrush x:Key="Brand.AmberBrush" Color="{StaticResource Brand.Amber}" />
+
+    
+    <SolidColorBrush x:Key="Brand.GlassBrush" Color="{StaticResource Brand.Glass}" />
+    <SolidColorBrush x:Key="Brand.GlassStrongBrush" Color="{StaticResource Brand.GlassStrong}" />
+    <SolidColorBrush x:Key="Brand.GlassBorderBrush" Color="{StaticResource Brand.GlassBorder}" />
+    <SolidColorBrush x:Key="Brand.ScrimBrush" Color="{StaticResource Brand.Scrim}" />
+
+    
+    <SolidColorBrush x:Key="Brand.PrimarySoftBrush" Color="{StaticResource Brand.PrimaryColor}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.AccentSoftBrush" Color="{StaticResource Brand.AccentCyan}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.AccentSelectedBrush" Color="{StaticResource Brand.AccentCyan}" Opacity="0.20" />
+    <SolidColorBrush x:Key="Brand.AccentSelectedBorderBrush" Color="{StaticResource Brand.AccentCyan}" Opacity="0.55" />
+    <SolidColorBrush x:Key="Brand.AccentOutlineBrush" Color="{StaticResource Brand.AccentCyan}" Opacity="0.50" />
+    <SolidColorBrush x:Key="Brand.SuccessSoftBrush" Color="{StaticResource Brand.Success}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.WarningSoftBrush" Color="{StaticResource Brand.Warning}" Opacity="0.16" />
+    <SolidColorBrush x:Key="Brand.ErrorSoftBrush" Color="{StaticResource Brand.Danger}" Opacity="0.16" />
+
+    
+    <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.AccentPurple}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.PrimaryGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.AccentPurple}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.ConnectedGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.SuccessDeep}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.Success}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.HeroGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.PrimaryDarkColor}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.PrimaryColor}" Offset="0.5" />
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.IdleOrbGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.Indigo}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.Violet}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.ConnectingOrbGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.Aqua}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.Violet}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.ConnectedOrbGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.Emerald}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.Teal}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.ErrorOrbGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.Pink}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.Danger}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brand.RotatingRingGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.PrimaryColor}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.AccentCyan}" Offset="0.5" />
+        <GradientStop Color="{StaticResource Brand.Success}" Offset="1" />
+    </LinearGradientBrush>
+
+    
+    <LinearGradientBrush x:Key="Brand.TelegramGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Brand.TelegramColor}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.TelegramDarkColor}" Offset="1" />
+    </LinearGradientBrush>
+    
+    <SolidColorBrush x:Key="Brand.TelegramSoftBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.13" />
+    <SolidColorBrush x:Key="Brand.TelegramHoverBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.24" />
+    <SolidColorBrush x:Key="Brand.TelegramBorderBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.40" />
+
+    
+    <Color x:Key="Surface.AppBgColor">#FF080A12</Color>
+    <SolidColorBrush x:Key="Surface.AppBg" Color="{StaticResource Brand.Bg}" />
+    
+    <LinearGradientBrush x:Key="Surface.AppBackground" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="{StaticResource Brand.Bg}" Offset="0" />
+        <GradientStop Color="{StaticResource Brand.BgDeep}" Offset="1" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="Surface.AppBgDeep" Color="{StaticResource Brand.BgDeep}" />
+    <SolidColorBrush x:Key="Surface.SidebarBg" Color="{StaticResource Brand.Sidebar}" />
+    <SolidColorBrush x:Key="Surface.TitleBarBg" Color="{StaticResource Brand.TitleBar}" />
+
+    <SolidColorBrush x:Key="Surface.CardBg" Color="{StaticResource Brand.Card}" />
+    <SolidColorBrush x:Key="Surface.Card" Color="{StaticResource Brand.Card}" />
+    <SolidColorBrush x:Key="Surface.CardSecondaryBg" Color="{StaticResource Brand.CardElevated}" />
+    <SolidColorBrush x:Key="Surface.CardElevated" Color="{StaticResource Brand.CardElevated}" />
+    
+    <SolidColorBrush x:Key="Surface.GlassBg" Color="{StaticResource Brand.Card}" />
+    <SolidColorBrush x:Key="Surface.GlassStrongBg" Color="{StaticResource Brand.CardElevated}" />
+    <SolidColorBrush x:Key="Surface.GlassBorder" Color="{StaticResource Brand.GlassBorder}" />
+    <SolidColorBrush x:Key="Surface.CardBorder" Color="{StaticResource Brand.Border}" />
+    <SolidColorBrush x:Key="Surface.CardBorderStrong" Color="{StaticResource Brand.BorderHover}" />
+
+    <SolidColorBrush x:Key="Surface.SubtleBg" Color="{StaticResource Brand.SubtleBg}" />
+    <SolidColorBrush x:Key="Surface.SubtleBorder" Color="{StaticResource Brand.Border}" />
+    <SolidColorBrush x:Key="Surface.HoverBg" Color="{StaticResource Brand.HoverBg}" />
+    <SolidColorBrush x:Key="Surface.SelectedBg" Color="{StaticResource Brand.SelectedBg}" />
+    <SolidColorBrush x:Key="Surface.LogBoxBg" Color="{StaticResource Brand.LogBox}" />
+    <SolidColorBrush x:Key="Surface.LogBoxBorder" Color="{StaticResource Brand.Border}" />
+    <SolidColorBrush x:Key="Surface.ConnectCoreBg" Color="#FF1A1D2B" />
+    <SolidColorBrush x:Key="Surface.ConnectCoreHoverBg" Color="#FF23273A" />
+    <SolidColorBrush x:Key="Surface.ConnectCorePressedBg" Color="#FF151827" />
+    <SolidColorBrush x:Key="TextOnConnectBrush" Color="#FFFFFFFF" />
+    
+    <SolidColorBrush x:Key="Surface.NavSelectedBg" Color="{StaticResource Brand.AccentCyan}" Opacity="0.20" />
+    <SolidColorBrush x:Key="Surface.NavSelectedBorder" Color="{StaticResource Brand.AccentCyan}" Opacity="0.55" />
+    
+    <SolidColorBrush x:Key="Nav.SelectedIcon" Color="{StaticResource Brand.AccentCyan}" />
+    <SolidColorBrush x:Key="Surface.BorderBrush" Color="{StaticResource Brand.Border}" />
+
+    
+    <SolidColorBrush x:Key="Tab.SelectedBg" Color="{StaticResource Brand.AccentCyan}" Opacity="0.20" />
+    <SolidColorBrush x:Key="Tab.SelectedBorder" Color="{StaticResource Brand.AccentCyan}" Opacity="0.55" />
+    <SolidColorBrush x:Key="Tab.SelectedText" Color="{StaticResource Brand.OnAccent}" />
+    <SolidColorBrush x:Key="Tab.SelectedIcon" Color="{StaticResource Brand.AccentCyan}" />
+    <SolidColorBrush x:Key="Tab.RestBg" Color="#7314161F" />
+    <SolidColorBrush x:Key="Tab.RestBorder" Color="#66242634" />
+    <SolidColorBrush x:Key="Tab.HoverBg" Color="#CC1B1D28" />
+    <SolidColorBrush x:Key="Tab.HoverBorder" Color="#CC242634" />
+    <SolidColorBrush x:Key="Tab.HoverText" Color="#FFFFFFFF" />
+
+    
+    <SolidColorBrush x:Key="Switch.TrackOff" Color="#FF1E293B" />
+    <SolidColorBrush x:Key="Switch.ThumbOff" Color="#FF94A3B8" />
+    <SolidColorBrush x:Key="Switch.TrackOffBorder" Color="#FF475569" />
+    <SolidColorBrush x:Key="Switch.TrackOffHover" Color="#FF1A4358" />
+
+    
+    <SolidColorBrush x:Key="Menu.HoverBg" Color="#14FFFFFF" />
+
+    
+    
+    
+    
+
+    
+    <SolidColorBrush x:Key="Btn.Primary.Fg" Color="{StaticResource Brand.OnCyan}" />
+    <SolidColorBrush x:Key="Btn.Primary.Solid" Color="{StaticResource Brand.AccentCyan}" />
+    <SolidColorBrush x:Key="Btn.Primary.SolidHover" Color="#FF35DDFF" />
+    <SolidColorBrush x:Key="Btn.Primary.SolidPress" Color="#FF00B2D8" />
+    <SolidColorBrush x:Key="Btn.Primary.Tint" Color="#1F00D4FF" />
+    <SolidColorBrush x:Key="Btn.Primary.TintHover" Color="#3000D4FF" />
+    <SolidColorBrush x:Key="Btn.Primary.TintPress" Color="#4200D4FF" />
+    <SolidColorBrush x:Key="Btn.Primary.Border" Color="#5200D4FF" />
+    <SolidColorBrush x:Key="Btn.Primary.BorderHover" Color="#8C00D4FF" />
+    <SolidColorBrush x:Key="Btn.Primary.Text" Color="{StaticResource Brand.AccentCyan}" />
+
+    
+    <SolidColorBrush x:Key="Btn.Success.Fg" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="Btn.Success.Solid" Color="{StaticResource Brand.Success}" />
+    <SolidColorBrush x:Key="Btn.Success.SolidHover" Color="#FF0EA271" />
+    <SolidColorBrush x:Key="Btn.Success.SolidPress" Color="#FF0C8A61" />
+    <SolidColorBrush x:Key="Btn.Success.Tint" Color="#1F10B981" />
+    <SolidColorBrush x:Key="Btn.Success.TintHover" Color="#3010B981" />
+    <SolidColorBrush x:Key="Btn.Success.TintPress" Color="#4210B981" />
+    <SolidColorBrush x:Key="Btn.Success.Border" Color="#5210B981" />
+    <SolidColorBrush x:Key="Btn.Success.BorderHover" Color="#8C10B981" />
+    <SolidColorBrush x:Key="Btn.Success.Text" Color="{StaticResource Brand.Emerald}" />
+
+    
+    <SolidColorBrush x:Key="Btn.Warning.Fg" Color="#FF1C1204" />
+    <SolidColorBrush x:Key="Btn.Warning.Solid" Color="{StaticResource Brand.Warning}" />
+    <SolidColorBrush x:Key="Btn.Warning.SolidHover" Color="#FFE08E06" />
+    <SolidColorBrush x:Key="Btn.Warning.SolidPress" Color="#FFC97C04" />
+    <SolidColorBrush x:Key="Btn.Warning.Tint" Color="#1FF59E0B" />
+    <SolidColorBrush x:Key="Btn.Warning.TintHover" Color="#30F59E0B" />
+    <SolidColorBrush x:Key="Btn.Warning.TintPress" Color="#42F59E0B" />
+    <SolidColorBrush x:Key="Btn.Warning.Border" Color="#52F59E0B" />
+    <SolidColorBrush x:Key="Btn.Warning.BorderHover" Color="#8CF59E0B" />
+    <SolidColorBrush x:Key="Btn.Warning.Text" Color="#FFFBBF24" />
+
+    
+    <SolidColorBrush x:Key="Btn.Danger.Fg" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="Btn.Danger.Solid" Color="{StaticResource Brand.Danger}" />
+    <SolidColorBrush x:Key="Btn.Danger.SolidHover" Color="#FFE63B3B" />
+    <SolidColorBrush x:Key="Btn.Danger.SolidPress" Color="#FFD32F2F" />
+    <SolidColorBrush x:Key="Btn.Danger.Tint" Color="#1FEF4444" />
+    <SolidColorBrush x:Key="Btn.Danger.TintHover" Color="#30EF4444" />
+    <SolidColorBrush x:Key="Btn.Danger.TintPress" Color="#42EF4444" />
+    <SolidColorBrush x:Key="Btn.Danger.Border" Color="#52EF4444" />
+    <SolidColorBrush x:Key="Btn.Danger.BorderHover" Color="#8CEF4444" />
+    <SolidColorBrush x:Key="Btn.Danger.Text" Color="#FFF87171" />
+
+    
+    <SolidColorBrush x:Key="Btn.Accent.Fg" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="Btn.Accent.Solid" Color="{StaticResource Brand.Violet}" />
+    <SolidColorBrush x:Key="Btn.Accent.SolidHover" Color="#FF7C3AED" />
+    <SolidColorBrush x:Key="Btn.Accent.SolidPress" Color="#FF6D28D9" />
+    <SolidColorBrush x:Key="Btn.Accent.Tint" Color="#1FA855F7" />
+    <SolidColorBrush x:Key="Btn.Accent.TintHover" Color="#30A855F7" />
+    <SolidColorBrush x:Key="Btn.Accent.TintPress" Color="#42A855F7" />
+    <SolidColorBrush x:Key="Btn.Accent.Border" Color="#52A855F7" />
+    <SolidColorBrush x:Key="Btn.Accent.BorderHover" Color="#8CA855F7" />
+    <SolidColorBrush x:Key="Btn.Accent.Text" Color="{StaticResource Brand.AccentPurple}" />
+
+    
+    <SolidColorBrush x:Key="Btn.Neutral.Tint" Color="#1F9EA2B8" />
+    <SolidColorBrush x:Key="Btn.Neutral.TintHover" Color="#309EA2B8" />
+    <SolidColorBrush x:Key="Btn.Neutral.TintPress" Color="#429EA2B8" />
+    <SolidColorBrush x:Key="Btn.Neutral.Border" Color="#45242634" />
+    <SolidColorBrush x:Key="Btn.Neutral.BorderHover" Color="#8C363A4E" />
+
+    
+    <SolidColorBrush x:Key="Btn.FocusRing" Color="{StaticResource Brand.AccentCyan}" />
+
+    
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource Brand.TextPrimary}" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource Brand.TextSecondary}" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource Brand.TextMuted}" />
+    <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource Brand.OnAccent}" />
+    
+    <SolidColorBrush x:Key="TextOnCyanBrush" Color="{StaticResource Brand.OnCyan}" />
+
+    <SolidColorBrush x:Key="WindowBackdrop" Color="{StaticResource Brand.Bg}" />
+
+    
+    
+    
+    <SolidColorBrush x:Key="MaterialDesignPaper" Color="#FF14161F" />
+    <SolidColorBrush x:Key="MaterialDesignCardBackground" Color="#FF14161F" />
+    <SolidColorBrush x:Key="MaterialDesignBody" Color="#FFF3F4FB" />
+    <SolidColorBrush x:Key="MaterialDesignBodyLight" Color="#FF9EA2B8" />
+    <SolidColorBrush x:Key="MaterialDesignColumnHeader" Color="#FF9EA2B8" />
+    <SolidColorBrush x:Key="MaterialDesignSelection" Color="#FF20233A" />
+    <SolidColorBrush x:Key="MaterialDesignTextBoxBorder" Color="#FF242634" />
+    <SolidColorBrush x:Key="MaterialDesignDivider" Color="#FF242634" />
+
+    
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Background" Color="#FF080A12" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Surface" Color="#FF14161F" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceDim" Color="#FF080A12" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceBright" Color="#FF1B1D28" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerLowest" Color="#FF04050A" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerLow" Color="#FF080A12" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainer" Color="#FF14161F" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerHigh" Color="#FF1B1D28" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SurfaceContainerHighest" Color="#FF20233A" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSurface" Color="#FFF3F4FB" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSurfaceVariant" Color="#FF9EA2B8" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.InverseSurface" Color="#FFF3F4FB" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.InverseOnSurface" Color="#FF080A12" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary" Color="#FF7C3AED" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnPrimary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.PrimaryContainer" Color="#FF20233A" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnPrimaryContainer" Color="#FF00D4FF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Secondary" Color="#FF00D4FF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSecondary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.SecondaryContainer" Color="#FF20233A" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnSecondaryContainer" Color="#FFA78BFA" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Tertiary" Color="#FF10B981" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnTertiary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.TertiaryContainer" Color="#FF1A3326" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnTertiaryContainer" Color="{StaticResource Brand.Emerald}" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Error" Color="{StaticResource Brand.Danger}" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnError" Color="{StaticResource Brand.OnAccent}" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.ErrorContainer" Color="#FF381818" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OnErrorContainer" Color="#FFFCA5A5" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Outline" Color="#FF242634" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.OutlineVariant" Color="#FF363A4E" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Scrim" Color="#B305060C" />
+
+</ResourceDictionary>

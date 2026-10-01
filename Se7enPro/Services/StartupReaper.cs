@@ -18,20 +18,38 @@ public sealed class StartupReaper : IStartupReaper
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var roots = new[]
         {
+            
+            
+            
+            
+            
+            Path.Combine(AppContext.BaseDirectory, "Resources"),
             Path.Combine(localAppData, "Se7en", "tunnel-core"),
             Path.Combine(localAppData, "Se7en", "tun2socks"),
             Path.Combine(localAppData, "Se7en", "tor"),
             Path.Combine(localAppData, "Se7en", "aether"),
             Path.Combine(localAppData, "Se7en", "shard"),
-            Path.Combine(localAppData, "Se7en", "ultra"),
             Path.Combine(localAppData, "Psiphon", "tunnel-core"),
             Path.Combine(localAppData, "Psiphon", "tun2socks"),
             Path.Combine(localAppData, "Psiphon", "singbox-tun"),
             Path.Combine(localAppData, "Psiphon", "xray-tun"),
             Path.Combine(Path.GetTempPath(), "Se7en"),
             Path.Combine(Path.GetTempPath(), "Psiphon"),
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources"),
         };
+
+        
+        
+        
+        
+        
+        var normalisedRoots = new string[roots.Length];
+        var liveRoots = 0;
+        for (int i = 0; i < roots.Length; i++)
+        {
+            var normalised = NormalisePath(roots[i]);
+            if (string.IsNullOrEmpty(normalised)) continue;
+            normalisedRoots[liveRoots++] = normalised;
+        }
 
         Process[] processes;
         try
@@ -67,11 +85,7 @@ public sealed class StartupReaper : IStartupReaper
 
                 if (string.IsNullOrEmpty(imagePath)) continue;
 
-                var fileName = Path.GetFileName(imagePath);
-                var isSe7enChild = fileName.StartsWith("Se7enPro.", StringComparison.OrdinalIgnoreCase)
-                    || EngineProcessNames.All.Any(name => string.Equals(name, fileName, StringComparison.OrdinalIgnoreCase) && IsUnderAny(imagePath, roots));
-
-                if (!IsUnderAny(imagePath, roots) && !isSe7enChild) continue;
+                if (!IsUnderAny(imagePath, normalisedRoots, liveRoots)) continue;
 
                 _logger.LogInformation(
                     "Killing stale child pid {Pid} ({Image})",
@@ -112,14 +126,13 @@ public sealed class StartupReaper : IStartupReaper
         }
     }
 
-    private static bool IsUnderAny(string path, string[] roots)
+    private static bool IsUnderAny(string path, string[] normalisedRoots, int count)
     {
 
         var normalised = NormalisePath(path);
-        foreach (var root in roots)
+        for (var i = 0; i < count; i++)
         {
-            var nroot = NormalisePath(root);
-            if (string.IsNullOrEmpty(nroot)) continue;
+            var nroot = normalisedRoots[i];
             if (normalised.StartsWith(nroot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
                 || normalised.Equals(nroot, StringComparison.OrdinalIgnoreCase))
             {

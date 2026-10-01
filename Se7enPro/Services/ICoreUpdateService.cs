@@ -12,7 +12,8 @@ public sealed record CoreUpdateInfo(
     bool HasUpdate,
     string DownloadUrl,
     string ReleaseNotes,
-    long DownloadSizeBytes
+    long DownloadSizeBytes,
+        string ChecksumManifestUrl
 );
 
 public interface ICoreUpdateService

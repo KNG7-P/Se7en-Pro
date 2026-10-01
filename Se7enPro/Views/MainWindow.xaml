@@ -1,0 +1,713 @@
+<Window x:Class="Se7enPro.Views.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" xmlns:vm="clr-namespace:Se7enPro.ViewModels" xmlns:views="clr-namespace:Se7enPro.Views" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" Title="{DynamicResource Loc_aboutTitle}" Icon="pack://application:,,,/Assets/app.ico" Width="1000" Height="680" MinWidth="1000" MinHeight="680" MaxWidth="2560" MaxHeight="1440" SizeToContent="Manual" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" AllowsTransparency="True" Background="Transparent" TextElement.Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="{StaticResource UI.FontFamily}" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Grayscale" RenderOptions.ClearTypeHint="Auto" RenderOptions.BitmapScalingMode="LowQuality" SnapsToDevicePixels="True" UseLayoutRounding="True" d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="42" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
+    </WindowChrome.WindowChrome>
+
+    <Border x:Name="RootChromeBorder" Background="{DynamicResource Surface.AppBackground}">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Surface.CardBorder}" />
+                <Setter Property="CornerRadius" Value="16" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="ClipToBounds" Value="True" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="BorderBrush" Value="Transparent" />
+                        <Setter Property="CornerRadius" Value="0" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+
+        <Grid>
+            <DockPanel LastChildFill="True">
+
+            
+            <Border DockPanel.Dock="Top" Height="42" Background="{DynamicResource Surface.TitleBarBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="0,0,0,1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="14,14,0,0" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                <Setter Property="CornerRadius" Value="0" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="210" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    
+                    <StackPanel Orientation="Horizontal" Grid.Column="0" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource AccentGradient}" BorderBrush="Transparent" BorderThickness="0" VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="ShieldLockOutline" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" />
+                        </Border>
+                        <TextBlock Text="{DynamicResource Loc_aboutTitle}" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13.5" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                    </StackPanel>
+
+                    
+                    <Border Grid.Column="1" Background="Transparent" />
+
+                    
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" WindowChrome.IsHitTestVisibleInChrome="True">
+
+                        <Button Style="{StaticResource UI.ThemeToggleButton}" ToolTip="{DynamicResource Loc_Togglelightdarktheme}" Command="{Binding ToggleThemeCommand}" AutomationProperties.Name="{DynamicResource Loc_Togglelightdarktheme}">
+                            <materialDesign:PackIcon Width="14" Height="14">
+                                <materialDesign:PackIcon.Style>
+                                    <Style TargetType="materialDesign:PackIcon">
+                                        <Setter Property="Kind" Value="WeatherSunny" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDarkTheme}" Value="True">
+                                                <Setter Property="Kind" Value="WeatherNight" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </materialDesign:PackIcon.Style>
+                            </materialDesign:PackIcon>
+                        </Button>
+
+                        <Button Style="{StaticResource UI.TitleBarButton}" ToolTip="{DynamicResource Loc_Minimize}" Command="{Binding MinimizeWindowCommand}" AutomationProperties.Name="{DynamicResource Loc_Minimize}">
+                            <materialDesign:PackIcon Kind="WindowMinimize" Width="14" Height="14" />
+                        </Button>
+                        <Button Style="{StaticResource UI.TitleBarButton}" ToolTip="{DynamicResource Loc_MaximizeRestore}" Command="{Binding MaximizeWindowCommand}" AutomationProperties.Name="{DynamicResource Loc_MaximizeRestore}">
+                            <materialDesign:PackIcon Width="14" Height="14">
+                                <materialDesign:PackIcon.Style>
+                                    <Style TargetType="materialDesign:PackIcon">
+                                        <Setter Property="Kind" Value="WindowMaximize" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                                <Setter Property="Kind" Value="WindowRestore" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </materialDesign:PackIcon.Style>
+                            </materialDesign:PackIcon>
+                        </Button>
+                        <Button Style="{StaticResource UI.TitleBarCloseButton}" ToolTip="{DynamicResource Loc_close}" Command="{Binding CloseWindowCommand}" AutomationProperties.Name="{DynamicResource Loc_close}">
+                            <materialDesign:PackIcon Kind="WindowClose" Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            
+            <Grid Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="210" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                
+                <Border Grid.Column="0" Background="{DynamicResource Surface.SidebarBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="0,0,1,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="0,0,0,14" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                    <Setter Property="CornerRadius" Value="0" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <DockPanel LastChildFill="True">
+
+                        
+                        <Border DockPanel.Dock="Bottom" Padding="14,10" Opacity="0.6">
+                            <TextBlock Text="{DynamicResource Loc_v103WindowsClient}" FontSize="10.5" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                        </Border>
+
+                        
+                        <Button DockPanel.Dock="Bottom" Style="{StaticResource UI.TelegramButton}" Margin="14,8" ToolTip="{DynamicResource Loc_OpentheKingNetworkTelegramchanneli}" Command="{Binding OpenTelegramChannelCommand}" AutomationProperties.Name="{DynamicResource Loc_OpentheKingNetworkTelegramchanneli}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="{StaticResource Brand.TelegramGradient}" VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="Send" Width="15" Height="15" Foreground="{DynamicResource TextOnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="King Network" FontSize="11.5" FontWeight="SemiBold" />
+                                    <TextBlock Text="@King_network7" FontSize="9.5" Foreground="{DynamicResource Brand.TelegramBrush}" FontFamily="{StaticResource UI.MonoFontFamily}" />
+                                </StackPanel>
+                                <materialDesign:PackIcon Grid.Column="2" Kind="OpenInNew" Width="11" Height="11" Opacity="0.75" VerticalAlignment="Center" />
+                            </Grid>
+                        </Button>
+
+                        
+                        <ListBox ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}" Background="Transparent" BorderThickness="0" Margin="0,14,0,0" ItemContainerStyle="{StaticResource UI.NavItem}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="{Binding Icon}" Width="18" Height="18" VerticalAlignment="Center" Margin="2,0,10,0" Style="{StaticResource UI.NavItemIcon}" />
+                                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" FontSize="13" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                
+                <Border Grid.Column="1" Background="{DynamicResource Surface.AppBackground}" ClipToBounds="True">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="0,0,14,0" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                    <Setter Property="CornerRadius" Value="0" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <DockPanel LastChildFill="True">
+                        
+                        <Border DockPanel.Dock="Top" Padding="24,14,24,14">
+                            <TextBlock Text="{Binding PageHeaderTitle}" FontSize="15" FontWeight="ExtraBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                        </Border>
+                        <ContentControl x:Name="PageHost" />
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </DockPanel>
+
+        
+        <Border x:Name="ModalBackdropOverlay" Background="{DynamicResource Brand.ScrimBrush}" Visibility="Collapsed" IsHitTestVisible="True" Focusable="False" MouseDown="OnModalBackdropMouseDown">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="CornerRadius" Value="15" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                            <Setter Property="CornerRadius" Value="0" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
+
+    
+        <Border DataContext="{Binding Content.DataContext, ElementName=PageHost}" Background="{DynamicResource Brand.ScrimBrush}" Visibility="{Binding IsResetSettingsDialogOpen, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Panel.ZIndex="1000">
+            
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="CornerRadius" Value="15" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                            <Setter Property="CornerRadius" Value="0" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        <Border Width="400" Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="16" Padding="22,20" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <StackPanel>
+                
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="10" Background="#20EF4444" BorderBrush="#40EF4444" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="AlertCircleOutline" Width="22" Height="22" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_ResetSettings2}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Loc_Restorefactorydefaults}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Style="{StaticResource UI.ModalCloseButton}" Command="{Binding CloseResetSettingsDialogCommand}" ToolTip="{DynamicResource Loc_close}" VerticalAlignment="Top" AutomationProperties.Name="{DynamicResource Loc_close}">
+                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" />
+                    </Button>
+                </Grid>
+
+                
+                <TextBlock Text="{DynamicResource Loc_Areyousureyouwanttoresetallsetting}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="19" Margin="0,0,0,22" />
+
+                
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0" Style="{StaticResource UI.GhostButton}" Content="{DynamicResource Loc_dialogCancel}" FontWeight="SemiBold" Command="{Binding CloseResetSettingsDialogCommand}" />
+
+                    <Button Grid.Column="2" Style="{StaticResource UI.DangerButton}" Content="{DynamicResource Loc_resetSettingsShort}" FontWeight="Bold" Command="{Binding ConfirmResetSettingsCommand}" />
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Border>
+
+    
+        <Border DataContext="{Binding Content.DataContext, ElementName=PageHost}" Background="{DynamicResource Brand.ScrimBrush}" Visibility="{Binding IsClearAllConfigsDialogOpen, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Panel.ZIndex="1000">
+            
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="CornerRadius" Value="15" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                            <Setter Property="CornerRadius" Value="0" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        <Border Width="400" Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="16" Padding="22,20" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <StackPanel>
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="10" Background="#20EF4444" BorderBrush="#40EF4444" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="DeleteSweep" Width="22" Height="22" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_ClearConfigurations}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Loc_Removeallproxyprofiles}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Style="{StaticResource UI.ModalCloseButton}" Command="{Binding CloseClearAllConfigsDialogCommand}" ToolTip="{DynamicResource Loc_close}" VerticalAlignment="Top" AutomationProperties.Name="{DynamicResource Loc_close}">
+                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" />
+                    </Button>
+                </Grid>
+
+                <TextBlock Text="{DynamicResource Loc_Areyousureyouwanttoremoveallsavedp}" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="19" Margin="0,0,0,22" />
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0" Style="{StaticResource UI.GhostButton}" Content="{DynamicResource Loc_dialogCancel}" FontWeight="SemiBold" Command="{Binding CloseClearAllConfigsDialogCommand}" />
+
+                    <Button Grid.Column="2" Style="{StaticResource UI.DangerButton}" Content="{DynamicResource Loc_clearAllRules}" FontWeight="Bold" Command="{Binding ConfirmClearAllConfigsCommand}" />
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Border>
+
+    
+        <Border DataContext="{Binding Content.DataContext, ElementName=PageHost}" Background="{DynamicResource Brand.ScrimBrush}" Visibility="{Binding IsImportDialogOpen, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Panel.ZIndex="1000">
+            
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="CornerRadius" Value="15" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                            <Setter Property="CornerRadius" Value="0" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        <Border Width="480" MaxHeight="600" Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="16" Padding="22,20" VerticalAlignment="Center" HorizontalAlignment="Center">
+            
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" MinHeight="200" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="10" Background="#20A855F7" BorderBrush="#40A855F7" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="Link" Width="22" Height="22" Foreground="#A855F7" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_ImportConfigurations}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Loc_PasteproxylinksorsubscriptionURLs}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Style="{StaticResource UI.ModalCloseButton}" Command="{Binding CloseImportDialogCommand}" ToolTip="{DynamicResource Loc_close}" VerticalAlignment="Top" AutomationProperties.Name="{DynamicResource Loc_close}">
+                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" />
+                    </Button>
+                </Grid>
+
+                <TextBlock Grid.Row="1" Text="{DynamicResource Loc_Supportsvlessvmesstrojansshysteria}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                
+                <TextBox Grid.Row="2" Margin="0,0,0,8" Style="{StaticResource UI.MultilineTextBox}" MinHeight="200" AutomationProperties.Name="{DynamicResource Loc_ImportConfigurations}" materialDesign:HintAssist.Hint="vless://…  •  vmess://…  •  https://subscription" Text="{Binding ImportLinkText, UpdateSourceTrigger=PropertyChanged}" />
+
+                
+                <Button Grid.Row="3" Style="{StaticResource UI.GhostButton}" HorizontalAlignment="Left" Height="28" Padding="10,0" Margin="0,0,0,12" Command="{Binding PasteImportFromClipboardCommand}" AutomationProperties.Name="{DynamicResource Loc_PastefromClipboard}">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="ContentPaste" Width="13" Height="13" Margin="0,0,5,0" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource Loc_PastefromClipboard}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                
+                <TextBlock Grid.Row="4" Text="{Binding ImportErrorText}" Visibility="{Binding HasImportError, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.LiveSetting="Assertive" Foreground="#EF4444" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                
+                <Grid Grid.Row="5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0" Style="{StaticResource UI.GhostButton}" Content="{DynamicResource Loc_dialogCancel}" FontWeight="SemiBold" Command="{Binding CloseImportDialogCommand}" />
+
+                    <Button Grid.Column="2" Style="{StaticResource UI.PrimaryButton}" Content="{DynamicResource Loc_ImportNodes}" FontWeight="Bold" Command="{Binding ConfirmImportCommand}" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Border>
+
+    
+        <Border x:Name="AddEditConfigOverlay" IsVisibleChanged="AddEditConfigOverlay_IsVisibleChanged" DataContext="{Binding Content.DataContext, ElementName=PageHost}" Background="{DynamicResource Brand.ScrimBrush}" Visibility="{Binding IsAddEditConfigDialogOpen, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Panel.ZIndex="1000">
+            
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="CornerRadius" Value="15" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                            <Setter Property="CornerRadius" Value="0" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        <Border Width="520" MaxHeight="620" Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="16" Padding="22,18" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                
+                <Grid Grid.Row="0" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="36" Height="36" CornerRadius="8" Background="#2606B6D4" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="Server" Width="18" Height="18" Foreground="#06B6D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding AddEditConfigDialogTitle}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Loc_Configureproxynodeparameters}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Style="{StaticResource UI.ModalCloseButton}" Command="{Binding CloseAddEditConfigDialogCommand}" ToolTip="{DynamicResource Loc_close}" VerticalAlignment="Top" AutomationProperties.Name="{DynamicResource Loc_close}">
+                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" />
+                    </Button>
+                </Grid>
+
+                
+                <ScrollViewer Grid.Row="1" x:Name="AddEditConfigScroll" VerticalScrollBarVisibility="Auto" Margin="0,0,0,14" MaxHeight="450">
+                    <StackPanel Margin="0,0,10,0">
+                        
+                        <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_v2rayProtocol}" Margin="0,0,0,6" />
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditProtocolCommand}" CommandParameter="vless" AutomationProperties.Name="VLESS">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                        <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditConfigProtocol}" Value="vless">
+                                                <Setter Property="Background" Value="#2606B6D4" />
+                                                <Setter Property="BorderBrush" Value="#06B6D4" />
+                                                <Setter Property="Foreground" Value="#06B6D4" />
+                                                <Setter Property="FontWeight" Value="Bold" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="VLESS" FontSize="11" />
+                            </Button>
+
+                            <Button Grid.Column="2" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditProtocolCommand}" CommandParameter="vmess" AutomationProperties.Name="VMess">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                        <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditConfigProtocol}" Value="vmess">
+                                                <Setter Property="Background" Value="#26A855F7" />
+                                                <Setter Property="BorderBrush" Value="#A855F7" />
+                                                <Setter Property="Foreground" Value="#A855F7" />
+                                                <Setter Property="FontWeight" Value="Bold" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="VMess" FontSize="11" />
+                            </Button>
+
+                            <Button Grid.Column="4" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditProtocolCommand}" CommandParameter="trojan" AutomationProperties.Name="Trojan">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                        <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditConfigProtocol}" Value="trojan">
+                                                <Setter Property="Background" Value="#26F59E0B" />
+                                                <Setter Property="BorderBrush" Value="#F59E0B" />
+                                                <Setter Property="Foreground" Value="#F59E0B" />
+                                                <Setter Property="FontWeight" Value="Bold" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="Trojan" FontSize="11" />
+                            </Button>
+
+                            <Button Grid.Column="6" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditProtocolCommand}" CommandParameter="shadowsocks" AutomationProperties.Name="SS">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                        <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditConfigProtocol}" Value="shadowsocks">
+                                                <Setter Property="Background" Value="#2622C55E" />
+                                                <Setter Property="BorderBrush" Value="#22C55E" />
+                                                <Setter Property="Foreground" Value="#22C55E" />
+                                                <Setter Property="FontWeight" Value="Bold" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="SS" FontSize="11" />
+                            </Button>
+                        </Grid>
+
+                        
+                        <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_PROFILENAME}" Margin="0,0,0,4" />
+                        <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigName, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{DynamicResource Loc_egFrankfurtHighSpeed}" Height="38" Margin="0,0,0,10" AutomationProperties.Name="{DynamicResource Loc_PROFILENAME}" />
+
+                        
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="3*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_v2rayServerAddress}" Margin="0,0,0,4" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigAddress, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{DynamicResource Loc_egexamplecomor1234}" Height="38" AutomationProperties.Name="{DynamicResource Loc_v2rayServerAddress}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_v2rayPort}" Margin="0,0,0,4" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigPort, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="443" Height="38" HorizontalContentAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_v2rayPort}" />
+                            </StackPanel>
+                        </Grid>
+
+                        
+                        <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_USERIDUUIDPASSWORD}" Margin="0,0,0,4" />
+                        <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigUserId, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{DynamicResource Loc_UUIDorpasswordkey}" Height="38" Margin="0,0,0,10" AutomationProperties.Name="{DynamicResource Loc_USERIDUUIDPASSWORD}" />
+
+                        
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_SECURITY}" Margin="0,0,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditSecurityCommand}" CommandParameter="reality" AutomationProperties.Name="Reality">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding EditConfigSecurity}" Value="reality">
+                                                        <Setter Property="Background" Value="#26A855F7" />
+                                                        <Setter Property="BorderBrush" Value="#A855F7" />
+                                                        <Setter Property="Foreground" Value="#A855F7" />
+                                                        <Setter Property="FontWeight" Value="Bold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="Reality" FontSize="10.5" />
+                                    </Button>
+                                    <Button Grid.Column="2" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditSecurityCommand}" CommandParameter="tls" AutomationProperties.Name="TLS">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding EditConfigSecurity}" Value="tls">
+                                                        <Setter Property="Background" Value="#2606B6D4" />
+                                                        <Setter Property="BorderBrush" Value="#06B6D4" />
+                                                        <Setter Property="Foreground" Value="#06B6D4" />
+                                                        <Setter Property="FontWeight" Value="Bold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="TLS" FontSize="10.5" />
+                                    </Button>
+                                    <Button Grid.Column="4" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditSecurityCommand}" CommandParameter="none" AutomationProperties.Name="{DynamicResource Loc_None}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding EditConfigSecurity}" Value="none">
+                                                        <Setter Property="Background" Value="#2094A3B8" />
+                                                        <Setter Property="BorderBrush" Value="#94A3B8" />
+                                                        <Setter Property="Foreground" Value="#94A3B8" />
+                                                        <Setter Property="FontWeight" Value="Bold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="{DynamicResource Loc_None}" FontSize="10.5" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_tabNetwork}" Margin="0,0,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditNetworkCommand}" CommandParameter="tcp" AutomationProperties.Name="TCP">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding EditConfigNetwork}" Value="tcp">
+                                                        <Setter Property="Background" Value="#2606B6D4" />
+                                                        <Setter Property="BorderBrush" Value="#06B6D4" />
+                                                        <Setter Property="Foreground" Value="#06B6D4" />
+                                                        <Setter Property="FontWeight" Value="Bold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="TCP" FontSize="10.5" />
+                                    </Button>
+                                    <Button Grid.Column="2" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditNetworkCommand}" CommandParameter="ws" AutomationProperties.Name="WS">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding EditConfigNetwork}" Value="ws">
+                                                        <Setter Property="Background" Value="#2606B6D4" />
+                                                        <Setter Property="BorderBrush" Value="#06B6D4" />
+                                                        <Setter Property="Foreground" Value="#06B6D4" />
+                                                        <Setter Property="FontWeight" Value="Bold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="WS" FontSize="10.5" />
+                                    </Button>
+                                    <Button Grid.Column="4" Height="30" Padding="0" MinWidth="0" Command="{Binding SetEditNetworkCommand}" CommandParameter="grpc" AutomationProperties.Name="gRPC">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource UI.GhostButton}">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding EditConfigNetwork}" Value="grpc">
+                                                        <Setter Property="Background" Value="#2606B6D4" />
+                                                        <Setter Property="BorderBrush" Value="#06B6D4" />
+                                                        <Setter Property="Foreground" Value="#06B6D4" />
+                                                        <Setter Property="FontWeight" Value="Bold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="gRPC" FontSize="10.5" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+
+                        
+                        <StackPanel Visibility="{Binding IsTlsOrRealitySecurity, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,10">
+                            <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_SNISERVERNAME}" Margin="0,0,0,4" />
+                            <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigSni, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{DynamicResource Loc_egwwwcloudflarecom}" Height="38" AutomationProperties.Name="{DynamicResource Loc_SNISERVERNAME}" />
+                        </StackPanel>
+
+                        
+                        <Grid Visibility="{Binding IsRealitySecurity, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_REALITYPUBLICKEY}" Margin="0,0,0,4" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigPublicKey, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{DynamicResource Loc_Base64publickey}" Height="38" AutomationProperties.Name="{DynamicResource Loc_REALITYPUBLICKEY}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="SHORT ID" Margin="0,0,0,4" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigShortId, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{DynamicResource Loc_HexshortID}" Height="38" AutomationProperties.Name="{DynamicResource Loc_HexshortID}" />
+                            </StackPanel>
+                        </Grid>
+
+                        
+                        <StackPanel Visibility="{Binding IsWsOrGrpcNetwork, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,10">
+                            <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_PATHSERVICENAME}" Margin="0,0,0,4" />
+                            <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding EditConfigPath, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="/path or grpc-service" Height="38" AutomationProperties.Name="{DynamicResource Loc_PATHSERVICENAME}" />
+                        </StackPanel>
+
+                        
+                        <TextBlock Text="{Binding EditConfigFormError}" Visibility="{Binding HasEditConfigFormError, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.LiveSetting="Assertive" Foreground="#EF4444" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,10" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0" Style="{StaticResource UI.GhostButton}" Content="{DynamicResource Loc_dialogCancel}" FontWeight="SemiBold" Command="{Binding CloseAddEditConfigDialogCommand}" />
+
+                    <Button Grid.Column="2" Style="{StaticResource UI.PrimaryButton}" Content="{DynamicResource Loc_SaveConfiguration}" FontWeight="Bold" Command="{Binding SaveAddEditConfigCommand}" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Border>
+    </Grid>
+</Border>
+</Window>

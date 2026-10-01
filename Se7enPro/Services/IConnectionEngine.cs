@@ -7,14 +7,13 @@ namespace Se7enPro.Services;
 
 public interface IConnectionEngine
 {
-
-    ConnectionMethod Method { get; }
+        ConnectionMethod Method { get; }
 
     ConnectionState State { get; }
 
-    int SocksProxyPort { get; }
+        int SocksProxyPort { get; }
 
-    int HttpProxyPort { get; }
+        int HttpProxyPort { get; }
 
     string ClientRegion { get; }
     string ConnectedServerRegion { get; }
@@ -29,7 +28,7 @@ public interface IConnectionEngine
     int ConnectProgressPercent { get; }
     string ConnectProgressText { get; }
 
-    IReadOnlyList<string> CoreProcessNames { get; }
+        IReadOnlyList<string> CoreProcessNames { get; }
 
     event EventHandler<ConnectionState>? StateChanged;
     event EventHandler<Notice>? NoticeReceived;
@@ -40,6 +39,5 @@ public interface IConnectionEngine
 
     Task StartAsync();
     Task StopAsync();
-
     void CancelConnecting();
 }

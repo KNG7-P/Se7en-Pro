@@ -27,6 +27,8 @@ public sealed class SystemProxyService : ISystemProxyService
 
     public SystemProxyService(ILogger<SystemProxyService> logger) => _logger = logger;
 
+    public bool IsApplied => File.Exists(BackupPath);
+
     public void Set(int httpProxyPort)
     {
         try
@@ -45,6 +47,10 @@ public sealed class SystemProxyService : ISystemProxyService
                     ProxyEnable = key.GetValue("ProxyEnable") as int? ?? 0,
                     ProxyServer = key.GetValue("ProxyServer") as string ?? "",
                     ProxyOverride = key.GetValue("ProxyOverride") as string ?? "",
+                    
+                    
+                    
+                    AutoConfigUrl = key.GetValue("AutoConfigURL") as string ?? "",
                 };
                 WriteBackup(backup);
             }
@@ -53,6 +59,11 @@ public sealed class SystemProxyService : ISystemProxyService
             key.SetValue("ProxyServer", $"127.0.0.1:{httpProxyPort}", RegistryValueKind.String);
 
             key.SetValue("ProxyOverride", "<local>", RegistryValueKind.String);
+
+            
+            
+            
+            try { key.DeleteValue("AutoConfigURL", throwOnMissingValue: false); } catch { }
 
             NotifyWinINet();
             _logger.LogInformation("System proxy set to 127.0.0.1:{Port}", httpProxyPort);
@@ -90,10 +101,26 @@ public sealed class SystemProxyService : ISystemProxyService
                 {
                     key.SetValue("ProxyOverride", backup.ProxyOverride, RegistryValueKind.String);
                 }
+
+                
+                if (string.IsNullOrEmpty(backup.AutoConfigUrl))
+                {
+                    try { key.DeleteValue("AutoConfigURL", throwOnMissingValue: false); } catch { }
+                }
+                else
+                {
+                    key.SetValue("AutoConfigURL", backup.AutoConfigUrl, RegistryValueKind.String);
+                }
+
                 TryDeleteBackup();
             }
             else
             {
+                
+                
+                
+                _logger.LogWarning(
+                    "No proxy backup found; disabling the system proxy without touching the rest of the configuration");
                 key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
             }
 
@@ -156,6 +183,7 @@ public sealed class SystemProxyService : ISystemProxyService
         [JsonPropertyName("proxyEnable")] public int ProxyEnable { get; set; }
         [JsonPropertyName("proxyServer")] public string ProxyServer { get; set; } = "";
         [JsonPropertyName("proxyOverride")] public string ProxyOverride { get; set; } = "";
+                [JsonPropertyName("autoConfigUrl")] public string AutoConfigUrl { get; set; } = "";
     }
 
     private void WriteBackup(ProxyBackup backup)

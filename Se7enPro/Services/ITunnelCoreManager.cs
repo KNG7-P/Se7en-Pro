@@ -28,10 +28,6 @@ public interface ITunnelCoreManager
 
     long BytesReceived { get; }
 
-    double DownSpeedBytesPerSec { get; }
-
-    double UpSpeedBytesPerSec { get; }
-
     int ConnectProgressPercent { get; }
 
     string ConnectProgressText { get; }
@@ -39,6 +35,8 @@ public interface ITunnelCoreManager
     event EventHandler<ConnectionState>? StateChanged;
     event EventHandler<Notice>? NoticeReceived;
     event EventHandler<string>? LogLineAppended;
+
+        event EventHandler<bool>? ConnectionIntentChanged;
 
     event EventHandler? BytesTransferredChanged;
 
@@ -50,4 +48,6 @@ public interface ITunnelCoreManager
     Task StopAsync();
 
     Task RestartAsync();
+
+    void CancelInFlightConnection();
 }

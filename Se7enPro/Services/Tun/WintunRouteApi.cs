@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -16,19 +15,21 @@ internal static class WintunRouteApi
     private const ushort AfInet = 2;
     private const ushort AfInet6 = 23;
     private const uint NoError = 0;
-    private const uint ErrorObjectAlreadyExists = 5010;
+    private const uint ErrorObjectAlreadyExists = 5010; 
     private const uint ErrorNotFound = 1168;
     private const byte IpDadStatePreferred = 4;
     private const uint Infinite32 = 0xFFFFFFFF;
     private const long Infinite64 = unchecked((long)0xFFFFFFFFFFFFFFFF);
 
-    [StructLayout(LayoutKind.Sequential, Pack = 4, Size = 28)]
+    
+
+        [StructLayout(LayoutKind.Sequential, Pack = 4, Size = 28)]
     internal struct SockaddrInet
     {
         public ushort Family;
         public ushort Port;
-        public ulong Low;
-        public ulong High;
+        public ulong Low;      
+        public ulong High;     
         public uint ScopeId;
 
         public static SockaddrInet FromIp(IPAddress ip)
@@ -57,7 +58,7 @@ internal static class WintunRouteApi
         public byte PrefixLength;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+        [StructLayout(LayoutKind.Sequential)]
     internal struct MibUnicastIpAddressRow
     {
         public SockaddrInet Address;
@@ -71,7 +72,7 @@ internal static class WintunRouteApi
         public uint ZoneScope;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+        [StructLayout(LayoutKind.Sequential)]
     internal struct MibIpforwardRow2
     {
         public ulong InterfaceLuid;
@@ -107,6 +108,8 @@ internal static class WintunRouteApi
     [DllImport("dnsapi.dll", SetLastError = false)]
     private static extern bool DnsFlushResolverCache();
 
+    
+
     public static NetworkInterface? FindAdapter(string name)
     {
         try
@@ -125,7 +128,9 @@ internal static class WintunRouteApi
         ?? nic.GetIPProperties().GetIPv6Properties()?.Index
         ?? 0;
 
-    public static void SetAdapterIpAddress(int ifIndex, IPAddress ip, byte prefixLen)
+    
+
+        public static void SetAdapterIpAddress(int ifIndex, IPAddress ip, byte prefixLen)
     {
         var row = new MibUnicastIpAddressRow
         {
@@ -147,26 +152,22 @@ internal static class WintunRouteApi
         }
     }
 
-    public sealed record RouteEntry(int IfIndex, IPAddress Destination, byte Prefix, IPAddress NextHop, uint Metric);
+        public sealed record RouteEntry(int IfIndex, IPAddress Destination, byte Prefix, IPAddress NextHop, uint Metric);
 
-    public static RouteEntry? AddRoute(
+    public static RouteEntry AddRoute(
         int ifIndex, IPAddress destination, byte prefix, IPAddress nextHop, uint metric = 0)
     {
         var row = BuildRouteRow(ifIndex, destination, prefix, nextHop, metric);
         var rc = CreateIpForwardEntry2(ref row);
-        if (rc == NoError)
-        {
-            return new RouteEntry(ifIndex, destination, prefix, nextHop, metric);
-        }
-        if (rc != ErrorObjectAlreadyExists)
+        if (rc != NoError && rc != ErrorObjectAlreadyExists)
         {
             throw new InvalidOperationException(
                 $"CreateIpForwardEntry2({destination}/{prefix} via {nextHop}) failed with Win32 error {rc}");
         }
-        return null;
+        return new RouteEntry(ifIndex, destination, prefix, nextHop, metric);
     }
 
-    public static void DeleteRoute(RouteEntry entry)
+        public static void DeleteRoute(RouteEntry entry)
     {
         var row = BuildRouteRow(entry.IfIndex, entry.Destination, entry.Prefix, entry.NextHop, entry.Metric);
         var rc = DeleteIpForwardEntry2(ref row);
@@ -194,11 +195,11 @@ internal static class WintunRouteApi
             ValidLifetime = Infinite32,
             PreferredLifetime = Infinite32,
             Metric = metric,
-            Protocol = 3,
+            Protocol = 3, 
         };
     }
 
-    public static IPAddress NormalizePrefix(IPAddress destination, byte prefix)
+        public static IPAddress NormalizePrefix(IPAddress destination, byte prefix)
     {
         var bytes = destination.GetAddressBytes();
         if (bytes.Length is not (4 or 16) || prefix > bytes.Length * 8) return destination;
@@ -219,7 +220,7 @@ internal static class WintunRouteApi
         try { DnsFlushResolverCache(); } catch { }
     }
 
-    public static bool IsOwnTunAdapter(NetworkInterface nic)
+        public static bool IsOwnTunAdapter(NetworkInterface nic)
     {
         var desc = nic.Description ?? "";
         return nic.Name.IndexOf(TunInterfaceNameConst, StringComparison.OrdinalIgnoreCase) >= 0
@@ -229,6 +230,8 @@ internal static class WintunRouteApi
     }
 
     private const string TunInterfaceNameConst = "se7en_tun";
+
+    
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct MibTcpRowOwnerPid
@@ -303,44 +306,79 @@ internal static class WintunRouteApi
 
     public sealed record ActiveTcpConn(IPAddress RemoteIp, int Pid, MibTcpRowOwnerPid Raw);
 
-    public static List<ActiveTcpConn> GetActiveTcpConnections()
+        public static List<ActiveTcpConn> GetActiveTcpConnections()
     {
         var list = new List<ActiveTcpConn>();
         int bufferSize = 0;
-
-        uint res = GetExtendedTcpTable(IntPtr.Zero, ref bufferSize, true, 2, TcpTableClass.TcpTableOwnerPidAll, 0);
+        
+        GetExtendedTcpTable(IntPtr.Zero, ref bufferSize, true, 2, TcpTableClass.TcpTableOwnerPidAll, 0);
         if (bufferSize <= 0) return list;
 
-        IntPtr pTable = Marshal.AllocHGlobal(bufferSize);
-        try
+        
+        
+        
+        
+        
+        const int errorInsufficientBuffer = 122;
+        for (int attempt = 0; attempt < 4; attempt++)
         {
-            res = GetExtendedTcpTable(pTable, ref bufferSize, true, 2, TcpTableClass.TcpTableOwnerPidAll, 0);
-            if (res != 0) return list;
-
-            int numEntries = Marshal.ReadInt32(pTable);
-            IntPtr rowPtr = IntPtr.Add(pTable, 4);
-            int rowSize = Marshal.SizeOf<MibTcpRowOwnerPid>();
-
-            for (int i = 0; i < numEntries; i++)
+            IntPtr pTable = Marshal.AllocHGlobal(bufferSize);
+            try
             {
-                var row = Marshal.PtrToStructure<MibTcpRowOwnerPid>(rowPtr);
-                if (row.RemoteAddr != 0 && row.OwningPid > 4)
+                var needed = bufferSize;
+                var res = GetExtendedTcpTable(pTable, ref needed, true, 2, TcpTableClass.TcpTableOwnerPidAll, 0);
+                if (res == errorInsufficientBuffer && needed > bufferSize)
                 {
-                    var ip = new IPAddress(BitConverter.GetBytes(row.RemoteAddr));
-                    list.Add(new ActiveTcpConn(ip, (int)row.OwningPid, row));
+                    bufferSize = needed;
+                    continue;   
                 }
-                rowPtr = IntPtr.Add(rowPtr, rowSize);
+                if (res != 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[wintun] GetExtendedTcpTable failed: {res}");
+                    return list;
+                }
+
+                int numEntries = Marshal.ReadInt32(pTable);
+
+                int rowSize = Marshal.SizeOf<MibTcpRowOwnerPid>();
+
+                
+                
+                
+                
+                int usable = Math.Min(numEntries, Math.Max(0, (bufferSize - sizeof(int)) / rowSize));
+
+                for (int i = 0; i < usable; i++)
+                {
+                    IntPtr rowPtr = IntPtr.Add(pTable, sizeof(int) + (i * rowSize));
+                    var row = Marshal.PtrToStructure<MibTcpRowOwnerPid>(rowPtr);
+                    if (row.RemoteAddr != 0 && row.OwningPid > 4)
+                    {
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        var ip = new IPAddress(BitConverter.GetBytes(row.RemoteAddr));
+                        list.Add(new ActiveTcpConn(ip, (int)row.OwningPid, row));
+                    }
+                }
+                break;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(pTable);
             }
         }
-        catch { }
-        finally
-        {
-            Marshal.FreeHGlobal(pTable);
-        }
+
         return list;
     }
 
-    public static string? TryGetProcessPath(int pid)
+        public static string? TryGetProcessPath(int pid)
     {
         if (pid <= 4) return null;
         IntPtr hProc = OpenProcess(0x1000 , false, pid);
@@ -362,7 +400,7 @@ internal static class WintunRouteApi
         }
     }
 
-    public static void ResetLocalLoopbackConnections(params int[] ports)
+        public static void ResetLocalLoopbackConnections(params int[] ports)
     {
         if (ports is null || ports.Length == 0) return;
         try
@@ -370,16 +408,6 @@ internal static class WintunRouteApi
             var conns = GetActiveTcpConnections();
             foreach (var conn in conns)
             {
-                var pid = conn.Pid;
-                var fullPath = TryGetProcessPath(pid);
-                var fileName = string.IsNullOrEmpty(fullPath) ? null : Path.GetFileName(fullPath);
-                if (!string.IsNullOrEmpty(fileName) &&
-                    EngineProcessNames.All.Any(e => string.Equals(e, fileName, StringComparison.OrdinalIgnoreCase)))
-                {
-
-                    continue;
-                }
-
                 var remotePort = (ushort)IPAddress.NetworkToHostOrder((short)conn.Raw.RemotePort);
                 var localPort = (ushort)IPAddress.NetworkToHostOrder((short)conn.Raw.LocalPort);
                 if (ports.Contains((int)remotePort) || ports.Contains((int)localPort))

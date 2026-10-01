@@ -1,0 +1,155 @@
+<Window x:Class="Se7enPro.Views.AddSiteDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" Title="{DynamicResource Loc_splitAddRoutingRule}" Width="500" SizeToContent="Height" WindowStartupLocation="CenterOwner" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False" FontFamily="{StaticResource UI.FontFamily}" TextElement.Foreground="{DynamicResource TextPrimaryBrush}" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Grayscale" UseLayoutRounding="True">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="4" CornerRadius="18" GlassFrameThickness="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <Style x:Key="SegmentRadioStyle" TargetType="RadioButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="8,4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2200D4FF" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#8000D4FF" />
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="1" />
+                                <Setter Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsChecked" Value="True" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="#3300D4FF" />
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22" Margin="12">
+        <StackPanel>
+            
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10" Background="#1A00D4FF" BorderBrush="#4000D4FF" BorderThickness="1" Margin="0,0,12,0">
+                    <materialDesign:PackIcon Kind="LinkPlus" Width="20" Height="20" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Loc_splitAddRoutingRule}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="{DynamicResource Loc_EnteradomainhostnameIPaddressorCID}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <Button Grid.Column="2" Style="{StaticResource UI.ModalCloseButton}" VerticalAlignment="Top" ToolTip="{DynamicResource Loc_close}" Click="OnCancelClicked" AutomationProperties.Name="{DynamicResource Loc_close}">
+                    <materialDesign:PackIcon Kind="WindowClose" Width="14" Height="14" />
+                </Button>
+            </Grid>
+
+            
+            <Border Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="10" Padding="3" Margin="0,0,0,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <RadioButton x:Name="DomainRadio" Grid.Column="0" GroupName="RuleType" IsChecked="True" Checked="OnRuleTypeChanged" Style="{StaticResource SegmentRadioStyle}" AutomationProperties.Name="{DynamicResource Loc_DomainHost}">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <materialDesign:PackIcon Kind="Web" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{DynamicResource Loc_DomainHost}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="IpRadio" Grid.Column="1" GroupName="RuleType" Checked="OnRuleTypeChanged" Style="{StaticResource SegmentRadioStyle}" AutomationProperties.Name="{DynamicResource Loc_IPSubnet}">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <materialDesign:PackIcon Kind="IpNetwork" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{DynamicResource Loc_IPSubnet}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+                    </RadioButton>
+                </Grid>
+            </Border>
+
+            
+            <TextBlock x:Name="FieldLabel" Text="{DynamicResource Loc_DOMAINORHOSTNAME}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" />
+
+            
+            <Grid Margin="0,0,0,10">
+                <TextBox x:Name="TargetInput" Style="{StaticResource UI.CustomTextBox}" Height="42" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="13" TextChanged="OnInputTextChanged" KeyDown="OnInputKeyDown" materialDesign:HintAssist.Hint="{DynamicResource Loc_egexamplecomorapigithubcom}" AutomationProperties.Name="{DynamicResource Loc_egexamplecomorapigithubcom}" />
+            </Grid>
+
+            
+            <CheckBox x:Name="SubdomainsCheckBox" Style="{StaticResource UI.DarkCheckBox}" IsChecked="True" Margin="0,0,0,10" ToolTip="{DynamicResource Loc_Wildcardwillautomaticallymatchalls}" AutomationProperties.Name="{DynamicResource Loc_Includeallsubdomainsdomain}">
+                <TextBlock Text="{DynamicResource Loc_Includeallsubdomainsdomain}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" />
+            </CheckBox>
+
+            
+            <Border x:Name="ResolvedIpBorder" Background="#1510B981" BorderBrush="#4010B981" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,10" Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <materialDesign:PackIcon Grid.Column="0" Kind="CheckCircleOutline" Width="15" Height="15" Foreground="{StaticResource Brand.SuccessBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_ResolvedIPv4}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="ResolvedIpText" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="11.5" FontWeight="Bold" AutomationProperties.LiveSetting="Polite" Foreground="{StaticResource Brand.SuccessBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            
+            <Border x:Name="ErrorBorder" Background="#1AEF4444" BorderBrush="#40EF4444" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,14" Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <materialDesign:PackIcon Grid.Column="0" Kind="AlertCircleOutline" Width="15" Height="15" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock x:Name="ErrorText" Grid.Column="1" FontSize="11.5" Foreground="{StaticResource DangerBrush}" AutomationProperties.LiveSetting="Assertive" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                
+                <Button x:Name="DnsRow" Grid.Column="0" Style="{StaticResource UI.GhostButton}" Padding="14,0" Click="OnResolveDnsClicked" ToolTip="{DynamicResource Loc_LookupIPv4addressofthisdomain}" AutomationProperties.Name="{DynamicResource Loc_splitResolveDns}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="Dns" Width="14" Height="14" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="{DynamicResource Loc_splitResolveDns}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                
+                <Button Grid.Column="2" Style="{StaticResource UI.DialogCancelButton}" Content="{DynamicResource Loc_dialogCancel}" Padding="18,0" MinWidth="88" Margin="0,0,10,0" VerticalAlignment="Center" Click="OnCancelClicked" IsCancel="True" />
+
+                <Button Grid.Column="3" Style="{StaticResource UI.PrimaryButton}" Content="{DynamicResource Loc_splitAddRuleBtn}" Padding="22,0" MinWidth="110" VerticalAlignment="Center" Click="OnAddClicked" IsDefault="True" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>

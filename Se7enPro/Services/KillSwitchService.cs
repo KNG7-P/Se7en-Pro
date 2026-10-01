@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Models;
 
@@ -10,19 +9,31 @@ namespace Se7enPro.Services;
 
 public sealed class KillSwitchService : IKillSwitchService, IDisposable
 {
-    private const string RuleName = "Se7enPro_KillSwitch_Block";
-    private const string RuleNameV6 = "Se7enPro_KillSwitch_Block_v6";
-
-    private const string BlockedRemoteV4 =
-        "0.0.0.0-9.255.255.255,11.0.0.0-126.255.255.255,128.0.0.0-172.15.255.255,"
-        + "172.32.0.0-192.167.255.255,192.169.0.0-255.255.255.255";
-
-    private const string BlockedRemoteV6 = "2000::/3";
+    private const string RuleNameV4 = "Se7enPro_KillSwitch_BlockV4";
+    private const string RuleNameV6 = "Se7enPro_KillSwitch_BlockV6";
+    private const string RuleNameDnsV4 = "Se7enPro_KillSwitch_BlockDnsV4";
+    private const string RuleNameDnsV6 = "Se7enPro_KillSwitch_BlockDnsV6";
 
     private readonly ILogger<KillSwitchService> _logger;
     private readonly ISettingsService _settings;
     private readonly ITunnelCoreManager _tunnel;
+
+    
+    
+    
+    
+    private readonly object _ruleLock = new();
+
+    
     private volatile bool _isBlocked;
+
+    
+    
+    
+    private volatile bool _userWantsConnection;
+
+    private bool _subscribed;
+    private bool _disposed;
 
     public KillSwitchService(
         ILogger<KillSwitchService> logger,
@@ -33,130 +44,212 @@ public sealed class KillSwitchService : IKillSwitchService, IDisposable
         _settings = settings;
         _tunnel = tunnel;
 
-        _settings.SettingsChanged += (_, _) => Reconcile();
-        _tunnel.StateChanged += (_, _) => Reconcile();
+        
+        
+        _userWantsConnection = tunnel.State is not (ConnectionState.Disconnected);
+        Subscribe();
+        Reconcile();
+    }
 
-        Enqueue(RemoveBlockRules);
+    private void Subscribe()
+    {
+        if (_subscribed) return;
+        _subscribed = true;
+        _settings.SettingsChanged += OnSettingsChanged;
+        _tunnel.StateChanged += OnTunnelStateChanged;
+        _tunnel.ConnectionIntentChanged += OnConnectionIntentChanged;
+    }
+
+    private void OnSettingsChanged(object? sender, EventArgs e) => Reconcile();
+
+    private void OnTunnelStateChanged(object? sender, ConnectionState state) => Reconcile();
+
+    private void OnConnectionIntentChanged(object? sender, bool wantsConnection)
+    {
+        _userWantsConnection = wantsConnection;
+        Reconcile();
     }
 
     public bool IsActive => _isBlocked;
 
-    public void Arm() => Reconcile();
+        public void Arm()
+    {
+        _userWantsConnection = true;
+        Reconcile();
+    }
 
-    public void Disarm() => Enqueue(RemoveBlockRules);
+        public void Disarm()
+    {
+        _userWantsConnection = false;
+        lock (_ruleLock)
+        {
+            RemoveBlockRules();
+        }
+    }
 
     public void Reconcile()
     {
+        if (_disposed) return;
+
         var enabled = _settings.Settings.KillSwitchEnabled;
-        var state = _tunnel.State;
+        var connected = _tunnel.State == ConnectionState.Connected;
 
-        if (!enabled)
+        
+        
+        
+        var shouldBlock = enabled && _userWantsConnection && !connected;
+
+        lock (_ruleLock)
         {
-            if (_isBlocked) Disarm();
-            return;
-        }
-
-        switch (state)
-        {
-            case ConnectionState.Error:
-                Enqueue(ApplyBlockRules);
-                break;
-
-            case ConnectionState.Connecting:
-            case ConnectionState.Connected:
-            case ConnectionState.Disconnected:
-            case ConnectionState.Disconnecting:
-                if (_isBlocked) Disarm();
-                break;
+            if (shouldBlock)
+            {
+                ApplyBlockRules();
+            }
+            else if (_isBlocked)
+            {
+                RemoveBlockRules();
+            }
         }
     }
 
-    private void Enqueue(Func<Task> op)
-    {
-        lock (_chainLock)
-        {
-            _chain = _chain.ContinueWith(
-                async _ => { try { await op(); } catch { } },
-                CancellationToken.None,
-                TaskContinuationOptions.None,
-                TaskScheduler.Default).Unwrap();
-        }
-    }
-
-    private readonly object _chainLock = new();
-    private Task _chain = Task.CompletedTask;
-
-    private async Task ApplyBlockRules()
+    private void ApplyBlockRules()
     {
         if (_isBlocked) return;
 
-        _logger.LogWarning("KillSwitch: blocking outbound internet traffic to prevent an IP leak.");
+        
+        
+        
+        var v4 =
+            "0.0.0.0-9.255.255.255," +
+            "11.0.0.0-126.255.255.255," +
+            "128.0.0.0-172.15.255.255," +
+            "172.32.0.0-192.167.255.255," +
+            "192.169.0.0-255.255.255.255";
 
-        var v4 = await RunNetshAsync(
-            "advfirewall", "firewall", "add", "rule",
-            $"name={RuleName}", "dir=out", "action=block",
-            $"remoteip={BlockedRemoteV4}", "profile=any", "enable=yes");
+        
+        
+        
+        var v6 = "::-::,2001::-2001:db8:ffff:ffff:ffff:ffff:ffff:ffff:ffff," +
+                 "2001:db8:1::-2001:db8:ffff:ffff:ffff:ffff:ffff:ffff," +
+                 "2002::-3fff:ffff:ffff:ffff:ffff:ffff:ffff:ffff," +
+                 "3fff::-fcff:ffff:ffff:ffff:ffff:ffff:ffff:ffff," +
+                 "fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff";
 
-        var v6 = await RunNetshAsync(
-            "advfirewall", "firewall", "add", "rule",
-            $"name={RuleNameV6}", "dir=out", "action=block",
-            $"remoteip={BlockedRemoteV6}", "profile=any", "enable=yes");
+        var ok = true;
+        ok &= RunNetsh($"advfirewall firewall add rule name=\"{RuleNameV4}\" dir=out action=block " +
+                       $"remoteip={v4} enable=yes profile=any");
+        ok &= RunNetsh($"advfirewall firewall add rule name=\"{RuleNameV6}\" dir=out action=block " +
+                       $"remoteip={v6} enable=yes profile=any");
+        
+        
+        ok &= RunNetsh($"advfirewall firewall add rule name=\"{RuleNameDnsV4}\" dir=out action=block " +
+                       "protocol=UDP remoteport=53");
+        ok &= RunNetsh($"advfirewall firewall add rule name=\"{RuleNameDnsV6}\" dir=out action=block " +
+                       "protocol=UDP remoteport=53");
 
-        if (v4 || v6) _isBlocked = true;
-
-        if (!v4)
+        if (!ok)
         {
-            _logger.LogError("KillSwitch: the IPv4 block rule could not be installed; "
-                             + "traffic is NOT being blocked.");
+            
+            
+            
+            _logger.LogError(
+                "KillSwitch: one or more block rules were refused by Windows Firewall. " +
+                "Traffic is NOT blocked. Run Se7en Pro as Administrator and check that " +
+                "the Windows Firewall service is enabled.");
+            RemoveBlockRules();
+            return;
         }
-        if (!v6)
-        {
 
-            _logger.LogError("KillSwitch: the IPv6 block rule could not be installed; "
-                             + "IPv6 traffic may still bypass the tunnel.");
-        }
+        _isBlocked = true;
+        _logger.LogWarning("KillSwitch: outbound IPv4/IPv6 internet traffic blocked (no live tunnel).");
     }
 
-    private async Task RemoveBlockRules()
+    private void RemoveBlockRules()
     {
-        await RunNetshAsync("advfirewall", "firewall", "delete", "rule", $"name={RuleName}");
-        await RunNetshAsync("advfirewall", "firewall", "delete", "rule", $"name={RuleNameV6}");
+        var wasBlocked = _isBlocked;
         _isBlocked = false;
+        foreach (var rule in new[] { RuleNameV4, RuleNameV6, RuleNameDnsV4, RuleNameDnsV6 })
+        {
+            RunNetsh($"advfirewall firewall delete rule name=\"{rule}\"");
+        }
+        if (wasBlocked)
+        {
+            _logger.LogInformation("KillSwitch: outbound traffic released.");
+        }
     }
 
-    private static async Task<bool> RunNetshAsync(params string[] args)
+        private bool RunNetsh(string args)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "netsh.exe",
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
         try
         {
+            
+            
+            var netsh = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System), "netsh.exe");
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = netsh,
+                Arguments = args,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+
             using var p = Process.Start(psi);
             if (p is null) return false;
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            try { await p.WaitForExitAsync(timeout.Token); }
-            catch (OperationCanceledException)
+
+            
+            
+            
+            if (!p.WaitForExit(5000))
             {
                 try { p.Kill(entireProcessTree: true); } catch { }
+                _logger.LogWarning("KillSwitch: netsh timed out for \"{Args}\"", args);
                 return false;
             }
-            return p.ExitCode == 0;
+
+            var stdout = p.StandardOutput.ReadToEnd();
+            var stderr = p.StandardError.ReadToEnd();
+
+            if (p.ExitCode != 0)
+            {
+                _logger.LogWarning(
+                    "KillSwitch: netsh exited {Code} for \"{Args}\": {Err}{Out}",
+                    p.ExitCode, args, stderr.Trim(), stdout.Trim());
+                return false;
+            }
+
+            return true;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "KillSwitch: netsh failed for \"{Args}\"", args);
+            return false;
+        }
     }
 
     public void Dispose()
     {
-        Disarm();
-        Task pending;
-        lock (_chainLock) pending = _chain;
-        try { pending.Wait(TimeSpan.FromSeconds(10)); } catch { }
+        if (_disposed) return;
+        _disposed = true;
+
+        if (_subscribed)
+        {
+            _settings.SettingsChanged -= OnSettingsChanged;
+            _tunnel.StateChanged -= OnTunnelStateChanged;
+            _tunnel.ConnectionIntentChanged -= OnConnectionIntentChanged;
+            _subscribed = false;
+        }
+
+        
+        
+        
+        _userWantsConnection = false;
+        lock (_ruleLock)
+        {
+            RemoveBlockRules();
+        }
     }
 }

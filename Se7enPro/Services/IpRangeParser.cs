@@ -120,19 +120,24 @@ public static class IpRangeParser
                        ((uint)ipBytes[2] << 8) | (uint)ipBytes[3];
 
         var hostBits = 32 - prefix;
-        var size = hostBits == 32 ? uint.MaxValue : ((1u << hostBits));
-        if (size > CidrMaxHosts)
+        
+        
+        
+        ulong sizeU = hostBits == 32 ? (1UL << 32) : (1UL << hostBits);
+        if (sizeU > CidrMaxHosts)
         {
-            warnings.Add($"'{token}': /{prefix} has {size:N0} hosts, exceeds the per-range cap of {CidrMaxHosts:N0}");
+            warnings.Add($"'{token}': /{prefix} has {sizeU:N0} hosts, exceeds the per-range cap of {CidrMaxHosts:N0}");
             return;
         }
 
         var mask = hostBits == 32 ? 0u : ~((1u << hostBits) - 1u);
         baseAddr &= mask;
 
-        for (uint i = 0; i < size && result.Count < MaxEntries; i++)
+        
+        
+        for (ulong i = 0; i < sizeU && result.Count < MaxEntries; i++)
         {
-            var addr = baseAddr + i;
+            var addr = (uint)((ulong)baseAddr + i);
             AddUnique(result, seen, FormatIPv4(addr));
         }
     }
@@ -203,6 +208,15 @@ public static class IpRangeParser
         if (string.IsNullOrEmpty(s)) return false;
         if (!IPAddress.TryParse(s, out var parsed)) return false;
         if (parsed.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+
+        
+        
+        
+        
+        
+        var canonical = parsed.ToString();
+        if (!string.Equals(canonical, s.Trim(), StringComparison.Ordinal)) return false;
+
         addr = parsed;
         return true;
     }
@@ -217,7 +231,7 @@ public static class IpRangeParser
     private static string FormatIPv4(uint addr) =>
         string.Create(CultureInfo.InvariantCulture, $"{(byte)(addr >> 24)}.{(byte)(addr >> 16)}.{(byte)(addr >> 8)}.{(byte)addr}");
 
-    public readonly record struct CidrSegment(uint BaseAddr, uint Count);
+        public readonly record struct CidrSegment(uint BaseAddr, ulong Count);
 
     public static List<CidrSegment> ParseSegments(IEnumerable<string> cidrs, out ulong totalHosts)
     {
@@ -238,7 +252,7 @@ public static class IpRangeParser
             var baseAddr = ((uint)ipBytes[0] << 24) | ((uint)ipBytes[1] << 16) |
                            ((uint)ipBytes[2] << 8) | (uint)ipBytes[3];
             var hostBits = 32 - prefix;
-            uint size = hostBits == 32 ? uint.MaxValue : (1u << hostBits);
+            ulong size = hostBits == 32 ? (1UL << 32) : (1UL << hostBits);
             var mask = hostBits == 32 ? 0u : ~((1u << hostBits) - 1u);
             baseAddr &= mask;
             segs.Add(new CidrSegment(baseAddr, size));
@@ -269,7 +283,7 @@ public static class IpRangeParser
         var truncated = (ulong)requested > total
             || ((ulong)hardCap < total && (targetCount <= 0 || (ulong)targetCount > (ulong)hardCap));
 
-        var ips = new List<string>((int)Math.Min(actual, (ulong)int.MaxValue));
+        var ips = new List<string>((int)Math.Min(actual, 1_000_000));
         var lastReport = 0;
         var reportEvery = Math.Max(2000, (int)Math.Min(actual / 50, 50_000));
 
@@ -277,23 +291,27 @@ public static class IpRangeParser
         {
             foreach (var seg in segments)
             {
-                for (uint i = 0; i < seg.Count; i++)
+                
+                
+                for (ulong i = 0; i < seg.Count; i++)
                 {
                     ct.ThrowIfCancellationRequested();
-                    ips.Add(FormatIPv4(seg.BaseAddr + i));
+                    ips.Add(FormatIPv4((uint)((ulong)seg.BaseAddr + i)));
                     if (ips.Count - lastReport >= reportEvery)
                     {
                         lastReport = ips.Count;
                         progress?.Report(ips.Count);
                     }
-                    if (seg.Count == uint.MaxValue && i == uint.MaxValue) break;
                 }
             }
         }
         else
         {
             var rng = new Random();
-            var seen = new HashSet<uint>(capacity: (int)Math.Min(actual * 2, (ulong)int.MaxValue));
+            
+            
+            
+            var seen = new HashSet<uint>(capacity: (int)Math.Min(actual, 1_000_000));
 
             var prefix = new ulong[segments.Count];
             ulong running = 0;
@@ -351,7 +369,7 @@ public static class IpRangeParser
         return lo;
     }
 
-    public static StreamSource BuildStream(string? input)
+        public static StreamSource BuildStream(string? input)
     {
         var warnings = new List<string>();
         var entries = new List<StreamEntry>();
@@ -402,7 +420,7 @@ public static class IpRangeParser
             }
             var baseAddr = IPv4ToUInt(ipPart);
             var hostBits = 32 - prefix;
-            uint size = hostBits == 32 ? uint.MaxValue : (1u << hostBits);
+            ulong size = hostBits == 32 ? (1UL << 32) : (1UL << hostBits);
             var mask = hostBits == 32 ? 0u : ~((1u << hostBits) - 1u);
             baseAddr &= mask;
             entry = new StreamEntry(baseAddr, size);
@@ -465,7 +483,7 @@ public static class IpRangeParser
         return false;
     }
 
-    public readonly record struct StreamEntry(uint BaseAddr, uint Count);
+        public readonly record struct StreamEntry(uint BaseAddr, ulong Count);
 
     public sealed class StreamSource
     {
@@ -481,7 +499,7 @@ public static class IpRangeParser
             TotalHosts = totalHosts;
         }
 
-        public IEnumerable<string> Enumerate(CancellationToken ct = default)
+                public IEnumerable<string> Enumerate(CancellationToken ct = default)
         {
             foreach (var seg in _entries)
             {
@@ -491,12 +509,14 @@ public static class IpRangeParser
                     yield return FormatIPv4(seg.BaseAddr);
                     continue;
                 }
-                uint remaining = seg.Count;
-                uint addr = seg.BaseAddr;
+                
+                
+                ulong remaining = seg.Count;
+                ulong addr = seg.BaseAddr;
                 while (remaining > 0)
                 {
                     ct.ThrowIfCancellationRequested();
-                    yield return FormatIPv4(addr);
+                    yield return FormatIPv4((uint)addr);
                     remaining--;
                     if (remaining == 0) break;
                     addr++;

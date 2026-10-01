@@ -19,16 +19,14 @@ public sealed partial class WintunTunManager
             var socksPort = _tunnel.SocksProxyPort;
             var have = State is TunState.Starting or TunState.Running;
 
+            
+            
             var wantStart = systemWide
                 && tunnelState == ConnectionState.Connected
                 && socksPort > 0;
-
-            var wantKeep = wantStart
-                || (systemWide
-                    && have
-                    && socksPort > 0
-                    && !_catchAllGraceExpired
-                    && tunnelState == ConnectionState.Connecting);
+            var wantKeep = systemWide
+                && tunnelState is ConnectionState.Connected or ConnectionState.Connecting
+                && socksPort > 0;
 
             var splitHash = ComputeSplitHash(socksPort);
             WriteDiag($"reconcile: systemWide={systemWide} tunnel={tunnelState} socks={socksPort} "
@@ -41,7 +39,7 @@ public sealed partial class WintunTunManager
             }
             else if (wantStart && have && _activeSocksPort != socksPort)
             {
-
+                
                 WriteDiag($"socks port changed ({_activeSocksPort}→{socksPort}); restarting tun core");
                 await StopSupervisorAsync();
                 StartSupervisor(socksPort);
@@ -51,7 +49,8 @@ public sealed partial class WintunTunManager
                      && _activeSocksPort == socksPort
                      && _activeSplitHash != splitHash)
             {
-
+                
+                
                 WriteDiag("split rules changed; re-applying routes live");
                 await ReapplyRoutesAsync(socksPort);
                 _activeSplitHash = splitHash;
@@ -65,43 +64,11 @@ public sealed partial class WintunTunManager
                 SetState(TunState.Off, error: null);
             }
 
-            var isChainedConnecting = IsChainedMethod(_settings.Settings.ConnectionMethod)
-                && tunnelState == ConnectionState.Connecting
-                && !wantStart;
-
+            
+            
             if (State is TunState.Starting or TunState.Running)
             {
-                if (wantStart)
-                {
-                    if (!ResumeCatchAllRoutes())
-                    {
-                        WriteDiag("catch-all could not be fully restored; rebuilding the tun session");
-                        await StopSupervisorAsync();
-                        StartSupervisor(socksPort);
-                        _activeSplitHash = splitHash;
-                    }
-                }
-                else if (wantKeep && !isChainedConnecting)
-                {
-                    if (!_settings.Settings.KillSwitchEnabled)
-                    {
-                        SuspendCatchAllRoutes();
-                    }
-                    else
-                    {
-                        WriteDiag("kill switch enabled: keeping catch-all routes intact during re-dial to prevent leak");
-                    }
-                }
-                else if (wantKeep && isChainedConnecting)
-                {
-                    WriteDiag("chained session still establishing outer leg; TUN reconcile deferred until fully connected");
-                }
-
                 SuppressSystemProxy();
-            }
-            else if (!have && isChainedConnecting)
-            {
-                WriteDiag("chained outer still scanning; TUN bring-up deferred");
             }
         }
         catch (Exception ex)
@@ -119,30 +86,27 @@ public sealed partial class WintunTunManager
     {
         if (!AdminElevation.IsAdministrator())
         {
-            SetError("System-wide tunneling needs Administrator privileges. "
-                     + "Restart Se7en Pro as Administrator and try again.");
+            SetError(Loc.Of("System-wide tunneling needs Administrator privileges. "
+                     + "Restart Se7en Pro as Administrator and try again."));
             return;
         }
 
         var cts = new CancellationTokenSource();
+        _activeSocksPort = socksPort;
+        SetState(TunState.Starting, error: null);
+
         lock (_lock)
         {
             _supervisorCts?.Cancel();
             _supervisorCts = cts;
+            
+            
+            
+            
+            
+            
+            _supervisorTask = Task.Run(() => SuperviseAsync(socksPort, cts.Token));
         }
-
-        _activeSocksPort = socksPort;
-        SetState(TunState.Starting, error: null);
-        _supervisorTask = Task.Run(() => SuperviseAsync(socksPort, cts.Token));
-    }
-
-    private static bool IsChainedMethod(string? token)
-    {
-        if (string.IsNullOrWhiteSpace(token)) return false;
-        var t = token.Trim().ToLowerInvariant();
-        return t is "psiphon_over_warp" or "pow" or "chain"
-            or "tor_over_warp" or "tow"
-            or "psiphon_over_v2ray" or "pov" or "tor_over_v2ray" or "tov";
     }
 
     private async Task SuperviseAsync(int socksPort, CancellationToken ct)

@@ -1,12 +1,13 @@
 # =====================================================================
-#  Se7en Pro — .gitignore
+#  Se7en Pro - .gitignore
 # =====================================================================
 
-# ---- Build & Staging Output ----
+# ---- Build output ----
 [Bb]in/
 [Oo]bj/
 artifacts/
 publish/
+dist/
 build_staging/
 *.binlog
 *.exe.config
@@ -14,26 +15,31 @@ TestResults/
 Output/
 installers/
 
-# ---- Distribution & Archive Artifacts ----
+# ---- Distribution & archive artifacts ----
 *.zip
 *.7z
 *.tar.gz
+*.msi
+*.appinstaller
+installer/Output/
 
-# ---- Flutter ----
-Se7enFlutter/build/
-Se7enFlutter/.dart_tool/
-Se7enFlutter/.flutter-plugins-dependencies
-windows/flutter/ephemeral/
-**/windows/flutter/ephemeral/
+# ---- Injected build secrets (NEVER commit) ----
+Se7enPro/Services/BuildSecrets.g.cs
+Se7enPro/Services/EmbeddedValues.plaintext.json
 
-# ---- Sensitive / Local Server Entries & Configurations ----
-*.toml
-server_entries.bin
-server_entries.txt
+# ---- Sensitive / proprietary resources (NEVER commit) ----
+# Psiphon propagation channel + sponsor configuration, in any form.
 Se7enPro/Resources/server_entries.bin
 Se7enPro/Resources/server_entries.txt
+*.serverlist
+# WARP / Aether device identity and WireGuard private keys.
+*.toml
 Se7enPro/Resources/aether/*.toml
 Se7enFlutter/Resources/aether/*.toml
+
+# ---- Flutter (legacy 1.0.4 UI, no longer part of the client) ----
+Se7enFlutter/
+**/flutter/ephemeral/
 
 # ---- Visual Studio / Rider / VS Code / Android Studio ----
 .vs/
@@ -47,27 +53,50 @@ Se7enFlutter/Resources/aether/*.toml
 *.iml
 UpgradeLog*.htm
 
-# ---- AI Agents & Local Tooling State ----
+# ---- Security, Certificates & Local Secrets (NEVER commit) ----
+*.pfx
+*.p12
+*.cer
+*.snk
+*.key
+*.pem
+*.env
+*.env.*
+*.credentials
+credentials.json
+secrets.json
+appsettings*.local.json
+appsettings*.Development.json
+
+# ---- Local agent / tooling state ----
+.claude/
+.gemini/
+.kilo/
+.agent/
+scratch/
+.scratch/
 .cursorrules
 AGENTS.md
 GEMINI.md
-.claude/
-.kilo/
-.gemini/
-.agent/
-tools/
-Se7enPro/tools/
 
-# ---- Logs & Runtime State ----
+# ---- Logs & runtime state ----
 *.log
 
-# ---- OS Noise & Temp ----
+# ---- OS noise & temp ----
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+.DS_Store
 *.tmp
 *.bak
+*~
+
+# ---- Linux / non-Windows leftovers ----
+Se7enPro.Linux/
+Resources_linux/
+*.so
+*.so.*
 
 # ---- Python ----
 __pycache__/

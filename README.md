@@ -1,14 +1,16 @@
 <div align="center">
 
-<img src="Se7enFlutter/assets/app-icon.png" width="140" alt="Se7en Pro Logo">
+<img src="Se7enPro/Assets/app-icon.png" width="130" alt="Se7en Pro Logo">
 
 # 🛡️ Se7en Pro
 
-**Modern Flutter Multi-Protocol Windows Client & Anti-Censorship Suite**
+**Modern WPF Multi-Protocol Windows Client & Anti-Censorship Suite**
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x86%20%7C%20x64)-blue.svg?style=flat-square)](https://microsoft.com/windows)
-[![Framework](https://img.shields.io/badge/Framework-Flutter%20%7C%20.NET%208.0-purple.svg?style=flat-square)](https://flutter.dev/)
-[![Version](https://img.shields.io/badge/Version-v1.0.4-orange.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/releases)
+[![Framework](https://img.shields.io/badge/Framework-WPF%20%7C%20.NET%208.0-purple.svg?style=flat-square)](https://dotnet.microsoft.com/)
+[![UI](https://img.shields.io/badge/UI-Material%20Design%203-informational.svg?style=flat-square)](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit)
+[![Release](https://img.shields.io/badge/Release-Passing-brightgreen.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/actions/workflows/release.yml)
+[![Version](https://img.shields.io/badge/Version-v1.0.5-orange.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/releases)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
 [🇬🇧 English](#-english) | [🇮🇷 فارسی](#-فارسی) | [🇷🇺 Русский](#-русский) | [🇨🇳 中文](#-中文)
@@ -20,19 +22,21 @@
 ## 🏗️ Architecture
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                   Se7en Flutter GUI                    │
-│      (Glassmorphic Controls, Telemetry, Routing)       │
-└───────────────────────────┬────────────────────────────┘
-                            │ Named Pipes IPC
-┌───────────────────────────▼────────────────────────────┐
-│                    Se7enCore Daemon                    │
-│      (.NET 8 Backend Engine, Process Controller)       │
-├──────────────┬──────────────┬──────────────┬───────────┤
-│    Aether    │   Psiphon    │     Tor      │   SHARD   │
-│  (MASQUE v2/ │ (TunnelCore) │ (Onion Mesh) │  (Frag/   │
-│  WireGuard)  │              │              │  Subnode) │
-└──────────────┴──────────────┴──────────────┴───────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                              Se7enPro.exe                              │
+│         Single-Process Native WPF (.NET 8) · Material Design 3         │
+│               MVVM · Telemetry · Routing · Responsive Tray             │
+├───────────────────┬───────────────────┬────────────────┬───────────────┤
+│      Aether       │      Psiphon      │      Tor       │     SHARD     │
+│  (MASQUE HTTP/3 / │   (TunnelCore)    │  (Onion Mesh   │ (TLS Frag /   │
+│  WireGuard Warp)  │                   │   Lyrebird PT) │  IP Shredder) │
+├───────────────────┴───────────────────┴────────────────┴───────────────┤
+│                     Sing-box & Xray Multi-Hop Hub                      │
+│             (VLESS · VMess · Trojan · Shadowsocks Multiplex)           │
+├────────────────────────────────────────────────────────────────────────┤
+│                         Wintun TUN & tun2socks                         │
+│             Kernel-Level Routing · Per-App Split · Zero Leak           │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -40,22 +44,25 @@
 ## 🇬🇧 English
 
 ### 📌 About The Project
-**Se7en Pro** is an open-source, next-generation Windows anti-censorship orchestrator and VPN suite. Re-engineered from the ground up, it features a fluid **60fps glassmorphic Flutter interface** backed by a high-performance **.NET 8 headless background daemon (`Se7enCore`)** communicating via high-speed IPC named pipes.
+**Se7en Pro** is an open-source, next-generation Windows anti-censorship orchestrator and multi-protocol VPN suite built on a modern, high-performance **single-process native WPF (.NET 8)** architecture featuring **Material Design 3**.
 
-Se7en Pro aggregates multiple state-of-the-art circumvention protocols — from Cloudflare MASQUE and TLS ClientHello fragmentation (SHARD) to Psiphon, Tor Onion mesh, and V2Ray/Xray/Sing-box chained multi-hop transports — into a unified, lightweight, resource-efficient desktop client.
+Engineered for extreme performance, security, and resilience, Se7en Pro features near-instant startup via **ReadyToRun (PGO)** pre-compilation, fluid 60fps animations, and minimal memory footprint.
 
-The repository is structured as a clean, open framework — it does **not** hardcode any private tokens, proprietary server lists, or sponsor configs. You can supply your own values or use any of the public multi-protocol engines right out of the box.
+Se7en Pro unifies state-of-the-art circumvention protocols — WireGuard Warp (primary connection protocol), Cloudflare MASQUE (HTTP/3 QUIC & HTTP/2), TLS ClientHello packet shredding (SHARD), Psiphon Network with CDN fronting, Tor Onion mesh with pluggable transports, and Xray/Sing-box chained multi-hop transports — into an intuitive, transparent desktop client.
+
+The repository follows strict security decoupling: **no private credentials, server lists, or sponsor keys are stored in source code or Git history**. Build secrets are injected securely via GitHub Actions Secrets using AES-256-GCM encryption, allowing forks and public checkouts to build cleanly with safe placeholders.
 
 ---
 
 ### ✨ Core Features & Supported Protocols
 
 #### 🌐 1. Supported Protocols & Multi-Engine Hub
-* **Aether Core (v2.0.0)**: Supports **MASQUE** (HTTP/3 QUIC & HTTP/2 TCP), **Masque-on-Masque (MoM)**, **WireGuard Warp**, and **Warp-on-Warp (Gool)**.
-* **SHARD Engine**: Advanced TLS ClientHello fragmentation and IP-level packet shredding to bypass deep packet inspection (DPI) with automatic node pool discovery.
-* **Psiphon Network**: Updated `psiphon-tunnel-core` with enhanced CDN Fronting (Akamai, Fastly, Cloudflare), custom SNI, and clean edge IP dial overrides.
+* **WireGuard Warp (Primary Protocol)**: High-speed, modern kernel-level tunnel set as the primary out-of-the-box connection method.
+* **Aether Core (v2.0.0)**: Advanced MASQUE transport supporting HTTP/3 (QUIC over UDP) and HTTP/2 (TCP) with automatic fallback and Warp-on-Warp chaining.
+* **SHARD Engine**: Advanced TLS ClientHello fragmentation and IP-level packet shredding to defeat Deep Packet Inspection (DPI) with automatic latency-based node discovery.
+* **Psiphon Network**: Hardened `psiphon-tunnel-core` integration with multi-CDN fronting (Akamai, Fastly, Cloudflare), custom SNI override, and clean edge-IP dials.
 * **Tor Expert Bundle**: Native Tor daemon integration with official Pluggable Transports (**Lyrebird** for obfs4 / Snowflake / WebTunnel / Conjure), strict country egress routing, and onion mesh circuits.
-* **Sing-box & Xray Inbound Engines**: Direct VLESS, VMess, Trojan, and Shadowsocks configuration support with TLS fragmenting and multiplexing.
+* **Sing-box & Xray Engines**: Native VLESS, VMess, Trojan, and Shadowsocks inbound support with TLS fragmenting and multiplexing.
 * **🔗 Chained Multi-Hop Tunnels**:
   - *Psiphon over WARP* & *Tor over WARP*
   - *Psiphon over V2Ray* & *Tor over V2Ray*
@@ -65,12 +72,13 @@ The repository is structured as a clean, open framework — it does **not** hard
 * **Application Split Tunneling**: Route only specific applications or bypass selected Windows software directly.
 * **Domain-Based Split Routing**: Real-time split-aware DNS interception for custom whitelist and blacklist rules.
 * **Kill Switch & Route Isolation**: Prevents IP leakage upon unexpected connection termination.
-* **LAN Sharing**: Optional local network proxy sharing with optional credentials.
+* **LAN Sharing**: Optional local network proxy sharing with customizable authentication.
 
-#### 🎨 3. Modern Flutter Glassmorphic Interface
-* **Ultra-Smooth 60fps Rendering**: Completely rewritten with Flutter, eliminating legacy WPF UI lag and dramatically reducing CPU/RAM footprint.
-* **Tri-Language Support**: Fully localized in **English**, **Russian (Русский)**, and **Chinese (中文)**.
-* **Live Telemetry & Logs**: Real-time upload/download speeds, round-trip latency, session counters, and searchable categorized log console.
+#### 🎨 3. Modern Material Design 3 Interface & Performance
+* **Single-Process WPF Client**: Fluid 60fps animations, optimized hot paths, zero overhead.
+* **ReadyToRun Startup Acceleration**: Eliminates startup delays with ahead-of-time IL-to-native compilation.
+* **Multi-Language Support**: Fully localized in **English**, **Russian (Русский)**, and **Chinese (中文)**.
+* **Live Telemetry & Logs**: Real-time throughput graphs, round-trip latency, session counters, and searchable categorized log console.
 
 ---
 
@@ -85,18 +93,13 @@ The repository is structured as a clean, open framework — it does **not** hard
 
 ---
 
-### ⚙️ Configuration & Usage
+### ⚙️ Configuration & Secrets Management
 
-#### Providing Your Own Psiphon Values
-Open `Se7enPro/Services/EmbeddedValues.cs` and replace the placeholder constants with your network configuration:
-
-```csharp
-public const string PropagationChannelId = "YOUR_PROPAGATION_CHANNEL_ID";
-public const string SponsorId           = "YOUR_SPONSOR_ID";
-// Public keys, fronted URL lists, feedback endpoints...
-```
-
-*(Optional)* Place a plaintext `server_entries.txt` in `Se7enPro/Resources/` for offline server caching.
+The repository is safe to fork and publish. To inject private Psiphon network credentials at build time:
+1. Define the 10 standard environment variables (or GitHub Repository Secrets):
+   `SE7EN_PROPAGATION_CHANNEL_ID`, `SE7EN_SPONSOR_ID`, `SE7EN_CLIENT_VERSION`, `SE7EN_CLIENT_PLATFORM`, public keys, and endpoint JSONs.
+2. Run `python tools/generate_build_secrets.py`.
+3. The script generates an AES-256-GCM encrypted `BuildSecrets.g.cs` (git-ignored) which is compiled into the binary.
 
 ---
 
@@ -105,25 +108,21 @@ public const string SponsorId           = "YOUR_SPONSOR_ID";
 **Requirements**:
 * Windows 10 / 11 (x86 / x64)
 * [.NET SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0)
-* [Flutter SDK (3.x or newer)](https://flutter.dev/docs/get-started/install/windows)
-* Visual Studio 2026+ with *Desktop development with C++*
+* Inno Setup 6 (optional, for installer builds)
 
 ```powershell
-# 1. Build .NET Daemon (Se7enCore)
-cd Se7enPro
-dotnet build -c Release -r win-x64 --self-contained false
+# 1. Quick Developer Build (Debug/Release)
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# 2. Build Flutter Client (Se7enFlutter)
-cd ../Se7enFlutter
-flutter pub get
-flutter build windows --release
+# 2. Complete Distribution Suite (Installers & Portables with/without bundled .NET for x64 and x86)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 ---
 
 ### 📄 Licensing & Bundled Components
 
-The **source code** in this repository is licensed under the [MIT License](LICENSE). Third-party binaries bundled under `Resources/` retain their respective upstream licenses:
+The **source code** in this repository is licensed under the [MIT License](LICENSE). Third-party binaries bundled under `Se7enPro/Resources/` retain their respective upstream licenses:
 
 | Component | Upstream Project | License |
 | :--- | :--- | :--- |
@@ -140,219 +139,175 @@ The **source code** in this repository is licensed under the [MIT License](LICEN
 ## 🇮🇷 فارسی
 
 ### 📌 درباره پروژه
-**سون پرو (Se7en Pro)** یک نرم‌افزار متن‌باز، نوین و بسیار قدرتمند برای دورزدن سانسور اینترنت در سیستم‌عامل ویندوز است. در این نسخه ساختار برنامه بازطراحی شده و شامل یک **رابط کاربری فوق‌العاده نرم و ۶۰ فریم با فلاتر (Flutter)** به همراه **دیمون پس‌زمینه قدرتمند دات‌نت ۸ (`Se7enCore`)** است که از طریق Named Pipes IPC با یکدیگر تبادل داده می‌کنند.
+**سون پرو (Se7en Pro)** یک نرم‌افزار متن‌باز، نوین و بسیار قدرتمند برای عبور از سانسور اینترنت و مدیریت اتصالات در سیستم‌عامل ویندوز است که بر پایه معماری بهینه‌شده **تک‌پروسس بومی WPF (.NET 8)** و طراحی مدرن **Material Design 3** پیاده‌سازی شده است.
 
-سون پرو پروتکل‌های متعددی از جمله MASQUE، Masque-on-Masque، فرگمنت TLS (پروتکل Shard)، هسته بهینه‌شده سایفون، شبکه پیازی تور و هسته‌های Sing-box و Xray برای اتصالات زنجیره‌ای را در قالب یک نرم‌افزار یکپارچه، سبک و بدون لگ در اختیار شما قرار می‌دهد.
+این نرم‌افزار با بهره‌گیری از تکنولوژی پیش‌کامپایل **ReadyToRun (PGO)**، شروع سریع و مصرف بهینه حافظه رم و پردازنده، تجربه‌ای روان و پایدار ارائه می‌دهد.
 
-این مخزن به صورت خام و ساختاریافته منتشر شده و **فاقد هرگونه شناسه یا کلید محرمانه اختصاصی** است.
+سون پرو مجموعه‌ای از پیشرفته‌ترین پروتکل‌های ارتباطی نظیر WireGuard Warp (به عنوان اتصال اصلی)، پروتکل Cloudflare MASQUE (با پشتیبانی از استانداردهای HTTP/3 QUIC و HTTP/2)، فناوری خردسازی بسته‌های TLS (پروتکل SHARD)، هسته ارتقایافته سایفون، شبکه تور و ترانزیت‌های چندمرحله‌ای Sing-box و Xray را در قالب کلاینتی یکپارچه ارائه می‌دهد.
+
+این مخزن به گونه‌ای معماری شده که **فاقد هرگونه شناسه، کلید محرمانه یا لیست سرور اختصاصی در متن کدها یا تاریخچه گیت** است. داده‌های حساس در زمان بیلد از طریق GitHub Actions Secrets با الگوریتم قدرتمند **AES-256-GCM** رمزگذاری شده و داخل باینری قرار می‌گیرند.
 
 ---
 
 ### ✨ قابلیت‌های کلیدی و معماری پروژه
 
 #### 🌐 ۱. پشتیبانی از پروتکل‌ها و هسته‌های ارتباطی
-* **هسته Aether (نسخه 2.0.0)**: پشتیبانی از پروتکل‌های **MASQUE** (شامل HTTP/3 QUIC و HTTP/2 TCP)، پروتکل پیشرفته **Masque-on-Masque (MoM)**، پروتکل **WireGuard Warp** و **Warp-on-Warp**.
-* **پروتکل قدرتمند SHARD**: فرگمنت پیشرفته بسته‌های TLS ClientHello و خردسازی ترافیک TCP جهت عبور از فیلترینگ عمیق (DPI) به همراه پایش خودکار سلامت سرورها.
-* **شبکه سایفون (Psiphon Core)**: به‌روزرسانی هسته سایفون با پشتیبانی کامل از CDN Fronting (سرویس‌های Akamai، Fastly و Cloudflare) و امکان وارد کردن SNI و IP تمیز.
-* **شبکه تور (Tor Expert Bundle)**: ادغام رسمی هسته Tor با پلاگین‌های رسمی Lyrebird (پل‌های obfs4، Snowflake، WebTunnel و Conjure)، انتخاب کشور خروجی و ساختار مش چندمرحله‌ای.
-* **هسته‌های Sing-box و Xray**: پشتیبانی از کانفیگ‌های VLESS، VMess، Trojan و Shadowsocks با قابلیت فرگمنت و مالتی‌پلکس.
-* **🔗 اتصالات زنجیره‌ای چندمرحله‌ای**:
+* **پروتکل WireGuard Warp (پروتکل اصلی)**: اتصال پرسرعت و پایدار در سطح کرنل سیستم‌عامل.
+* **هسته Aether (نسخه 2.0.0)**: پشتیبانی پیشرفته از پروتکل **MASQUE** بر بستر HTTP/3 (QUIC over UDP) و HTTP/2 (TCP) به همراه امکان برگشت خودکار و قابلیت Warp-on-Warp.
+* **پروتکل قدرتمند SHARD**: فرگمنت پیشرفته بسته‌های TLS ClientHello و تکه‌تکه‌کردن ترافیک برای دورزدن فیلترینگ عمیق (DPI) همراه با اسکنر خودکار نزدیک‌ترین آی‌پی‌های لبه.
+* **شبکه سایفون (Psiphon Core)**: هسته اختصاصی سایفون با پشتیبانی کامل از CDN Fronting (سرویس‌های Akamai، Fastly و Cloudflare) و امکان وارد کردن SNI و IP تمیز.
+* **شبکه تور (Tor Expert Bundle)**: ادغام کامل هسته Tor با ترنسپورت‌های رسمی Lyrebird (پل‌های obfs4، Snowflake، WebTunnel و Conjure)، قابلیت انتخاب کشور خروجی و ارتباط شبکه‌ای پیازی.
+* **هسته‌های Sing-box و Xray**: پشتیبانی کامل از کانفیگ‌های VLESS، VMess، Trojan و Shadowsocks با قابلیت مالتی‌پلکسینگ و فرگمنت.
+* **🔗 اتصالات زنجیره‌ای چندمرحله‌ای (Chained)**:
   - *سایفون روی وارپ* و *تور روی وارپ*
   - *سایفون روی V2Ray* و *تور روی V2Ray*
 
-#### ⚡ ۲. موتور پرسرعت Wintun TUN و روتینگ
-* **تونل در سطح کرنل**: بدون نشت DNS با بهره‌گیری از درایور `wintun.dll` و `tun2socks`.
-* **اسپلیت تانل برنامه‌ها و دامنه‌ها**: تفکیک ترافیک بر اساس نرم‌افزارهای دلخواه یا دامنه‌های خاص (Whitelist / Blacklist).
-* **کیل سوییچ و اشتراک LAN**: قطع خودکار ترافیک در زمان قطع اتصال جهت جلوگیری از نشت IP و قابلیت اشتراک‌گذاری پروکسی در شبکه محلی.
+#### ⚡ ۲. موتور پرسرعت Wintun TUN و تفکیک ترافیک
+* **تونل سیستم در سطح هسته**: بدون کوچک‌ترین نشت DNS با تکیه بر درایور `wintun.dll` و `tun2socks`.
+* **اسپلیت تانل برنامه‌ها و سایت‌ها**: تفکیک ترافیک بر اساس نرم‌افزارهای انتخابی یا لیست دامنه‌های خاص (Whitelist / Blacklist) با رهگیری آنی DNS.
+* **کیل سوییچ و اشتراک LAN**: جلوگیری فوری از نشت IP در صورت قطع ناگهانی تانل و امکان اشتراک‌گذاری پروکسی در شبکه محلی.
 
-#### 🎨 ۳. رابط کاربری مدرن فلاتر (Flutter UI)
-* **عملکرد فوق‌العاده سریع و سبک**: حذف کامل لگ و کاهش چشمگیر مصرف منابع سیستم و رم با مهاجرت کامل به فلاتر.
-* **پشتیبانی از ۳ زبان در برنامه**: رابط کاربری برنامه به صورت پیش‌فرض از زبان‌های **انگلیسی**، **روسی (Русский)** و **چینی (中文)** پشتیبانی می‌کند.
-* **کنسول لاگ زنده و آمار دقیق**: نمایش لحظه‌ای سرعت، پینگ و ترافیک مصرفی با ترمینال لاگ پیشرفته.
+#### 🎨 ۳. رابط کاربری مدرن Material Design 3 و عملکرد
+* **کلاینت بومی و سبک**: انیمیشن‌های روان، مصرف بهینه و سرعت پاسخ‌دهی بالا.
+* **استارتاپ سریع**: بهینه‌سازی بارگذاری اولیه با کامپایل Native از طریق PublishReadyToRun.
+* **پشتیبانی از ۳ زبان در برنامه**: ترجمه کامل به زبان‌های **انگلیسی**، **روسی (Русский)** و **چینی (中文)**.
+* **کنسول لاگ زنده و تلکتری**: مانیتورینگ زنده سرعت ارسال/دریافت، پینگ، آمار داده‌های مصرفی و ترمینال لاگین دسته‌بندی‌شده.
 
 ---
 
 ### 💡 قدردانی و کردیت‌ها (Credits)
 
 * **ایده و متد اتصال زنجیره‌ای و متد SHARD**: ایده اتصالات زنجیره‌ای (*سایفون/تور روی وارپ*) و همچنین **متد فرگمنت SHARD** برگرفته و الهام‌گرفته‌شده از پروژه اندرویدی ارزشمند [MSN-GUARD](https://github.com/mbm110/MSN-GUARD) توسعه‌داده‌شده توسط **[mbm110](https://github.com/mbm110)** است.
-* **پروژه‌های مبدأ**: Psiphon-Labs، The Tor Project، Wintun، Xray-core، Sing-box و Flutter.
-
----
-
-### ⚙️ تنظیمات و راه‌اندازی با دیتای اختصاصی
-
-کافی است فایل `Se7enPro/Services/EmbeddedValues.cs` را باز کرده و مقادیر متنی خام خود را داخل ثابت‌ها قرار دهید:
-
-```csharp
-public const string PropagationChannelId = "YOUR_PROPAGATION_CHANNEL_ID";
-public const string SponsorId           = "YOUR_SPONSOR_ID";
-// کلیدها، لینک‌های سرور لیست و اندپوینت‌های فیدبک...
-```
+* **پروژه‌های مبدأ**: Psiphon-Labs، The Tor Project، Wintun، Xray-core، Sing-box و MaterialDesignInXaml.
 
 ---
 
 ### 🛠️ نحوه بیلد و کامپایل
 
 **پیش‌نیازها**:
-* ویندوز 10 یا 11 (32 و 64 بیتی)
+* ویندوز 10 یا 11 (نسخه‌های 32 و 64 بیتی)
 * [.NET SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0)
-* [Flutter SDK 3.x+](https://flutter.dev/docs/get-started/install/windows)
-* Visual Studio 2026 با افزونه *Desktop development with C++*
+* Inno Setup 6 (اختیاری، جهت ساخت فایل‌های Setup)
 
 ```powershell
-# ۱. کامپایل دیمون سی‌شارپ (Se7enCore)
-cd Se7enPro
-dotnet build -c Release -r win-x64 --self-contained false
+# ۱. بیلد سریع سورس کد (نسخه 64 بیتی)
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# ۲. کامپایل رابط کاربری فلاتر (Se7enFlutter)
-cd ../Se7enFlutter
-flutter pub get
-flutter build windows --release
+# ۲. ساخت پکیج‌های کامل رسمی (شامل فایل‌های نصبی و پرتابل ۳۲ و ۶۴ بیتی با و بدون دات‌نت)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 ---
 
 ### 📄 لایسنس
 
-کدهای این مخزن تحت مجوز [MIT License](LICENSE) منتشر شده‌اند. باینری‌های جانبی موجود در پوشه `Resources/` تحت لایسنس‌های رسمی پروژه‌های مبدأ بازنشر می‌شوند.
+کدهای اختصاصی این مخزن تحت مجوز [MIT License](LICENSE) منتشر شده‌اند. باینری‌های جانبی موجود در پوشه `Se7enPro/Resources/` تحت لایسنس‌های رسمی پروژه‌های مبدأ بازنشر می‌شوند.
 
 ---
 
 ## 🇷🇺 Русский
 
 ### 📌 О проекте
-**Se7en Pro** — это современный инструмент с открытым исходным кодом для обхода интернет-цензуры и VPN-клиент для операционной системы Windows. Проект полностью переработан и сочетает в себе **плавный интерфейс на Flutter (60 FPS, стиль Glassmorphism)** и высокопроизводительный **фоновый демон .NET 8 (`Se7enCore`)**, взаимодействующий через быстрые именованные каналы (Named Pipes IPC).
+**Se7en Pro** — это современный инструмент с открытым исходным кодом для обхода интернет-цензуры и универсальный VPN-клиент для Windows на базе нативной **однопроцессной архитектуры WPF (.NET 8)** с дизайном **Material Design 3**.
 
-Se7en Pro объединяет передовые протоколы маскировки трафика — от Cloudflare MASQUE и фрагментации пакетов TLS ClientHello (SHARD) до сети Psiphon, луковой сети Tor и многозвенных цепочек через ядра Sing-box и Xray.
+Приложение спроектировано для обеспечения максимальной скорости, безопасности и стабильности, обладает быстрым запуском за счет предварительной компиляции **ReadyToRun (PGO)** и минимальным потреблением системных ресурсов.
 
-Репозиторий оформлен как чистый исходный фреймворк — он **не содержит** приватных ключей, списков серверов или спонсорских настроек.
+Клиент объединяет передовые протоколы маскировки: WireGuard Warp (основной протокол), Cloudflare MASQUE (HTTP/3 QUIC и HTTP/2), фрагментацию пакетов TLS ClientHello (SHARD), сеть Psiphon с CDN Fronting, сеть Tor с подключаемыми транспортами, а также многозвенные цепочки Sing-box и Xray.
+
+В репозитории соблюдены строгие стандарты безопасности: **никаких приватных ключей, списков серверов или спонсорских данных в кодовой базе или истории Git**. Секреты внедряются на этапе сборки через GitHub Actions Secrets с шифрованием **AES-256-GCM**.
 
 ---
 
 ### ✨ Ключевые возможности и протоколы
 
-#### 🌐 1. Многопротокольный центр
-* **Ядро Aether (v2.0.0)**: Поддержка **MASQUE** (HTTP/3 QUIC и HTTP/2 TCP), протокола **Masque-on-Masque (MoM)**, **WireGuard Warp** и **Warp-on-Warp**.
-* **Движок SHARD**: Продвинутая фрагментация пакетов TLS ClientHello и разделение TCP-потоков для обхода глубокого анализа пакетов (DPI) с автообнаружением узлов.
-* **Сеть Psiphon**: Обновленное ядро `psiphon-tunnel-core` с поддержкой CDN Fronting (Akamai, Fastly, Cloudflare), кастомных SNI и пула чистых IP-адресов.
-* **Пакет Tor Expert Bundle**: Нативная интеграция Tor с официальными подключаемыми транспортами (**Lyrebird** для obfs4 / Snowflake / WebTunnel / Conjure) и строгой маршрутизацией по странам выхода.
-* **Ядра Sing-box и Xray**: Прямая поддержка конфигураций VLESS, VMess, Trojan и Shadowsocks с фрагментацией и мультиплексированием.
-* **🔗 Многозвенные цепочки туннелей**:
-  - *Psiphon поверх WARP* и *Tor поверх WARP*
-  - *Psiphon поверх V2Ray* и *Tor поверх V2Ray*
+#### 🌐 1. Многопротокольный хаб
+* **WireGuard Warp (Основной протокол)**: Современный высокоскоростной протокол на уровне ядра операционной системы.
+* **Ядро Aether (v2.0.0)**: Поддержка протокола MASQUE (HTTP/3 QUIC over UDP и HTTP/2 TCP) с автоматическим откатом и цепочками Warp-on-Warp.
+* **Движок SHARD**: Фрагментация пакетов TLS ClientHello и разделение TCP-потоков для обхода глубокого анализа пакетов (DPI).
+* **Сеть Psiphon**: Полноценная интеграция `psiphon-tunnel-core` с поддержкой CDN Fronting (Akamai, Fastly, Cloudflare) и пула чистых IP.
+* **Пакет Tor Expert Bundle**: Нативная интеграция Tor с транспортами **Lyrebird** (obfs4, Snowflake, WebTunnel, Conjure) и выбором страны выхода.
+* **Ядра Sing-box и Xray**: Поддержка VLESS, VMess, Trojan и Shadowsocks с фрагментацией и мультиплексированием.
+* **🔗 Цепочки туннелей**: Psiphon поверх WARP/V2Ray и Tor поверх WARP/V2Ray.
 
-#### ⚡ 2. Высокопроизводительный драйвер Wintun TUN
-* **Туннелирование на уровне ядра**: Полный захват системного трафика через `wintun.dll` + `tun2socks` с защитой от утечек DNS.
-* **Раздельное туннелирование (Split Tunneling)**: Маршрутизация конкретных приложений или доменов (режимы белого/черного списков).
-* **Kill Switch и локальный доступ**: Защита от утечки реального IP при обрыве соединения и возможность раздачи прокси в локальной сети (LAN).
-
-#### 🎨 3. Стеклянный интерфейс Flutter и 3 языка
-* **Плавная работа (60 FPS)**: Полный отказ от устаревшего WPF, отсутствие задержек и минимальное потребление ресурсов CPU/RAM.
-* **Поддержка 3 языков**: Интерфейс приложения полностью переведен на **английский**, **русский (Русский)** и **китайский (中文)** языки.
-* **Живая телеметрия и журнал событий**: Отображение скорости приема/передачи, пинга, объема трафика и удобная консоль логов с фильтрацией.
+#### ⚡ 2. Высокопроизводительный Wintun TUN
+* **Захват трафика на уровне ядра**: Полная изоляция через `wintun.dll` + `tun2socks` без утечек DNS.
+* **Раздельное туннелирование**: Маршрутизация по приложениям или по доменным именам (Split Tunneling).
+* **Kill Switch и LAN**: Мгновенная блокировка утечки IP при сбое и возможность раздачи прокси в локальную сеть.
 
 ---
 
 ### 💡 Благодарности и источники
 
-* **Архитектура цепочек и метод SHARD**: Архитектура цепочек туннелей (*Psiphon/Tor поверх WARP*), а также **метод фрагментации SHARD** заимствованы из проекта для Android [MSN-GUARD](https://github.com/mbm110/MSN-GUARD) разработчика **[mbm110](https://github.com/mbm110)**.
-* **Исходные проекты**: Psiphon-Labs, The Tor Project, Wintun, Xray-core, Sing-box и Flutter.
+* **Архитектура цепочек и метод SHARD**: Архитектура цепочек туннелей (*Psiphon/Tor поверх WARP*), а также **метод фрагментации SHARD** вдохновлены и заимствованы из проекта для Android [MSN-GUARD](https://github.com/mbm110/MSN-GUARD) разработчика **[mbm110](https://github.com/mbm110)**.
+* **Исходные проекты**: Psiphon-Labs, The Tor Project, Wintun, Xray-core, Sing-box и сообщество MaterialDesignInXaml.
 
 ---
 
 ### 🛠️ Сборка из исходников
 
-**Требования**:
-* Windows 10 / 11 (x86 / x64)
-* [.NET SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0)
-* [Flutter SDK (3.x+)](https://flutter.dev/docs/get-started/install/windows)
-* Visual Studio 2026 с компонентом *Разработка классических приложений на C++*
-
 ```powershell
-# 1. Сборка .NET демона (Se7enCore)
-cd Se7enPro
-dotnet build -c Release -r win-x64 --self-contained false
+# Быстрая сборка x64
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# 2. Сборка интерфейса Flutter (Se7enFlutter)
-cd ../Se7enFlutter
-flutter pub get
-flutter build windows --release
+# Полная сборка релизных пакетов (установщики и портативные архивы с .NET и без .NET для x64/x86)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
-
----
-
-### 📄 Лицензия
-
-Исходный код распространяется под лицензией [MIT License](LICENSE). Сторонние бинарные файлы в папке `Resources/` сохраняют свои исходные лицензии.
 
 ---
 
 ## 🇨🇳 中文
 
 ### 📌 项目简介
-**Se7en Pro** 是一款开源、现代且强大的 Windows 桌面多协议抗封锁工具与 VPN 客户端。该项目经过全面重构，采用了 **60 FPS 流畅的 Flutter 毛玻璃界面** 与高性能的 **.NET 8 后台常驻守护进程 (`Se7enCore`)**，二者通过高速 IPC 命名管道无缝通信。
+**Se7en Pro** 是一款现代、开源且强大的 Windows 桌面多协议抗封锁工具与全能 VPN 客户端，基于高性能 **原生单进程 WPF (.NET 8)** 架构与现代 **Material Design 3** 风格开发。
 
-Se7en Pro 集成了多项先进的网络穿透与抗审查协议：涵盖 Cloudflare MASQUE、TLS ClientHello 分片（SHARD 协议）、优化版 Psiphon 核心、Tor 洋葱网络以及基于 Sing-box / Xray 的多跳链式代理。
+软件具备出色的运行效率、安全性与抗审查韧性，借助 **ReadyToRun (PGO)** 预编译技术实现毫秒级快速启动，界面帧率平稳流畅，内存占用极低。
 
-本仓库以纯净的开源框架形式发布，**不包含**任何硬编码的私有密钥、服务器列表或赞助商配置。
+Se7en Pro 集成了多项尖端网络抗封锁协议：包括 **WireGuard Warp（主连接协议）**、Cloudflare **MASQUE（支持 HTTP/3 QUIC 与 HTTP/2）**、TLS 报文分片与分包打碎（SHARD 协议）、集成多 CDN 域前置的 Psiphon 核心、Tor 洋葱网络以及基于 Sing-box / Xray 的多跳链式代理。
+
+本仓库遵循严格的安全解耦设计：**源代码与 Git 历史中绝不包含任何硬编码私有密钥、服务器列表或赞助商凭据**。构建秘密通过 GitHub Actions Secrets 在自动化流水线中经 **AES-256-GCM** 加密后安全注入。
 
 ---
 
 ### ✨ 核心特性与支持协议
 
 #### 🌐 1. 多协议引擎中心
-* **Aether 核心 (v2.0.0)**：支持 **MASQUE** (HTTP/3 QUIC 与 HTTP/2 TCP)、**Masque-on-Masque (MoM)**、**WireGuard Warp** 及 **Warp-on-Warp**。
-* **SHARD 协议引擎**：先进的 TLS ClientHello 报文分片与 TCP 分包技术，绕过深度包检测 (DPI)，并具备自动节点池探测与健康检测。
-* **Psiphon 网络**：升级版 `psiphon-tunnel-core`，增强了 CDN 域前置 (Akamai, Fastly, Cloudflare)、自定义 SNI 与纯净 IP 调度。
-* **Tor 专家包**：原生集成 Tor 守护进程及官方可插拔传输工具 (**Lyrebird** 用于 obfs4 / Snowflake / WebTunnel / Conjure)，支持严格的出口国家选择与洋葱网状路由。
-* **Sing-box 与 Xray 引擎**：原生支持 VLESS、VMess、Trojan、Shadowsocks 等配置的分片与多路复用。
-* **🔗 多跳链式组合代理**：
-  - *Psiphon 经由 WARP* 及 *Tor 经由 WARP*
-  - *Psiphon 经由 V2Ray* 及 *Tor 经由 V2Ray*
+* **WireGuard Warp（主协议）**：内核级虚拟网卡转发，速度快、延迟低、连接稳固。
+* **Aether 核心 (v2.0.0)**：支持 MASQUE 协议（HTTP/3 基于 UDP 的 QUIC 及 HTTP/2 TCP 传输），支持自动回退与 Warp-on-Warp 嵌套。
+* **SHARD 协议引擎**：先进的 TLS ClientHello 深度分片与报文碎化技术，有效规避 DPI 深度包检测。
+* **Psiphon 核心网络**：升级版 `psiphon-tunnel-core`，集成 Akamai、Fastly、Cloudflare 等 CDN 前置节点调度与纯净 IP 优选。
+* **Tor 专家包**：集成官方可插拔传输工具 (**Lyrebird**，支持 obfs4、Snowflake、WebTunnel 及 Conjure)，支持出口国家定向。
+* **Sing-box 与 Xray**：全面支持 VLESS、VMess、Trojan、Shadowsocks 等配置。
+* **🔗 多跳链式组合代理**：支持 Psiphon 经由 WARP/V2Ray 以及 Tor 经由 WARP/V2Ray。
 
-#### ⚡ 2. 高性能 Wintun TUN 驱动与分流路由
-* **内核级 TUN 虚拟网卡**：采用 `wintun.dll` + `tun2socks` 实现全系统网络接管，杜绝 DNS 泄漏。
-* **应用级与域名级分流 (Split Tunneling)**：可精确指定特定软件或域名走代理/直连（支持黑白名单）。
-* **Kill Switch 与局域网共享**：在异常断连时自动阻断流量防止真实 IP 泄漏，支持将代理共享至局域网（LAN）。
-
-#### 🎨 3. Flutter 流畅毛玻璃界面与三国语言
-* **极速流畅体验 (60 FPS)**：完全告别老旧 WPF 界面的卡顿，显著降低 CPU 与内存占用。
-* **支持 3 种语言**：客户端原生支持 **英语**、**俄语 (Русский)** 及 **简体中文 (中文)**。
-* **实时网络监控与日志**：毫秒级延迟、上下行速度图表、流量统计及支持实时分类检索的终端日志。
+#### ⚡ 2. 高性能 Wintun TUN 驱动与分流
+* **内核级网络接管**：通过 `wintun.dll` + `tun2socks` 实现全系统零 DNS 泄漏代理。
+* **应用级与域名级分流 (Split Tunneling)**：按需指定软件或域名走直连/代理。
+* **Kill Switch 与局域网共享**：断网自动阻断流量防止 IP 泄漏，支持将节点共享至局域网（LAN）。
 
 ---
 
 ### 💡 开源鸣谢与致谢 (Credits)
 
 * **链式代理架构与 SHARD 分片方法**：链式代理架构 (*Psiphon/Tor over WARP*) 以及 **SHARD TLS 分片方法** 的设计思路源自 **[mbm110](https://github.com/mbm110)** 开发的 Android 开源项目 [MSN-GUARD](https://github.com/mbm110/MSN-GUARD)。
-* **上游开源项目**：Psiphon-Labs、The Tor Project、Wintun、Xray-core、Sing-box 以及 Flutter 团队。
+* **上游开源项目**：Psiphon-Labs、The Tor Project、Wintun、Xray-core、Sing-box 以及 MaterialDesignInXaml 社区。
 
 ---
 
 ### 🛠️ 源码构建指南
 
-**环境要求**：
-* Windows 10 / 11 (32 位或 64 位)
-* [.NET SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0)
-* [Flutter SDK (3.x+)](https://flutter.dev/docs/get-started/install/windows)
-* Visual Studio 2026 并安装 *使用 C++ 的桌面开发* 工作负载
-
 ```powershell
-# 1. 编译 .NET 守护进程 (Se7enCore)
-cd Se7enPro
-dotnet build -c Release -r win-x64 --self-contained false
+# 1. 快速编译 x64 发行版
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# 2. 编译 Flutter 客户端 (Se7enFlutter)
-cd ../Se7enFlutter
-flutter pub get
-flutter build windows --release
+# 2. 一键编译完整发布包 (包含 x64/x86 安装程序与便携版，支持含 .NET 及不含 .NET 版本)
+powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVariants -OutDir dist
 ```
 
 ---
 
 ### 📄 许可证
 
-本项目源码基于 [MIT License](LICENSE) 授权开源。`Resources/` 目录中打包的第三方二进制文件均遵循其各自的原版开源协议。
+本项目源码基于 [MIT License](LICENSE) 授权开源。`Se7enPro/Resources/` 目录中所包含的第三方二进制组件均保留其原版开源协议。
 
 ---
 

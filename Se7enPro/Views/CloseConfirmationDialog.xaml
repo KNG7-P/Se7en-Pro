@@ -1,0 +1,108 @@
+<Window x:Class="Se7enPro.Views.CloseConfirmationDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" Title="{DynamicResource Loc_aboutTitle}" Width="460" SizeToContent="Height" WindowStartupLocation="CenterOwner" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False" FontFamily="{StaticResource UI.FontFamily}" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Grayscale" UseLayoutRounding="True">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="0" CornerRadius="18" GlassFrameThickness="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        
+        <Style x:Key="Close.Row" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Background" Value="{DynamicResource Surface.CardSecondaryBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Surface.CardBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" Padding="14,12" SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Surface.CardBorderStrong}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Brand.AccentOutlineBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22,20" Margin="12">
+
+        <StackPanel>
+
+            <Grid Margin="0,0,0,18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Width="42" Height="42" CornerRadius="12" Background="{StaticResource Brand.AccentSoftBrush}" BorderBrush="{StaticResource Brand.AccentOutlineBrush}" BorderThickness="1" Margin="0,0,12,0">
+                    <materialDesign:PackIcon Kind="ExitToApp" Width="22" Height="22" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Loc_CloseSe7enPro}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="{DynamicResource Loc_Whatwouldyouliketodo}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,3,0,0" />
+                </StackPanel>
+            </Grid>
+
+            
+            <Button Style="{StaticResource Close.Row}" Margin="0,0,0,10" Click="OnMinimizeRowClicked" AutomationProperties.Name="{DynamicResource Loc_minimizeToTray}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="34" Height="34" CornerRadius="9" Background="{StaticResource Brand.AccentSoftBrush}" Margin="0,0,12,0">
+                        <materialDesign:PackIcon Kind="ArrowDownDropCircleOutline" Width="18" Height="18" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_minimizeToTray}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Loc_KeepSe7enProrunninginthebackground}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <materialDesign:PackIcon Grid.Column="2" Kind="ChevronRight" Width="18" Height="18" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+
+            
+            <Button Style="{StaticResource Close.Row}" Margin="0,0,0,16" Click="OnExitRowClicked" AutomationProperties.Name="{DynamicResource Loc_Closecompletely}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="34" Height="34" CornerRadius="9" Background="{StaticResource Brand.ErrorSoftBrush}" Margin="0,0,12,0">
+                        <materialDesign:PackIcon Kind="CloseCircleOutline" Width="18" Height="18" Foreground="{StaticResource Brand.ErrorBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_Closecompletely}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Loc_DisconnectthetunnelandexitSe7enPro}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <materialDesign:PackIcon Grid.Column="2" Kind="ChevronRight" Width="18" Height="18" Foreground="{StaticResource Brand.ErrorBrush}" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+
+            <Border Height="1" Background="{DynamicResource Surface.CardBorder}" Margin="0,0,0,14" />
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Grid.Column="0" x:Name="RememberCheckBox" Style="{StaticResource UI.DarkCheckBox}" Content="{DynamicResource Loc_Remembermychoicedontaskagain}" VerticalAlignment="Center" />
+                <Button Grid.Column="1" x:Name="CancelButton" Style="{StaticResource UI.GhostButton}" Content="{DynamicResource Loc_dialogCancel}" HorizontalAlignment="Right" Padding="20,0" Click="OnCancelClicked" IsCancel="True" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>

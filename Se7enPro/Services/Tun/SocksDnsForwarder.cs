@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -10,133 +11,64 @@ namespace Se7enPro.Services;
 
 internal sealed partial class SocksDnsForwarder : IDisposable
 {
-    private const int DefaultPort = 53;
-
     private readonly int _socksPort;
     private readonly string _upstreamDnsIp;
     private readonly TimeSpan _connectTimeout;
     private readonly TimeSpan _queryTimeout;
-    private readonly int _listenPort;
 
     private UdpClient? _listener;
-    private UdpClient? _listenerV6;
     private CancellationTokenSource? _cts;
     private Task? _loop;
-    private Task? _loopV6;
+    private Task? _tcpLoop;
+    private TcpListener? _tcpListener;
     private int _handled;
 
     public SocksDnsForwarder(
         int socksPort,
         string upstreamDnsIp = "1.1.1.1",
         TimeSpan? connectTimeout = null,
-        TimeSpan? queryTimeout = null,
-        int listenPort = DefaultPort)
+        TimeSpan? queryTimeout = null)
     {
         _socksPort = socksPort;
         _upstreamDnsIp = upstreamDnsIp;
         _connectTimeout = connectTimeout ?? TimeSpan.FromSeconds(3);
         _queryTimeout = queryTimeout ?? TimeSpan.FromSeconds(5);
-        _listenPort = listenPort;
     }
 
-    public int HandledQueries => _handled;
+        public int HandledQueries => _handled;
 
-    public IPAddress? BoundAddress { get; private set; }
+        public Action<string>? Diag;
 
-    public IPAddress? BoundAddressV6 { get; private set; }
-
-    public Action<string>? Diag;
-
-    private static readonly TimeSpan PreferredAddressGrace = TimeSpan.FromSeconds(8);
-    private static readonly TimeSpan PreferredAddressRetry = TimeSpan.FromMilliseconds(100);
-
-    public void Start() => StartAsync(null, CancellationToken.None).GetAwaiter().GetResult();
-
-    public Task StartAsync(IPAddress? preferredAddress, CancellationToken ct) =>
-        StartAsync(preferredAddress, null, ct);
-
-    public async Task StartAsync(IPAddress? preferredAddress, IPAddress? preferredAddressV6, CancellationToken ct)
+        public void Start()
     {
         if (_listener is not null) return;
+        _listener = new UdpClient();
+        _listener.ExclusiveAddressUse = true;
+        _listener.Client.Bind(new IPEndPoint(IPAddress.Loopback, 53));
 
-        UdpClient? bound = null;
-        if (preferredAddress is not null && !IPAddress.IsLoopback(preferredAddress))
-        {
-            bound = await TryBindPreferredAsync(preferredAddress, ct);
-            if (bound is not null) BoundAddress = preferredAddress;
-        }
-
-        if (bound is null)
-        {
-
-            bound = Bind(IPAddress.Loopback);
-            BoundAddress = IPAddress.Loopback;
-        }
-
-        _listener = bound;
-        _cts = new CancellationTokenSource();
-        _loop = Task.Run(() => ReceiveLoopAsync(bound, _cts.Token));
-
-        if (preferredAddressV6 is not null && !IPAddress.IsLoopback(preferredAddressV6))
-        {
-            var boundV6 = await TryBindPreferredAsync(preferredAddressV6, ct);
-            if (boundV6 is not null)
-            {
-                _listenerV6 = boundV6;
-                BoundAddressV6 = preferredAddressV6;
-                _loopV6 = Task.Run(() => ReceiveLoopAsync(boundV6, _cts.Token));
-            }
-        }
-    }
-
-    private async Task<UdpClient?> TryBindPreferredAsync(IPAddress addr, CancellationToken ct)
-    {
-        var started = DateTime.UtcNow;
-        var deadline = started + PreferredAddressGrace;
-        var attempts = 0;
-        SocketError last = SocketError.Success;
-        while (true)
-        {
-            try
-            {
-                var client = Bind(addr);
-                if (attempts > 0)
-                {
-                    Diag?.Invoke($"dns forwarder: {addr} became bindable after "
-                                 + $"{(DateTime.UtcNow - started).TotalMilliseconds:0} ms ({attempts} retries)");
-                }
-                return client;
-            }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressNotAvailable
-                                             && DateTime.UtcNow < deadline)
-            {
-                last = ex.SocketErrorCode;
-                attempts++;
-                await Task.Delay(PreferredAddressRetry, ct);
-            }
-            catch (SocketException ex)
-            {
-                last = ex.SocketErrorCode;
-                break;
-            }
-        }
-
-        Diag?.Invoke($"dns forwarder: cannot bind {addr}:{_listenPort} ({last}); falling back to {IPAddress.Loopback}");
-        return null;
-    }
-
-    private UdpClient Bind(IPAddress addr)
-    {
-        var client = new UdpClient { ExclusiveAddressUse = true };
+        
+        
+        
+        
+        
+        
         try
         {
-            client.Client.Bind(new IPEndPoint(addr, _listenPort));
-            return client;
+            _tcpListener = new TcpListener(IPAddress.Loopback, 53);
+            _tcpListener.Start();
         }
-        catch
+        catch (SocketException)
         {
-            client.Dispose();
-            throw;
+            
+            
+            _tcpListener = null;
+        }
+
+        _cts = new CancellationTokenSource();
+        _loop = Task.Run(() => ReceiveLoopAsync(_cts.Token));
+        if (_tcpListener is not null)
+        {
+            _tcpLoop = Task.Run(() => TcpAcceptLoopAsync(_tcpListener, _cts.Token));
         }
     }
 
@@ -144,19 +76,80 @@ internal sealed partial class SocksDnsForwarder : IDisposable
     {
         try { _cts?.Cancel(); } catch { }
         try { _listener?.Dispose(); } catch { }
-        try { _listenerV6?.Dispose(); } catch { }
         _listener = null;
-        _listenerV6 = null;
-        BoundAddress = null;
-        BoundAddressV6 = null;
+        try { _tcpListener?.Stop(); } catch { }
+        _tcpListener = null;
         try { _cts?.Dispose(); } catch { }
         _cts = null;
         _loop = null;
-        _loopV6 = null;
+        _tcpLoop = null;
     }
 
-    private async Task ReceiveLoopAsync(UdpClient listener, CancellationToken ct)
+        private async Task TcpAcceptLoopAsync(TcpListener listener, CancellationToken ct)
     {
+        while (!ct.IsCancellationRequested)
+        {
+            TcpClient? client = null;
+            try
+            {
+                client = await listener.AcceptTcpClientAsync(ct);
+                var accepted = client;
+                client = null;
+                _ = Task.Run(() => HandleTcpClientAsync(accepted, ct), CancellationToken.None);
+            }
+            catch (OperationCanceledException) { break; }
+            catch (ObjectDisposedException) { break; }
+            catch (SocketException) { break; }
+            catch
+            {
+                try { await Task.Delay(50, ct); }
+                catch (OperationCanceledException) { break; }
+            }
+            finally
+            {
+                if (client is not null) { try { client.Dispose(); } catch { } }
+            }
+        }
+    }
+
+    private async Task HandleTcpClientAsync(TcpClient client, CancellationToken ct)
+    {
+        using (client)
+        {
+            try
+            {
+                client.NoDelay = true;
+                await using var stream = client.GetStream();
+
+                var lengthBuf = new byte[2];
+                await ReadExactlyAsync(stream, lengthBuf, ct);
+                var queryLen = (lengthBuf[0] << 8) | lengthBuf[1];
+                if (queryLen is <= 0 or > 65535) return;
+
+                var query = new byte[queryLen];
+                await ReadExactlyAsync(stream, query, ct);
+
+                var answer = await AnswerQueryAsync(query, ct);
+                if (answer is null) return;
+
+                var framed = new byte[2 + answer.Length];
+                framed[0] = (byte)(answer.Length >> 8);
+                framed[1] = (byte)(answer.Length & 0xFF);
+                Buffer.BlockCopy(answer, 0, framed, 2, answer.Length);
+                await stream.WriteAsync(framed, ct);
+            }
+            catch (OperationCanceledException) { }
+            catch (IOException) { }
+            catch (SocketException) { }
+            catch { }
+        }
+    }
+
+    private async Task ReceiveLoopAsync(CancellationToken ct)
+    {
+        var listener = _listener;
+        if (listener is null) return;
+
         while (!ct.IsCancellationRequested)
         {
             UdpReceiveResult received;
@@ -168,18 +161,39 @@ internal sealed partial class SocksDnsForwarder : IDisposable
             catch (ObjectDisposedException) { return; }
             catch { continue; }
 
-            _ = Task.Run(() => HandleQueryAsync(listener, received.RemoteEndPoint, received.Buffer, ct), ct);
+            
+            
+            _ = Task.Run(() => HandleQueryAsync(received.RemoteEndPoint, received.Buffer, ct), ct);
         }
     }
 
-    private async Task HandleQueryAsync(UdpClient listener, IPEndPoint client, byte[] query, CancellationToken ct)
+    private async Task HandleQueryAsync(IPEndPoint client, byte[] query, CancellationToken ct)
+    {
+        try
+        {
+            var answer = await AnswerQueryAsync(query, ct);
+            if (answer is null) return;
+
+            var listener = _listener;
+            if (listener is null) return;
+            await listener.SendAsync(answer, answer.Length, client);
+        }
+        catch
+        {
+            
+            
+        }
+    }
+
+        private async Task<byte[]?> AnswerQueryAsync(byte[] query, CancellationToken ct)
     {
         try
         {
             var parsed = ParseQuestion(query);
             var split = _split;
             byte[]? answer;
-            IReadOnlyList<IPAddress> seen = Array.Empty<IPAddress>();
+            var seen = new List<IPAddress>();
+            bool seenViaTunnel = false;
 
             if (parsed is { } q && split is not null && split.LocalDnsIp is not null)
             {
@@ -189,9 +203,12 @@ internal sealed partial class SocksDnsForwarder : IDisposable
 
                 if (useLocal)
                 {
-                    if (isAAAA && !split.CanPinLocalV6)
+                    
+                    
+                    
+                    
+                    if (isAAAA && split.ExcludeMode)
                     {
-
                         answer = BuildEmptyResponse(query, q.QuestionLength);
                     }
                     else
@@ -201,27 +218,27 @@ internal sealed partial class SocksDnsForwarder : IDisposable
                         {
                             Diag?.Invoke($"split dns: local resolver ({split.LocalDnsIp}) did not answer "
                                          + $"'{q.Name}'; falling back to the tunnel path");
+                            
+                            
+                            
+                            
                             answer = await QueryUpstreamAsync(query, ct);
-
-                            if (isAAAA && answer is not null)
-                            {
-                                answer = BuildEmptyResponse(query, q.QuestionLength);
-                            }
                         }
                         else
                         {
-
-                            seen = ExtractAnswerAddresses(answer);
+                            seen.AddRange(ExtractAnswerARecords(answer));
                         }
                     }
                 }
                 else
                 {
                     answer = await QueryUpstreamAsync(query, ct);
-                    if (answer is not null && !split.ExcludeMode)
+                    if (answer is not null && !split.ExcludeMode && !isAAAA)
                     {
-
-                        seen = ExtractAnswerAddresses(answer);
+                        
+                        
+                        seen.AddRange(ExtractAnswerARecords(answer));
+                        seenViaTunnel = true;
                     }
                 }
             }
@@ -230,19 +247,25 @@ internal sealed partial class SocksDnsForwarder : IDisposable
                 answer = await QueryUpstreamAsync(query, ct);
             }
 
-            if (answer is null) return;
+            if (answer is null) return null;
             Interlocked.Increment(ref _handled);
 
-            foreach (var addr in seen)
+            if (seen.Count > 0 && split is not null)
             {
-                try { split?.AddressSeen?.Invoke(addr, parsed?.Name ?? ""); } catch { }
+                var name = parsed?.Name ?? "";
+                foreach (var ip in seen)
+                {
+                    
+                    
+                    try { split.AddressSeen?.Invoke(ip, name, seenViaTunnel); } catch { }
+                }
             }
 
-            await listener.SendAsync(answer, answer.Length, client);
+            return answer;
         }
         catch
         {
-
+            return null;
         }
     }
 

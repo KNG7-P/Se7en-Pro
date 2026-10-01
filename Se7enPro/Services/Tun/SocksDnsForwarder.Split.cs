@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 
@@ -6,26 +6,22 @@ namespace Se7enPro.Services;
 
 internal sealed partial class SocksDnsForwarder
 {
-
-    public sealed class SplitPolicy
+        public sealed class SplitPolicy
     {
+                public bool ExcludeMode = true;
 
-        public bool ExcludeMode = true;
+                public IReadOnlyList<string> Domains = Array.Empty<string>();
 
-        public IReadOnlyList<string> Domains = Array.Empty<string>();
+                public string? LocalDnsIp;
 
-        public string? LocalDnsIp;
-
-        public Action<IPAddress, string>? AddressSeen;
-
-        public bool CanPinLocalV6;
+                public Action<IPAddress, string, bool>? AddressSeen;
     }
 
     private volatile SplitPolicy? _split;
 
-    public void UpdateSplitPolicy(SplitPolicy? policy) => _split = policy;
+        public void UpdateSplitPolicy(SplitPolicy? policy) => _split = policy;
 
-    internal static string? MatchDomain(string name, IReadOnlyList<string> domains)
+        internal static string? MatchDomain(string name, IReadOnlyList<string> domains)
     {
         foreach (var d in domains)
         {
@@ -40,7 +36,7 @@ internal sealed partial class SocksDnsForwarder
         return null;
     }
 
-    internal static (string Name, ushort Type, int QuestionLength)? ParseQuestion(byte[] q)
+        internal static (string Name, ushort Type, int QuestionLength)? ParseQuestion(byte[] q)
     {
         if (q.Length < 17) return null;
         var i = 12;
@@ -55,7 +51,7 @@ internal sealed partial class SocksDnsForwarder
                 var type = (ushort)((q[i] << 8) | q[i + 1]);
                 return (sb.ToString(), type, i + 4);
             }
-            if ((len & 0xC0) != 0) return null;
+            if ((len & 0xC0) != 0) return null; 
             if (i + 1 + len > q.Length) return null;
             if (sb.Length > 0) sb.Append('.');
             sb.Append(System.Text.Encoding.ASCII.GetString(q, i + 1, len));

@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [ci, dependencies]
+
+  - package-ecosystem: nuget
+    directory: /Se7enPro
+    schedule:
+      interval: monthly
+    labels: [dependencies]
+
+  - package-ecosystem: pip
+    directory: /tools
+    schedule:
+      interval: monthly
+    labels: [dependencies]

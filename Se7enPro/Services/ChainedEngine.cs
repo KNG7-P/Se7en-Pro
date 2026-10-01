@@ -21,16 +21,28 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
 
     private const int ChainOuterSocksPort = 1820;
     private const int ChainOuterV2RaySocksPort = 1832;
+
+    
+    
+    
+    private const int ChainedTorInnerBudgetSec = 200;
+    private const int ChainedPsiphonInnerBudgetSec = 320;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly object _staticLock = new();
     private CancellationTokenSource? _connectCts;
     private volatile bool _isStopping;
+    private volatile bool _hasBeenConnected;
 
+    
+    
+    
+    
     private static readonly object _outerOverridesLock = new();
     private static int? _outerSocksPortOverride;
     private static ConnectionMethod? _outerMethodOverride;
     private static string? _outerSocks5ProxyOverride;
     private static string? _outerUpstreamProxyUrlOverride;
+    
 
     public ChainedEngine(
         ILogger<ChainedEngine> logger,
@@ -64,6 +76,14 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray => _tor,
             _ => _psiphon,
         };
+
+        private IConnectionEngine OuterEngine =>
+        _method is ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray ? _v2ray : _outer;
+
+    private bool IsV2RayOuter =>
+        _method is ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray;
+
+    private string OuterLegName => IsV2RayOuter ? "V2Ray" : "WARP";
 
     public int SocksProxyPort => InnerEngine.SocksProxyPort;
     public int HttpProxyPort => InnerEngine.HttpProxyPort;
@@ -102,6 +122,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
     {
         if (State == s) return;
         State = s;
+        if (s == ConnectionState.Connected) _hasBeenConnected = true;
         StateChanged?.Invoke(this, s);
     }
 
@@ -114,6 +135,19 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
 
     public Task StartAsync()
     {
+        
+        
+        
+        
+        
+        
+        
+        if (State is ConnectionState.Connected or ConnectionState.Connecting)
+        {
+            Log("Chained session already active; ignoring duplicate connect.");
+            return Task.CompletedTask;
+        }
+
         _connectCts?.Cancel();
         _connectCts = new CancellationTokenSource();
         var ct = _connectCts.Token;
@@ -124,6 +158,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
 
     private async Task RunChainAsync(CancellationToken ct)
     {
+        _hasBeenConnected = false;
         try
         {
             await _gate.WaitAsync(ct);
@@ -137,13 +172,11 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
         {
             if (ct.IsCancellationRequested) return;
 
-            var userUpstream = (_settings.Settings.UpstreamProxy ?? "").Trim();
-            if (_settings.Settings.UpstreamProxyEnabled && !string.IsNullOrEmpty(userUpstream))
-            {
-                Log("Chained mode cannot be used while 'Use upstream proxy' is enabled — disable it in Settings first.");
-                SetState(ConnectionState.Error);
-                return;
-            }
+            
+            
+            
+            
+            
 
             if (_method is ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray)
             {
@@ -152,10 +185,62 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                     ConnectionMethod.TorOverV2Ray => "Tor",
                     _ => "Psiphon"
                 };
-                Log($"Starting multi-hop chained session ({v2rayInnerName} over V2Ray)...");
+
+                
+                var activeConfig = _v2ray.ResolveActiveConfig();
+                if (activeConfig == null)
+                {
+                    Log($"Cannot start chained {v2rayInnerName} over V2Ray: No active V2Ray/Xray configuration is selected.");
+                    await StopInternalAsync();
+                    SetState(ConnectionState.Error);
+                    return;
+                }
+
+                
+                
+                
+                
+                if (string.IsNullOrWhiteSpace(activeConfig.Address))
+                {
+                    Log($"Cannot start chained {v2rayInnerName} over V2Ray: the selected node"
+                      + $" \"{NodeLabel(activeConfig)}\" has no server address, so it cannot carry any traffic."
+                      + " Edit it in the V2Ray page or pick a node that has one.");
+                    await StopInternalAsync();
+                    SetState(ConnectionState.Error);
+                    return;
+                }
+
+                var nodeName = NodeLabel(activeConfig);
+                var hopTransport = HopTransport(activeConfig);
+                Log($"Starting multi-hop chained session ({v2rayInnerName} over V2Ray), outer hop {hopTransport}...");
+
+                
+                
+                
+                
+                
+                
+                if (_method == ConnectionMethod.TorOverV2Ray && IsPlaintextHop(activeConfig))
+                {
+                    Log($"\"{nodeName}\" carries the chain unencrypted ({hopTransport}), so Tor's relay"
+                      + " handshakes cross the network in the open and anything that blocks them there"
+                      + " (your provider, or the network the node runs on) can drop them while normal"
+                      + " traffic still passes. Pick a TLS or Reality node (security=tls in the V2Ray"
+                      + " page), or run Tor on its own with bridges.");
+                }
                 SetProgress(10, "Starting V2Ray/Xray/Sing-box outer transport...");
 
                 V2RayEngine.SetSocksPortOverride(ChainOuterV2RaySocksPort);
+                
+                
+                
+                
+                if (_method == ConnectionMethod.PsiphonOverV2Ray)
+                {
+                    lock (_outerOverridesLock)
+                        _outerUpstreamProxyUrlOverride = $"socks5://127.0.0.1:{ChainOuterV2RaySocksPort}";
+                    TunnelCoreManager.UpstreamProxyUrlOverride = $"socks5://127.0.0.1:{ChainOuterV2RaySocksPort}";
+                }
                 await _v2ray.StartAsync();
 
                 var v2rayConnected = false;
@@ -182,7 +267,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 }
 
                 var socksPort = _v2ray.SocksProxyPort;
-
+                
                 if (!await ProbeOuterSocksReadyAsync(socksPort, ct))
                 {
                     Log("V2Ray SOCKS did not answer after reporting Connected; aborting chain.");
@@ -191,39 +276,18 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                     return;
                 }
 
-                Log($"V2Ray inbound ready on 127.0.0.1:{socksPort}. Verifying outbound node connectivity before starting {v2rayInnerName}...");
-                SetProgress(30, "Verifying V2Ray outbound connectivity...");
+                
+                
+                
+                
+                
+                
+                
+                
+                if (_method == ConnectionMethod.TorOverV2Ray)
+                    await VerifyOuterEgressAsync(socksPort, nodeName, hopTransport, ct);
 
-                var outboundReady = false;
-                var outboundDeadline = DateTime.UtcNow.AddSeconds(25);
-                while (DateTime.UtcNow < outboundDeadline && !ct.IsCancellationRequested)
-                {
-                    if (_v2ray.State is ConnectionState.Error or ConnectionState.Disconnected)
-                    {
-                        Log("V2Ray process exited unexpectedly while testing outbound connectivity.");
-                        break;
-                    }
-                    if (await ProbeProxyCanConnectInternetAsync(socksPort, ct))
-                    {
-                        outboundReady = true;
-                        break;
-                    }
-                    await Task.Delay(600, ct);
-                }
-
-                if (!outboundReady)
-                {
-                    Log("V2Ray outbound connectivity test failed (node is unreachable or unresponsive); aborting chained session.");
-                    await StopInternalAsync();
-                    SetState(ConnectionState.Error);
-                    return;
-                }
-
-                Log("V2Ray outbound connection confirmed live. Stabilizing node tunnel...");
-                SetProgress(45, "Stabilizing V2Ray connection...");
-                try { await Task.Delay(1200, ct); } catch { }
-
-                Log($"Starting {v2rayInnerName} through verified V2Ray tunnel...");
+                Log($"V2Ray inbound ready on 127.0.0.1:{socksPort}. Starting {v2rayInnerName} through V2Ray tunnel...");
                 SetProgress(50, $"Tunnelling {v2rayInnerName} through V2Ray node...");
 
                 lock (_outerOverridesLock)
@@ -233,20 +297,23 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                     else
                         _outerUpstreamProxyUrlOverride = $"socks5://127.0.0.1:{socksPort}";
                 }
-
+                
                 if (_method == ConnectionMethod.TorOverV2Ray)
                 {
-                    TorEngine.SetSocks5ProxyOverride($"127.0.0.1:{socksPort}");
+                    TorEngine.Socks5ProxyOverride = $"127.0.0.1:{socksPort}";
+                    _tor.ReadyTimeoutOverride = TimeSpan.FromSeconds(ChainedTorInnerBudgetSec + 10);
                     await _tor.StartAsync();
                 }
                 else
                 {
-                    TunnelCoreManager.SetUpstreamProxyUrlOverride($"socks5://127.0.0.1:{socksPort}");
-                    await _psiphon.StartAsync();
+                    TunnelCoreManager.UpstreamProxyUrlOverride = $"socks5://127.0.0.1:{socksPort}";
+                    await StartInnerPsiphonAsync();
                 }
 
                 var v2rayInnerConnected = false;
-                var v2rayInnerBudget = _method == ConnectionMethod.TorOverV2Ray ? 190 : 320;
+                var v2rayInnerBudget = _method == ConnectionMethod.TorOverV2Ray
+                    ? ChainedTorInnerBudgetSec
+                    : ChainedPsiphonInnerBudgetSec;
                 var v2rayInnerMax = (int)Math.Ceiling(v2rayInnerBudget * 1000.0 / 500.0);
                 for (var i = 0; i < v2rayInnerMax && !ct.IsCancellationRequested; i++)
                 {
@@ -285,7 +352,8 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                         SetState(ConnectionState.Disconnected);
                         return;
                     }
-                    Log($"{v2rayInnerName} failed to connect through V2Ray; stopping.");
+                    Log($"{v2rayInnerName} failed to connect through V2Ray; stopping."
+                      + InnerStallHint(v2rayInnerName, nodeName, hopTransport, IsPlaintextHop(activeConfig)));
                     await StopInternalAsync();
                     SetState(ConnectionState.Error);
                 }
@@ -299,16 +367,20 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             Log($"Starting multi-hop chained session ({label})...");
             SetProgress(10, "Connecting to Cloudflare WARP (outer leg)...");
 
+            
             var outerTransport = isTor
-                ? (_settings.Settings.ChainedTorOuterTransport ?? _settings.Settings.ChainedOuterTransport ?? "auto").Trim().ToLowerInvariant()
-                : (_settings.Settings.ChainedPsiphonOuterTransport ?? _settings.Settings.ChainedOuterTransport ?? "auto").Trim().ToLowerInvariant();
+                ? (!string.IsNullOrWhiteSpace(_settings.Settings.ChainedTorOuterTransport)
+                    ? _settings.Settings.ChainedTorOuterTransport
+                    : (_settings.Settings.ChainedOuterTransport ?? "auto")).Trim().ToLowerInvariant()
+                : (!string.IsNullOrWhiteSpace(_settings.Settings.ChainedPsiphonOuterTransport)
+                    ? _settings.Settings.ChainedPsiphonOuterTransport
+                    : (_settings.Settings.ChainedOuterTransport ?? "auto")).Trim().ToLowerInvariant();
 
             var preferredAether = (_settings.Settings.AetherProtocol ?? "masque").Trim().ToLowerInvariant();
             var autoTarget = preferredAether switch
             {
                 "wireguard" or "wg" => ConnectionMethod.WireGuard,
                 "warp_on_warp" or "wow" or "warp" => ConnectionMethod.WarpOnWarp,
-                "masque_on_masque" or "mim" or "mom" => ConnectionMethod.MasqueOnMasque,
                 _ => ConnectionMethod.Masque,
             };
 
@@ -316,9 +388,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             {
                 "wireguard" or "wg" => ConnectionMethod.WireGuard,
                 "warp_on_warp" or "wow" or "warp" => ConnectionMethod.WarpOnWarp,
-                "masque_on_masque" or "mim" or "mom" => ConnectionMethod.MasqueOnMasque,
-                "masque" => ConnectionMethod.Masque,
-                _ => autoTarget,
+                _ => ConnectionMethod.Masque,
             };
 
             lock (_outerOverridesLock)
@@ -326,10 +396,28 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 _outerSocksPortOverride = ChainOuterSocksPort;
                 _outerMethodOverride = targetMethod;
             }
-            AetherEngine.SetOverrides(ChainOuterSocksPort, targetMethod);
+            AetherEngine.SocksPortOverride = ChainOuterSocksPort;
+            AetherEngine.MethodOverride = targetMethod;
+            
+            
+            
+            
+            
+            if (!isTor)
+            {
+                lock (_outerOverridesLock)
+                    _outerUpstreamProxyUrlOverride = $"socks5://127.0.0.1:{ChainOuterSocksPort}";
+                TunnelCoreManager.UpstreamProxyUrlOverride = $"socks5://127.0.0.1:{ChainOuterSocksPort}";
+            }
             Log($"Starting outer WARP transport ({targetMethod.ToDisplayName()})...");
             await _outer.StartAsync();
 
+            
+            
+            
+            
+            
+            
             var outerBudgetSec = GetAetherOuterTimeoutSeconds();
             var maxWait = (int)Math.Ceiling(outerBudgetSec * 1000.0 / 500.0);
             var outerConnected = false;
@@ -337,11 +425,18 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             {
                 if (_outer.State == ConnectionState.Connected)
                 {
-
+                    
+                    
+                    
                     if (await ProbeOuterSocksReadyAsync(ChainOuterSocksPort, ct))
                     {
-
-                        try { await Task.Delay(1200, ct); } catch { }
+                        
+                        
+                        
+                        
+                        
+                        
+                        await Task.Delay(1200, ct);
                         if (_outer.State == ConnectionState.Connected
                             && await ProbeOuterSocksReadyAsync(ChainOuterSocksPort, ct))
                         {
@@ -352,7 +447,8 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 }
                 if (_outer.State is ConnectionState.Error or ConnectionState.Disconnected)
                 {
-
+                    
+                    
                     var graceUntil = DateTime.UtcNow.AddSeconds(6);
                     while (DateTime.UtcNow < graceUntil && !ct.IsCancellationRequested)
                     {
@@ -367,6 +463,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 await Task.Delay(500, ct);
             }
 
+            
             if (!outerConnected && outerTransport == "auto" && !ct.IsCancellationRequested)
             {
                 var fallbackMethod = targetMethod == ConnectionMethod.WireGuard
@@ -377,7 +474,8 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 try { await _outer.StopAsync(); } catch { }
 
                 lock (_outerOverridesLock) _outerMethodOverride = fallbackMethod;
-                AetherEngine.SetOverrides(ChainOuterSocksPort, fallbackMethod);
+                AetherEngine.SocksPortOverride = ChainOuterSocksPort;
+                AetherEngine.MethodOverride = fallbackMethod;
                 await _outer.StartAsync();
 
                 for (var i = 0; i < 160 && !ct.IsCancellationRequested; i++)
@@ -409,18 +507,22 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
 
             if (!outerConnected)
             {
-                if (!ct.IsCancellationRequested)
+                if (ct.IsCancellationRequested)
                 {
-                    Log("Outer WARP leg failed to establish; aborting chained session.");
                     await StopInternalAsync();
-                    SetState(ConnectionState.Error);
+                    SetState(ConnectionState.Disconnected);
+                    return;
                 }
+                Log("Outer WARP leg failed to establish; aborting chained session.");
+                await StopInternalAsync();
+                SetState(ConnectionState.Error);
                 return;
             }
 
             Log("Outer WARP tunnel established. Starting inner leg through WARP...");
             SetProgress(55, $"Tunnelling {innerName} through WARP (inner leg)...");
 
+            
             lock (_outerOverridesLock)
             {
                 if (isTor) _outerSocks5ProxyOverride = $"127.0.0.1:{ChainOuterSocksPort}";
@@ -428,18 +530,21 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             }
             if (isTor)
             {
-                TorEngine.SetSocks5ProxyOverride($"127.0.0.1:{ChainOuterSocksPort}");
+                TorEngine.Socks5ProxyOverride = $"127.0.0.1:{ChainOuterSocksPort}";
+                _tor.ReadyTimeoutOverride = TimeSpan.FromSeconds(ChainedTorInnerBudgetSec + 10);
                 await _tor.StartAsync();
             }
             else
             {
-                TunnelCoreManager.SetUpstreamProxyUrlOverride($"socks5://127.0.0.1:{ChainOuterSocksPort}");
-                await _psiphon.StartAsync();
+                TunnelCoreManager.UpstreamProxyUrlOverride = $"socks5://127.0.0.1:{ChainOuterSocksPort}";
+                await StartInnerPsiphonAsync();
             }
 
-            var innerBudgetSec = isTor ? 190 : 320;
+            
+            
+            var innerBudgetSec = isTor ? ChainedTorInnerBudgetSec : ChainedPsiphonInnerBudgetSec;
             var innerMaxWait = (int)Math.Ceiling(innerBudgetSec * 1000.0 / 500.0);
-
+            
             var innerConnected = false;
             for (var i = 0; i < innerMaxWait && !ct.IsCancellationRequested; i++)
             {
@@ -450,7 +555,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 }
                 if (InnerEngine.State == ConnectionState.Connected)
                 {
-
+                    
                     var innerPort = InnerEngine.SocksProxyPort;
                     if (innerPort > 0 && await ProbeOuterSocksReadyAsync(innerPort, ct))
                     {
@@ -479,7 +584,8 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                     SetState(ConnectionState.Disconnected);
                     return;
                 }
-                Log("Inner leg failed to establish; stopping chained session.");
+                Log("Inner leg failed to establish; stopping chained session."
+                  + InnerStallHint(innerName, "WARP", "wireguard", unencryptedHop: false));
                 await StopInternalAsync();
                 SetState(ConnectionState.Error);
             }
@@ -504,16 +610,31 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
         }
         finally
         {
-            _isStopping = false;
+            
+            
+            
+            
+            
+            
+            
             try { _gate.Release(); } catch { }
         }
+    }
+
+        private async Task StartInnerPsiphonAsync()
+    {
+        if (_psiphon.State is ConnectionState.Connected or ConnectionState.Connecting)
+            await _psiphon.RestartAsync();
+        else
+            await _psiphon.StartAsync();
     }
 
     public void CancelConnecting()
     {
         _isStopping = true;
         try { _connectCts?.Cancel(); } catch { }
-        try { InnerEngine.CancelConnecting(); } catch { }
+        if (InnerEngine is TunnelCoreManager p) try { p.CancelConnecting(); } catch { }
+        if (InnerEngine is TorEngine t) try { t.CancelConnecting(); } catch { }
         try { _outer.CancelConnecting(); } catch { }
         try { _v2ray.CancelConnecting(); } catch { }
     }
@@ -576,10 +697,15 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                 _outerSocksPortOverride = null;
                 _outerMethodOverride = null;
             }
-            TunnelCoreManager.ClearUpstreamProxyUrlOverride();
-            TorEngine.ClearSocks5ProxyOverride();
+            TunnelCoreManager.UpstreamProxyUrlOverride = null;
+            TorEngine.Socks5ProxyOverride = null;
+            
+            
+            _tor.ReadyTimeoutOverride = null;
+            AetherEngine.SocksPortOverride = null;
+            AetherEngine.MethodOverride = null;
             V2RayEngine.ClearSocksPortOverride();
-            AetherEngine.ClearOverrides();
+            V2RayEngine.ClearUserUpstreamOverride();
         }
     }
 
@@ -594,6 +720,30 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                     Log($"Chained leg ({engine.Method}) dropped into {state}. Triggering recovery.");
                     SetState(ConnectionState.Error);
                 }
+                else if (state == ConnectionState.Connecting)
+                {
+                    
+                    
+                    
+                    SetProgress(60, $"A chain hop ({engine.Method.ToDisplayName()}) is re-establishing...");
+                }
+            }
+            else if (!_isStopping && state == ConnectionState.Connected &&
+                     State is ConnectionState.Connecting or ConnectionState.Error)
+            {
+                
+                
+                
+                if (OuterEngine.State == ConnectionState.Connected && InnerEngine.State == ConnectionState.Connected)
+                {
+                    
+                    
+                    
+                    
+                    if (_hasBeenConnected) Log("All chain hops are up again — session restored.");
+                    SetProgress(100, "Connected");
+                    SetState(ConnectionState.Connected);
+                }
             }
         };
 
@@ -601,13 +751,12 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
         {
             if (State is ConnectionState.Connecting or ConnectionState.Connected)
             {
-                var isV2RayOuter = _method is ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray;
                 var innerTag = _method switch
                 {
                     ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray => "Tor",
                     _ => "Psiphon"
                 };
-                var tag = isOuter ? (isV2RayOuter ? "V2Ray" : "WARP") : innerTag;
+                var tag = isOuter ? OuterLegName : innerTag;
                 LogLineAppended?.Invoke(this, $"[{tag}] {line}");
             }
         };
@@ -617,10 +766,15 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             engine.RouteChanged += (_, _) => RouteChanged?.Invoke(this, EventArgs.Empty);
             engine.ConnectProgressChanged += (_, _) =>
             {
-                if (State == ConnectionState.Connecting && _outer.State != ConnectionState.Connected)
+                
+                
+                
+                
+                if (!ReferenceEquals(engine, OuterEngine)) return;
+                if (State == ConnectionState.Connecting && engine.State != ConnectionState.Connected)
                 {
-                    var pct = Math.Clamp(_outer.ConnectProgressPercent / 2, 5, 50);
-                    SetProgress(pct, $"WARP outer: {_outer.ConnectProgressText}");
+                    var pct = Math.Clamp(engine.ConnectProgressPercent / 2, 5, 50);
+                    SetProgress(pct, $"{OuterLegName} outer: {engine.ConnectProgressText}");
                 }
             };
         }
@@ -631,7 +785,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             engine.RouteChanged += (_, _) => RouteChanged?.Invoke(this, EventArgs.Empty);
             engine.ConnectProgressChanged += (_, _) =>
             {
-                if (State == ConnectionState.Connecting && _outer.State == ConnectionState.Connected)
+                if (State == ConnectionState.Connecting && OuterEngine.State == ConnectionState.Connected)
                 {
                     var pct = 50 + Math.Clamp(InnerEngine.ConnectProgressPercent / 2, 0, 50);
                     SetProgress(pct, InnerEngine.ConnectProgressText);
@@ -639,6 +793,8 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             };
         }
     }
+
+    
 
     private double GetAetherOuterTimeoutSeconds()
     {
@@ -649,10 +805,70 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             "thorough" => 300 + 30,
             "stealth" => 180 + 25,
             "ironclad" => 180 + 15,
-            _ => 120 + 20,
+            _ => 120 + 20, 
         };
-
+        
+        
         return scanSec + 30 + 20;
+    }
+
+        private static string NodeLabel(V2RayConfigEntry c) =>
+        string.IsNullOrWhiteSpace(c.Name) ? $"{c.Protocol} port {c.Port}" : c.Name.Trim();
+
+        private static string HopTransport(V2RayConfigEntry c)
+    {
+        var security = (c.Security ?? string.Empty).Trim().ToLowerInvariant();
+        if (security.Length == 0) security = "none";
+        var network = string.IsNullOrWhiteSpace(c.Network) ? "tcp" : c.Network.Trim().ToLowerInvariant();
+        return $"{(c.Protocol ?? "vless").ToLowerInvariant()}/{network}/{security}";
+    }
+
+        private static bool IsPlaintextHop(V2RayConfigEntry c)
+    {
+        var protocol = (c.Protocol ?? string.Empty).ToLowerInvariant();
+        if (protocol is not ("vless" or "trojan")) return false;
+        if (!string.IsNullOrWhiteSpace(c.PublicKey)) return false;
+        var security = (c.Security ?? string.Empty).Trim().ToLowerInvariant();
+        return security is "" or "none" or "plain";
+    }
+
+        private async Task VerifyOuterEgressAsync(int socksPort, string nodeName, string transport, CancellationToken ct)
+    {
+        SetProgress(42, "Checking that the V2Ray node can reach the internet...");
+        var proof = await SocksProbe.WaitForTunnelAsync(
+            socksPort, DateTime.UtcNow.AddSeconds(12), ct, TimeSpan.FromMilliseconds(700));
+        if (ct.IsCancellationRequested) return;
+
+        if (proof != null)
+        {
+            Log($"V2Ray outer hop carries traffic ({transport}, verified through {proof}).");
+            return;
+        }
+
+        Log($"V2Ray outer hop \"{nodeName}\" is listening on 127.0.0.1:{socksPort} but carried no probe traffic."
+          + " Continuing anyway — nodes that block the probe sites still work — but if the inner leg"
+          + " fails, this node is the first thing to change.");
+    }
+
+        private string InnerStallHint(string innerName, string outerLabel, string transport, bool unencryptedHop)
+    {
+        if (InnerEngine is not TorEngine) return "";
+
+        if (unencryptedHop)
+        {
+            return $" The {outerLabel} hop is {transport}: it carries the chain without encrypting it,"
+              + " so Tor's relay handshakes are readable to anything between you and the relay and get"
+              + " dropped there while ordinary traffic passes. A node with security=tls or"
+              + " security=reality is what fixes this - another attempt on this node will stall the"
+              + " same way.";
+        }
+
+        var stage = InnerEngine.CurrentRouteSni;
+        if (string.IsNullOrWhiteSpace(stage)) return "";
+
+        return $" Last {innerName} progress through the {outerLabel} hop ({transport}) was \"{stage}\":"
+          + " the hop answers connections but does not finish carrying them."
+          + " Pick a different node, or switch the V2Ray core (xray / sing-box) in Settings.";
     }
 
     private static async Task<bool> ProbeOuterSocksReadyAsync(int socksPort, CancellationToken ct)
@@ -676,50 +892,6 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             return resp[0] == 0x05 && resp[1] == 0x00;
         }
         catch { return false; }
-    }
-
-    private static async Task<bool> ProbeProxyCanConnectInternetAsync(int socksPort, CancellationToken ct)
-    {
-        var targetUrls = new[]
-        {
-            "http://cp.cloudflare.com/generate_204",
-            "http://connectivitycheck.gstatic.com/generate_204",
-            "http://1.1.1.1/cdn-cgi/trace"
-        };
-
-        foreach (var url in targetUrls)
-        {
-            if (ct.IsCancellationRequested) return false;
-            try
-            {
-                using var handler = new SocketsHttpHandler
-                {
-                    Proxy = new WebProxy($"socks5://127.0.0.1:{socksPort}"),
-                    UseProxy = true,
-                    ConnectTimeout = TimeSpan.FromSeconds(2.5),
-                    PooledConnectionLifetime = TimeSpan.FromSeconds(1)
-                };
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(2.5)
-                };
-                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                linkedCts.CancelAfter(TimeSpan.FromSeconds(2.5));
-
-                using var req = new HttpRequestMessage(HttpMethod.Get, url);
-                req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-                var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
-                if (resp.IsSuccessStatusCode || (int)resp.StatusCode == 204)
-                {
-                    return true;
-                }
-            }
-            catch
-            {
-
-            }
-        }
-        return false;
     }
 
     private void Log(string line) =>

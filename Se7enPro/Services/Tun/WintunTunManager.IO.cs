@@ -17,10 +17,30 @@ public sealed partial class WintunTunManager
     {
         try
         {
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            var file = new FileInfo(_logPath!);
+            var carried = file.Exists ? file.Length : 0L;
+            if (carried > LogByteCap)
+            {
+                try { file.Delete(); } catch { }
+                carried = 0;
+            }
+
             _logWriter = new StreamWriter(
-                new FileStream(_logPath!, FileMode.Create, FileAccess.Write, FileShare.Read))
+                new FileStream(_logPath!, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
             { AutoFlush = true };
-            Interlocked.Exchange(ref _logBytesWritten, 0);
+            Interlocked.Exchange(ref _logBytesWritten, carried);
             Interlocked.Exchange(ref _logCapNoticeWritten, 0);
             _logWriter.WriteLine($"# tun2socks TUN session {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         }
@@ -53,9 +73,8 @@ public sealed partial class WintunTunManager
 
     private void WriteDiag(string line) => WriteLogLine($"[diag {DateTime.Now:HH:mm:ss.fff}] {line}");
 
-    private void WriteLogLine(string line)
+        private void WriteLogLine(string line)
     {
-        try { LogLineAppended?.Invoke(this, line); } catch { }
         try
         {
             var writer = _logWriter;
@@ -74,7 +93,7 @@ public sealed partial class WintunTunManager
         catch { }
     }
 
-    private async Task TryRemoveStaleWintunDeviceAsync()
+        private async Task TryRemoveStaleWintunDeviceAsync()
     {
         try
         {
@@ -91,32 +110,22 @@ public sealed partial class WintunTunManager
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            using var p = Process.Start(psi)!;
+            using var p = Process.Start(psi);
+            if (p is null) return;
             var output = await p.StandardOutput.ReadToEndAsync();
+            _ = p.StandardError.ReadToEndAsync();
             await p.WaitForExitAsync();
 
-            var matches = System.Text.RegularExpressions.Regex.Matches(
-                output, @"SWD\\Wintun\\\{[0-9a-fA-F\-]+\}");
-            var ids = matches.Select(m => m.Value).Distinct().ToList();
-
-            var protectedGuids = LiveForeignAdapterGuids();
-            var kept = new List<string>();
-            ids.RemoveAll(id =>
-            {
-                var guid = ExtractAdapterGuid(id);
-                if (guid is null || !protectedGuids.Contains(guid)) return false;
-                kept.Add(id);
-                return true;
-            });
-            if (kept.Count > 0)
-            {
-                WriteDiag($"pnputil pre-cleanup: kept {kept.Count} Wintun device(s) belonging to other "
-                          + $"live adapters: {string.Join(", ", kept)}");
-            }
-
+            
+            
+            
+            
+            
+            
+            var ids = OwnWintunDeviceIds(output);
             if (ids.Count == 0)
             {
-                WriteDiag("pnputil pre-cleanup: no stale Wintun devices");
+                WriteDiag("pnputil pre-cleanup: no stale se7en_tun devices");
                 return;
             }
 
@@ -132,14 +141,30 @@ public sealed partial class WintunTunManager
                 };
                 rpsi.ArgumentList.Add("/remove-device");
                 rpsi.ArgumentList.Add(id);
-                using var rp = Process.Start(rpsi)!;
+
+                using var rp = Process.Start(rpsi);
+                if (rp is null) continue;
+                _ = rp.StandardOutput.ReadToEndAsync();
+                _ = rp.StandardError.ReadToEndAsync();
+
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                try { await rp.WaitForExitAsync(timeout.Token); }
+                try
+                {
+                    await rp.WaitForExitAsync(timeout.Token);
+                    
+                    
+                    
+                    WriteDiag($"pnputil pre-cleanup: removed '{id}' (exit={rp.ExitCode})");
+                }
                 catch (OperationCanceledException)
                 {
                     try { rp.Kill(entireProcessTree: true); } catch { }
+                    WriteDiag($"pnputil pre-cleanup: '{id}' timed out");
                 }
-                WriteDiag($"pnputil pre-cleanup: removed '{id}' (exit={rp.ExitCode})");
+                catch (InvalidOperationException)
+                {
+                    WriteDiag($"pnputil pre-cleanup: '{id}' exited before it could be read");
+                }
             }
         }
         catch (Exception ex)
@@ -148,71 +173,46 @@ public sealed partial class WintunTunManager
         }
     }
 
-    private static HashSet<string> LiveForeignAdapterGuids()
+        private static List<string> OwnWintunDeviceIds(string pnputilOutput)
     {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        try
+        var result = new List<string>();
+        var currentId = (string?)null;
+
+        foreach (var rawLine in pnputilOutput.Split('\n'))
         {
-            foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            var line = rawLine.Trim();
+            if (line.Length == 0) continue;
+
+            var colon = line.IndexOf(':');
+            if (colon <= 0) continue;
+
+            var label = line[..colon].Trim();
+            var value = line[(colon + 1)..].Trim();
+
+            if (label.Equals("Instance ID", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.Equals(nic.Name, TunInterfaceName, StringComparison.OrdinalIgnoreCase)) continue;
-                var guid = ExtractAdapterGuid(nic.Id);
-                if (guid is not null) set.Add(guid);
+                currentId = value.StartsWith(@"SWD\Wintun\", StringComparison.OrdinalIgnoreCase) ? value : null;
+                continue;
             }
-        }
-        catch {  }
-        return set;
-    }
 
-    private static string? ExtractAdapterGuid(string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return null;
-        var m = System.Text.RegularExpressions.Regex.Match(value, @"\{[0-9a-fA-F\-]{36}\}");
-        return m.Success ? m.Value.ToUpperInvariant() : null;
-    }
+            if (currentId is null) continue;
 
-    private void KillOrphanTunCores()
-    {
-        if (string.IsNullOrEmpty(_workDir)) return;
-
-        var expectedImage = Path.Combine(_workDir, CachedTunExeName);
-        Process? own;
-        lock (_lock) own = _process;
-
-        Process[] candidates;
-        try { candidates = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(CachedTunExeName)); }
-        catch (Exception ex)
-        {
-            WriteDiag($"orphan tun core scan failed (continuing): {ex.Message}");
-            return;
-        }
-
-        foreach (var proc in candidates)
-        {
-            try
+            
+            
+            
+            if (label.Equals("Friendly Name", StringComparison.OrdinalIgnoreCase) ||
+                label.Equals("Description", StringComparison.OrdinalIgnoreCase))
             {
-                if (own is not null && proc.Id == own.Id) continue;
-
-                var image = WintunRouteApi.TryGetProcessPath(proc.Id);
-                if (image is null
-                    || !string.Equals(image, expectedImage, StringComparison.OrdinalIgnoreCase))
+                if (value.Contains("se7en", StringComparison.OrdinalIgnoreCase) ||
+                    value.Contains("tun2socks", StringComparison.OrdinalIgnoreCase))
                 {
-                    continue;
+                    result.Add(currentId);
                 }
-
-                WriteDiag($"reaping orphaned tun core (pid {proc.Id}) still holding '{TunInterfaceName}'");
-                proc.Kill(entireProcessTree: true);
-                proc.WaitForExit(3000);
-            }
-            catch (Exception ex)
-            {
-                WriteDiag($"orphaned tun core pid {proc.Id} not reaped: {ex.Message}");
-            }
-            finally
-            {
-                try { proc.Dispose(); } catch { }
+                currentId = null;
             }
         }
+
+        return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private async Task<bool> WaitForAdapterUpAsync(Process proc, CancellationToken ct)
@@ -249,7 +249,7 @@ public sealed partial class WintunTunManager
         return !ct.IsCancellationRequested && WintunRouteApi.IsAdapterUp(TunInterfaceName);
     }
 
-    private void CleanupLegacyTunWorkDirs()
+        private void CleanupLegacyTunWorkDirs()
     {
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         foreach (var legacy in new[] { "singbox-tun", "xray-tun" })
