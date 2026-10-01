@@ -1,102 +1,56 @@
-# Building and releasing Se7en Pro
+<div align="center">
 
-Everything here works from a clean clone. Two rules to keep in mind:
+# 🛠️ Se7en Pro — Build & Release Guide
 
-1. **No secret is ever committed.** The repository ships placeholder Psiphon
-   configuration. Real values are injected at build time from environment
-   variables and encrypted into the binary.
-2. **Releases are made by pushing a tag.** GitHub Actions builds, verifies and
-   publishes; you do not upload anything by hand.
+[🇬🇧 English](#-english) | [🇮🇷 فارسی](#-فارسی) | [🇷🇺 Русский](#-русский) | [🇨🇳 中文](#-中文)
+
+</div>
 
 ---
 
-## 1. Prerequisites
+## 🇬🇧 English
 
-| Requirement | Version | Notes |
+### 1. Prerequisites
+
+| Requirement | Version | Purpose |
 | :--- | :--- | :--- |
-| Windows | 10 / 11 (x86 or x64) | WPF desktop app |
-| [.NET SDK](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.0 or newer | SDK 10 also works |
-| [Python](https://python.org/downloads/) | 3.10+ | only for the secret injector |
-| `cryptography` (pip) | any | only for the secret injector |
-| [Inno Setup 6](https://jrsoftware.org/isinfo.php) | 6.x | only for `.exe` installers |
+| **Windows** | 10 / 11 (x86 or x64) | Target OS for WPF Client |
+| **[.NET SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** | 8.0 or newer | Build compiler & runtime |
+| **[Python](https://python.org/downloads/)** | 3.10+ | Secret injection script |
+| **`cryptography`** (pip) | Latest | AES-256-GCM secret encryption |
+| **[Inno Setup 6](https://jrsoftware.org/isinfo.php)** | 6.x | Installer packaging (`.exe`) |
 
 ```powershell
-git clone https://github.com/KNG7-P/Se7en-Pro.git
+# Clone repository
+git clone https://github.com/yesmaynameisO/Se7en-Pro.git
 cd Se7en-Pro
+
+# Install Python dependency for build secrets
 python -m pip install cryptography
 ```
 
 ---
 
-## 2. Everyday development build
+### 2. Everyday Development Build
 
-This needs no secrets and no configuration:
+Builds a fully functional client with placeholder Psiphon credentials. All other engines (Tor, WireGuard WARP, Aether MASQUE, Xray, Sing-box, SHARD) work out of the box without secrets.
 
 ```powershell
-# framework-dependent, x64
+# Compile x64 Release
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-# framework-dependent, x86
+# Compile x86 Release
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x86
 ```
 
-Output:
-
-```
-Se7enPro\bin\Release\net8.0-windows10.0.19041.0\win-x64\Se7enPro.exe
-```
-
-The client starts and every UI feature works. Psiphon resolves no real
-propagation channel, because the placeholder branch of `EmbeddedValues.cs` is
-compiled. Other protocols (Tor, WARP, Xray, Sing-box, V2Ray) work normally.
+Output executable path:
+`Se7enPro\bin\Release\net8.0-windows10.0.19041.0\win-x64\Se7enPro.exe`
 
 ---
 
-## 3. Psiphon configuration (secrets)
+### 3. Psiphon Secrets Configuration
 
-### 3.1 How it works
-
-```
-Services/EmbeddedValues.cs
-    #if SE7EN_SECRETS      -> reads Services/BuildSecrets.g.cs (generated)
-    #else                  -> placeholders, compiled when no file is present
-
-Se7enPro.csproj
-    exists('Services\BuildSecrets.g.cs')  ->  defines SE7EN_SECRETS
-
-tools/generate_build_secrets.py
-    env vars  ->  AES-256-GCM  ->  Services/BuildSecrets.g.cs
-```
-
-`BuildSecrets.g.cs` is git-ignored. If it is missing, the build silently uses
-placeholders, so a fork can always build.
-
-### 3.2 The variables
-
-Every one is a **plain text value**, not base64 — the injector handles the
-encoding.
-
-| Variable | Value |
-| :--- | :--- |
-| `SE7EN_PROPAGATION_CHANNEL_ID` | Psiphon propagation channel id |
-| `SE7EN_SPONSOR_ID` | Psiphon sponsor id |
-| `SE7EN_CLIENT_VERSION` | client version string, normally `1` |
-| `SE7EN_CLIENT_PLATFORM` | `Windows` |
-| `SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY` | base64 DER public key that signs the remote server list |
-| `SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY` | base64 DER public key that signs server entries |
-| `SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY` | base64 public key for feedback uploads |
-| `SE7EN_REMOTE_SERVER_LIST_URLS_JSON` | the `RemoteServerListURLs` JSON array |
-| `SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON` | the `ObfuscatedServerListRootURLs` JSON array |
-| `SE7EN_FEEDBACK_UPLOAD_URLS_JSON` | the `FeedbackUploadURLs` JSON array |
-
-Optional:
-
-| Variable | Value |
-| :--- | :--- |
-| `SE7EN_SERVER_ENTRIES` | path to a plaintext `server_entries.txt`; encrypted into `Resources/server_entries.bin` and embedded |
-
-### 3.3 Local build with real values
-
+1. Set the 10 environment variables in your PowerShell terminal:
 ```powershell
 $env:SE7EN_PROPAGATION_CHANNEL_ID    = 'your-channel'
 $env:SE7EN_SPONSOR_ID                = 'your-sponsor'
@@ -108,206 +62,331 @@ $env:SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY           = 'base64-key'
 $env:SE7EN_REMOTE_SERVER_LIST_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
 $env:SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
 $env:SE7EN_FEEDBACK_UPLOAD_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+```
 
-# optional, ~2 MB file
-$env:SE7EN_SERVER_ENTRIES = 'C:\secure\server_entries.txt'
-
+2. Run secret generator and compile:
+```powershell
 python tools\generate_build_secrets.py
 dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 ```
 
-Then delete the generated file when you are done:
-
+3. Clean up encrypted secrets after build:
 ```powershell
-Remove-Item Se7enPro\Services\BuildSecrets.g.cs
-Remove-Item Se7enPro\Resources\server_entries.bin
+Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
 ```
-
-Both are git-ignored, but removing them keeps a stray `git add -A` honest.
-
-Check what is present without writing anything:
-
-```powershell
-python tools\generate_build_secrets.py --check
-```
-
-Exit code `0` = all ten values available, `2` = something is missing.
 
 ---
 
-## 4. Local release build
+### 4. Full Distribution Packaging (Local)
 
-Produces the same artifacts CI does, without publishing.
+To build full installers and portable ZIP packages locally:
 
 ```powershell
-# x64 + x86, self-contained, portable zips and installers
+# Build all architectures (x64 and x86) with installers and portables:
 .\tools\build-all.ps1 -Arch all -OutDir dist
-
-# one architecture
-.\tools\build-all.ps1 -Arch x64 -OutDir dist
-
-# framework-dependent variants only (smaller, needs .NET 8 Desktop Runtime)
-.\tools\build-all.ps1 -Arch all -AllVariants
 ```
 
-Artifacts land in `dist/`:
-
-```
-Se7enPro_v1.0.5_Portable_x64.zip              (self-contained)
-Se7enPro_v1.0.5_Portable_x64_without_dotnet.zip
-Se7enPro_v1.0.5_Portable_x86.zip
-Se7enPro_v1.0.5_Portable_x86_without_dotnet.zip
-Se7enPro_v1.0.5_Setup_x64.exe                 (needs Inno Setup)
-Se7enPro_v1.0.5_Setup_x86.exe
-```
-
-Other flags: `-SkipInstaller`, `-SkipPortable`, `-FrameworkDependent`.
-
-If Inno Setup is not installed the script warns and skips the `.exe`; the
-zip archives are still produced.
+Outputs generated in `dist/`:
+- `Se7enPro_v1.0.5_Setup_x64.exe`
+- `Se7enPro_v1.0.5_Setup_x86.exe`
+- `Se7enPro_v1.0.5_Portable_x64.zip`
+- `Se7enPro_v1.0.5_Portable_x86.zip`
+- `SHA256SUMS.txt`
 
 ---
 
-## 5. Publishing a release from GitHub
+### 5. Automated GitHub Actions Release
 
-### 5.1 One-time repository setup
-
-**Add the secrets** — *Settings → Secrets and variables → Actions →
-New repository secret*. Add the ten variables from section 3.2. Optionally add:
-
-| Secret | Purpose |
-| :--- | :--- |
-| `SE7EN_SERVER_ENTRIES_B64` | base64 of a plaintext `server_entries.txt` |
-
+1. Ensure the 10 secrets are defined in **Settings → Secrets and variables → Actions**.
+2. Verify token permissions in **Settings → Actions → General → Workflow permissions** are set to **Read and write permissions**.
+3. Push a version tag:
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('server_entries.txt')) |
-    Set-Clipboard
-```
-
-GitHub caps a secret at 48 KB, and a 2 MB file base64-encodes to ~2.7 MB, so
-this one does **not** fit. Options:
-
-- skip it — the client fetches the remote server list on first run instead of
-  embedding one, which works but is slower on a cold start;
-- or keep the plaintext in a private repo / private release asset and have the
-  workflow download it. That needs a token, so it is not wired up here.
-
-**Create the `release` environment** — *Settings → Environments → New
-environment*, name it `release`. Add the same secrets to it if you want them
-scoped, and turn on **Required reviewers** if you want a manual gate. The
-release job references this environment, so it is created automatically on the
-first run if you skip this step.
-
-The tag `v*` must point at a commit whose `Se7enPro.csproj` already declares
-the same `<Version>`, `<AssemblyVersion>` and `<FileVersion>`. The workflow
-refuses to publish otherwise.
-
-### 5.2 Cut a release
-
-```powershell
-# 1. bump the version in Se7enPro\Se7enPro.csproj
-#    <Version>1.0.5</Version>  <AssemblyVersion>1.0.5.0</AssemblyVersion>  <FileVersion>1.0.5.0</FileVersion>
-# 2. write the release notes at the top of CHANGELOG.md
-# 3. commit, then tag
-git add Se7enPro\Se7enPro.csproj CHANGELOG.md
-git commit -m "chore(app): release 1.0.5"
 git tag -a v1.0.5 -m "Se7en Pro v1.0.5"
-git push origin master --tags
+git push origin v1.0.5
 ```
-
-Actions → **Release** runs automatically. It:
-
-1. checks out with `persist-credentials: false`;
-2. verifies the tag matches the csproj version;
-3. installs Python, .NET 8 and Inno Setup;
-4. runs `--check` and **fails before building** if any secret is missing;
-5. injects the secrets, encrypts the optional server list, and asserts that
-   `SE7EN_SECRETS` is actually defined — a release can never silently ship
-   placeholders;
-6. runs `tools/build-all.ps1 -Arch all`;
-7. writes `dist/SHA256SUMS.txt`;
-8. opens every produced archive and greps for the plaintext channel id and
-   sponsor id — a hit aborts the release;
-9. publishes the release with `gh release create --verify-tag --latest`, using
-   the built-in `GITHUB_TOKEN`.
-
-Re-running is safe: the workflow group is serialised and `gh release create`
-fails rather than overwriting an existing tag.
-
-### 5.3 Manual re-run
-
-*Actions → Release → Run workflow*, then type the tag. The tag must already
-exist.
-
-### 5.4 Security properties of this setup
-
-| Concern | How it is handled |
-| :--- | :--- |
-| Secrets in git | never; values only exist as GitHub secrets and as ciphertext in the built binary |
-| Secrets in build logs | passed through `env:` only, never echoed; the `--check` gate prints names, not values |
-| Secrets in artifacts | an explicit post-build scan aborts the release on a match |
-| Placeholder shipped by accident | the release asserts `SE7EN_SECRETS` is defined before building |
-| Over-broad token | `permissions: contents: write` on the publish job only; everything else is `read` |
-| Token persistence | `persist-credentials: false` on every checkout |
-| Untrusted code | builds run only for tags you push, and pull requests never get secrets |
-| Duplicate releases | `concurrency` group serialises, `gh` refuses to reuse a tag |
-| Dependency updates | Dependabot watches Actions, NuGet and pip monthly |
-
-Actions are referenced by major-version tag rather than commit SHA. To tighten
-further, replace e.g. `actions/checkout@v4` with its pinned SHA and add a
-comment with the tag it corresponds to.
-
-### 5.5 Uninstalling the key material
-
-GitHub cannot delete a secret's history; rotating is the only option. If a
-secret leaks, change the value on the Psiphon side, update the repository
-secret, and publish a new release. Because the shipped binary only holds
-AES-GCM ciphertext, a leaked *binary* is not a channel takeover, but a leaked
-*secret* is — rotate first.
+GitHub Actions automatically builds, verifies secret encryption, generates installers and portables, calculates SHA-256 sums, and publishes the GitHub Release.
 
 ---
 
-## 6. Repository layout
+## 🇮🇷 فارسی
 
-```
-Se7enPro/            the WPF client
-  Services/          engines, TUN, settings, secret store
-  Services/Tun/      Wintun + tun2socks + DNS forwarder
-  ViewModels/        MVVM view models
-  Views/             pages and dialogs
-  Themes/            Material Design 3 palette and styles
-  Resources/         bundled binaries, GeoIP data, flags, fonts
-installer/           Inno Setup scripts
-tools/
-  build-all.ps1              the release pipeline
-  publish-portable.ps1       portable archive only
-  generate_build_secrets.py  secret injector
-  TunEngineTest/             TUN/routing test harness
-.github/workflows/   ci.yml, release.yml
-CHANGELOG.md         release notes, consumed by the release workflow
+### ۱. پیش‌نیازهای ساخت و کامپایل
+
+| پیش‌نیاز | نسخه | کاربرد |
+| :--- | :--- | :--- |
+| **ویندوز** | 10 یا 11 (نسخه 32 یا 64 بیتی) | سیستم‌عامل مقصد برنامه کلاینت WPF |
+| **[.NET SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** | 8.0 یا بالاتر | کامپایلر دات‌نت و ران‌تایم |
+| **[پایتون](https://python.org/downloads/)** | 3.10 به بالا | اسکریپت تزریق سکرت‌ها در بیلد |
+| **کتابخانه `cryptography`** | آخرین نسخه | رمزگذاری AES-256-GCM مقادیر سکرت |
+| **[Inno Setup 6](https://jrsoftware.org/isinfo.php)** | نسخه 6.x | ساخت فایل‌های ستاپ نصبی (`.exe`) |
+
+```powershell
+# کلون کردن ریپازیتوری
+git clone https://github.com/yesmaynameisO/Se7en-Pro.git
+cd Se7en-Pro
+
+# نصب کتابخانه پایتون برای رمزگذاری مقادیر
+python -m pip install cryptography
 ```
 
 ---
 
-## 7. Troubleshooting
+### ۲. کامپایل معمولی و توسعه روزمره
 
-**`Could not find file ... Resources\server_entries.bin`** — expected on a
-clean checkout. The csproj only embeds it when it exists. Supply it via
-`SE7EN_SERVER_ENTRIES`, or ignore it.
+این بیلد بدون نیاز به هیچ کلید یا سکرتی انجام می‌شود و کلاینتی کاملاً سالم تولید می‌کند. پروتکل‌های تور، WireGuard WARP، ماسک، Xray، Sing-box و SHARD بدون نیاز به سکرت کار می‌کنند:
 
-**Psiphon shows no region and never connects, everything else works** — the
-build used placeholders. Set the environment variables and re-run
-`generate_build_secrets.py`, then rebuild.
+```powershell
+# کامپایل نسخه 64 بیتی Release
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
 
-**`BuildSecrets.g.cs` is present but the client still shows placeholders** — a
-stale `obj` directory. `Remove-Item -Recurse -Force Se7enPro\obj` and rebuild.
+# کامپایل نسخه 32 بیتی Release
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x86
+```
 
-**Inno Setup not found** — install Inno Setup 6, or pass `-SkipInstaller`.
+مسیر خروجی باینری:
+`Se7enPro\bin\Release\net8.0-windows10.0.19041.0\win-x64\Se7enPro.exe`
 
-**Workflow fails at "SE7EN_SECRETS is not defined"** — the generator did not
-write the file, or the path is wrong. Run the generator by hand and check
-`Se7enPro\Services\BuildSecrets.g.cs` exists.
+---
 
-**Workflow fails at "LEAK: a secret value appears verbatim"** — something
-embedded a secret unencrypted. The release is intentionally blocked; do not
-bypass this check.
+### ۳. تنظیم سکرت‌های شبکه سایفون
+
+۱. متغیرهای ده‌گانه را در پاورشل مقداردهی کنید:
+```powershell
+$env:SE7EN_PROPAGATION_CHANNEL_ID    = 'your-channel'
+$env:SE7EN_SPONSOR_ID                = 'your-sponsor'
+$env:SE7EN_CLIENT_VERSION            = '1'
+$env:SE7EN_CLIENT_PLATFORM           = 'Windows'
+$env:SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY = 'base64-DER-key'
+$env:SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY        = 'base64-DER-key'
+$env:SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY           = 'base64-key'
+$env:SE7EN_REMOTE_SERVER_LIST_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+$env:SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+$env:SE7EN_FEEDBACK_UPLOAD_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+```
+
+۲. اجرای اسکریپت تزریق و کامپایل نهایی:
+```powershell
+python tools\generate_build_secrets.py
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
+```
+
+۳. پاک‌سازی فایل رمزگذاری‌شده موقت پس از اتمام ساخت:
+```powershell
+Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
+```
+
+---
+
+### ۴. ساخت پکیج‌های کامل رسمی به صورت لوکال
+
+برای ساخت تمامی فایل‌های نصبی Inno Setup و فایل‌های پرتابل ZIP در سیستم خود:
+
+```powershell
+# بیلد کامل هر دو معماری x64 و x86 همراه با نصاب‌ها و نسخه‌های پرتابل:
+.\tools\build-all.ps1 -Arch all -OutDir dist
+```
+
+فایل‌های تولیدشده در پوشه `dist/`:
+- `Se7enPro_v1.0.5_Setup_x64.exe` (فایل نصبی ۶۴ بیتی)
+- `Se7enPro_v1.0.5_Setup_x86.exe` (فایل نصبی ۳۲ بیتی)
+- `Se7enPro_v1.0.5_Portable_x64.zip` (نسخه پرتابل ۶۴ بیتی)
+- `Se7enPro_v1.0.5_Portable_x86.zip` (نسخه پرتابل ۳۲ بیتی)
+- `SHA256SUMS.txt` (چک‌سام هش‌ها)
+
+---
+
+### ۵. انتشار خودکار نسخه از طریق گیت‌هاب (GitHub Actions)
+
+۱. مطمئن شوید ۱۰ سکرت مربوطه در مسیر **Settings → Secrets and variables → Actions** ریپازیتوری ذخیره شده‌اند.
+۲. مطمئن شوید در بخش **Settings → Actions → General → Workflow permissions** دسترسی به **Read and write permissions** تنظیم شده است.
+۳. پوش کردن تگ نسخه:
+```powershell
+git tag -a v1.0.5 -m "Se7en Pro v1.0.5"
+git push origin v1.0.5
+```
+اکشن گیت‌هاب به طور خودکار بیلد را آغاز کرده، سکرت‌ها را رمزنگاری می‌کند، فایل‌های نصبی و پرتابل را می‌سازد و نسخه را در صفحه Releases منتشر می‌نماید.
+
+---
+
+## 🇷🇺 Русский
+
+### 1. Системные требования для сборки
+
+| Требование | Версия | Назначение |
+| :--- | :--- | :--- |
+| **Windows** | 10 / 11 (x86 или x64) | Целевая ОС для клиента WPF |
+| **[.NET SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** | 8.0 или выше | Компилятор и среда выполнения |
+| **[Python](https://python.org/downloads/)** | 3.10+ | Скрипт внедрения секретов |
+| **`cryptography`** (pip) | Последняя | Шифрование секретов AES-256-GCM |
+| **[Inno Setup 6](https://jrsoftware.org/isinfo.php)** | 6.x | Сборка установщиков (`.exe`) |
+
+```powershell
+# Клонирование репозитория
+git clone https://github.com/yesmaynameisO/Se7en-Pro.git
+cd Se7en-Pro
+
+# Установка зависимостей Python
+python -m pip install cryptography
+```
+
+---
+
+### 2. Повседневная сборка для разработки
+
+Компилирует полностью работоспособный клиент с плейсхолдерами для Psiphon. Все остальные протоколы (Tor, WireGuard WARP, Aether MASQUE, Xray, Sing-box, SHARD) работают сразу без секретов:
+
+```powershell
+# Сборка x64 Release
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
+
+# Сборка x86 Release
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x86
+```
+
+---
+
+### 3. Настройка секретов Psiphon
+
+1. Задайте переменные окружения в PowerShell:
+```powershell
+$env:SE7EN_PROPAGATION_CHANNEL_ID    = 'your-channel'
+$env:SE7EN_SPONSOR_ID                = 'your-sponsor'
+$env:SE7EN_CLIENT_VERSION            = '1'
+$env:SE7EN_CLIENT_PLATFORM           = 'Windows'
+$env:SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY = 'base64-DER-key'
+$env:SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY        = 'base64-DER-key'
+$env:SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY           = 'base64-key'
+$env:SE7EN_REMOTE_SERVER_LIST_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+$env:SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+$env:SE7EN_FEEDBACK_UPLOAD_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+```
+
+2. Сгенерируйте зашифрованный файл секретов и соберите проект:
+```powershell
+python tools\generate_build_secrets.py
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
+```
+
+3. Удалите временный сгенерированный файл:
+```powershell
+Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
+```
+
+---
+
+### 4. Полная локальная сборка дистрибутивов
+
+```powershell
+# Сборка x64 и x86 со всеми установщиками и портативными версиями:
+.\tools\build-all.ps1 -Arch all -OutDir dist
+```
+
+---
+
+### 5. Автоматический релиз через GitHub Actions
+
+1. Добавьте 10 секретов в **Settings → Secrets and variables → Actions**.
+2. Включите **Read and write permissions** в **Settings → Actions → General → Workflow permissions**.
+3. Создайте и отправьте тег:
+```powershell
+git tag -a v1.0.5 -m "Se7en Pro v1.0.5"
+git push origin v1.0.5
+```
+
+---
+
+## 🇨🇳 中文
+
+### 1. 源码构建环境准备
+
+| 依赖环境 | 推荐版本 | 作用说明 |
+| :--- | :--- | :--- |
+| **Windows** | 10 / 11 (x86 或 x64) | 客户端运行与编译目标操作系统 |
+| **[.NET SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** | 8.0 或更高版本 | C# / WPF 项目编译工具与运行时 |
+| **[Python](https://python.org/downloads/)** | 3.10+ | 构建时密钥注入脚本解释器 |
+| **`cryptography`** (pip) | 最新版 | 用于对敏感凭据进行 AES-256-GCM 加密 |
+| **[Inno Setup 6](https://jrsoftware.org/isinfo.php)** | 6.x | 打包生成标准 `.exe` 安装程序 |
+
+```powershell
+# 克隆代码仓库
+git clone https://github.com/yesmaynameisO/Se7en-Pro.git
+cd Se7en-Pro
+
+# 安装构建辅助 Python 模块
+python -m pip install cryptography
+```
+
+---
+
+### 2. 日常开发调试编译
+
+该方式无需注入任何商业私钥或凭证，编译生成的客户端完全可用。Tor、WireGuard WARP、Aether MASQUE、Xray、Sing-box 和 SHARD 协议可直接开箱使用：
+
+```powershell
+# 编译 x64 发行版
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
+
+# 编译 x86 发行版
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x86
+```
+
+输出可执行程序路径：
+`Se7enPro\bin\Release\net8.0-windows10.0.19041.0\win-x64\Se7enPro.exe`
+
+---
+
+### 3. 配置 Psiphon 商业接入密钥
+
+1. 在 PowerShell 终端设置 10 项标准环境变量：
+```powershell
+$env:SE7EN_PROPAGATION_CHANNEL_ID    = 'your-channel'
+$env:SE7EN_SPONSOR_ID                = 'your-sponsor'
+$env:SE7EN_CLIENT_VERSION            = '1'
+$env:SE7EN_CLIENT_PLATFORM           = 'Windows'
+$env:SE7EN_REMOTE_SERVER_LIST_SIGNATURE_PUBLIC_KEY = 'base64-DER-key'
+$env:SE7EN_SERVER_ENTRY_SIGNATURE_PUBLIC_KEY        = 'base64-DER-key'
+$env:SE7EN_FEEDBACK_ENCRYPTION_PUBLIC_KEY           = 'base64-key'
+$env:SE7EN_REMOTE_SERVER_LIST_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+$env:SE7EN_OBFUSCATED_SERVER_LIST_ROOT_URLS_JSON = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+$env:SE7EN_FEEDBACK_UPLOAD_URLS_JSON       = '[{"URL":"...","OnlyAfterAttempts":0,"SkipVerify":false}]'
+```
+
+2. 运行加密注入并编译：
+```powershell
+python tools\generate_build_secrets.py
+dotnet build Se7enPro\Se7enPro.csproj -c Release -r win-x64
+```
+
+3. 构建完成后可清理本地生成的临时文件：
+```powershell
+Remove-Item Se7enPro\Services\BuildSecrets.g.cs -ErrorAction SilentlyContinue
+```
+
+---
+
+### 4. 本地完整发布包打包
+
+```powershell
+# 一键生成 x64 和 x86 的安装程序与免安装绿色版 ZIP：
+.\tools\build-all.ps1 -Arch all -OutDir dist
+```
+
+产物生成在 `dist/` 文件夹中：
+- `Se7enPro_v1.0.5_Setup_x64.exe`
+- `Se7enPro_v1.0.5_Setup_x86.exe`
+- `Se7enPro_v1.0.5_Portable_x64.zip`
+- `Se7enPro_v1.0.5_Portable_x86.zip`
+- `SHA256SUMS.txt`
+
+---
+
+### 5. GitHub Actions 自动化持续集成与发布
+
+1. 在 GitHub 仓库设置 **Settings → Secrets and variables → Actions** 中配置这 10 个密钥。
+2. 确保在 **Settings → Actions → General → Workflow permissions** 中勾选 **Read and write permissions**。
+3. 推送版本标签以触发全自动构建：
+```powershell
+git tag -a v1.0.5 -m "Se7en Pro v1.0.5"
+git push origin v1.0.5
+```
+GitHub Actions 将自动执行单元测试、加密凭据、编译产物、计算校验和并正式发布至 GitHub Releases 页面。
