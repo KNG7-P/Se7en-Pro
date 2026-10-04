@@ -2376,6 +2376,184 @@ cloudflare.com" AutomationProperties.Name="{DynamicResource Loc_customSniLabel}"
             </Border>
 
             
+<!-- Custom DNS. Placed below the local-proxy section because it is a
+                 network setting like that section, not a routing one. -->
+            <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsNetworkTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Stretch">
+
+                    <!-- header -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <materialDesign:PackIcon Kind="Dns" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" Margin="0,1,8,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{Binding Dns.Labels.CardTitle}" />
+                            <TextBlock Text="{Binding Dns.Labels.CardSubtitle}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Border Grid.Column="2" Background="#2600D4FF" BorderBrush="#4000D4FF" BorderThickness="1" CornerRadius="6" Padding="8,3.5" VerticalAlignment="Top" Margin="10,1,0,0">
+                            <TextBlock Text="{Binding Dns.Summary}" FontSize="10.5" FontWeight="Bold" Foreground="#00D4FF" />
+                        </Border>
+                    </Grid>
+
+                    <!-- The three resolver lists. One template drives all of them, so the
+                         transports cannot drift apart visually. -->
+                    <ItemsControl ItemsSource="{Binding Dns.Rows}">
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Margin" Value="0,0,0,8" />
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:DnsFieldRow}">
+                                <Border Padding="12,10" CornerRadius="10"
+                                        Background="{DynamicResource Surface.SubtleBg}"
+                                        BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
+                                            <Style.Triggers>
+                                                <!-- Amber only when something entered will be
+                                                     ignored, so the colour means something. -->
+                                                <DataTrigger Binding="{Binding HasProblem}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#66F59E0B" />
+                                                    <Setter Property="Background" Value="#14F59E0B" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding State}" Value="{x:Static vm:DnsFieldState.Ok}">
+                                                    <Setter Property="BorderBrush" Value="#4D34D399" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                            <Border Grid.Column="1" Background="#2634D399" BorderBrush="#5034D399" BorderThickness="1" CornerRadius="5" Padding="6,2" VerticalAlignment="Center"
+                                                    Visibility="{Binding HasEntries, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding CountText}" FontSize="10" FontWeight="Bold" Foreground="#34D399" />
+                                            </Border>
+                                        </Grid>
+
+                                        <TextBox Style="{StaticResource UI.CustomTextBox}" Height="38" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="12"
+                                                 Text="{Binding Text, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                                                 materialDesign:HintAssist.Hint="{Binding Placeholder}"
+                                                 AutomationProperties.Name="{Binding Label}" />
+
+                                        <!-- Guidance only while the field is empty; once it has
+                                             entries the example in the placeholder is enough. -->
+                                        <TextBlock Text="{Binding Hint}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Margin="2,5,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding IsEmpty, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+
+                                        <StackPanel Orientation="Horizontal" Margin="2,5,0,0"
+                                                    Visibility="{Binding HasProblem, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <materialDesign:PackIcon Kind="AlertCircleOutline" Width="12" Height="12" Foreground="#F59E0B" Margin="0,1,5,0" />
+                                            <TextBlock Text="{Binding Problem}" FontSize="10.5" Foreground="#F59E0B" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- strict mode -->
+                    <Border Padding="0,4">
+                        <StackPanel>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="{Binding Dns.Labels.StrictLabel}" />
+                                                <Setter Property="FontSize" Value="13" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Dns.StrictMode}" Value="True">
+                                                        <Setter Property="Text" Value="{Binding Dns.Labels.StrictLabelOn}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Dns.Labels.StrictHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" AutomationProperties.Name="{Binding Dns.Labels.StrictLabel}" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding Dns.StrictMode, Mode=TwoWay}" VerticalAlignment="Center" />
+                            </Grid>
+
+                            <!-- Strict mode with only encrypted resolvers leaves the TUN
+                                 forwarder with nothing to dial, so it would silently break DNS
+                                 for any app resolving through the adapter. -->
+                            <Border Margin="0,10,0,0" Padding="11,9" CornerRadius="8" Background="#20F59E0B" BorderBrush="#40F59E0B" BorderThickness="1"
+                                    Visibility="{Binding Dns.HasTunnelWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="AlertCircleOutline" Width="14" Height="14" Foreground="#F59E0B" Margin="0,0,8,0" VerticalAlignment="Top" />
+                                    <TextBlock Text="{Binding Dns.Labels.TunnelWarning}" TextWrapping="Wrap" FontSize="11.5" Foreground="#F59E0B" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- footer -->
+                    <Border Padding="12" Margin="0,12,0,0" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button Grid.Column="0" Style="{StaticResource UI.Btn.Primary}" Padding="14,0" Margin="0,0,8,0"
+                                        Command="{Binding Dns.TestResolversCommand}"
+                                        IsEnabled="{Binding Dns.CanTest, Converter={StaticResource InverseBool}}"
+                                        AutomationProperties.Name="{Binding Dns.Labels.TestLabel}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="Stethoscope" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Dns.Labels.TestLabel}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Grid.Column="1" Style="{StaticResource UI.Btn.Danger}" Padding="12,0"
+                                        Command="{Binding Dns.ResetCommand}"
+                                        AutomationProperties.Name="{Binding Dns.Labels.ResetLabel}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="Restore" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Dns.Labels.ResetLabel}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Confirmation that the auto-save landed. No Save button,
+                                     because there is nothing left to press. -->
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Visibility="{Binding Dns.IsSavedFlash, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <materialDesign:PackIcon Kind="CheckCircle" Width="14" Height="14" Foreground="#34D399" Margin="0,0,5,0" />
+                                    <TextBlock Text="{Binding Dns.Labels.AutoSaved}" FontSize="11.5" FontWeight="SemiBold" Foreground="#34D399" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Margin="0,10,0,0" Padding="12,9" CornerRadius="8" Background="#2022C55E" BorderBrush="#4022C55E" BorderThickness="1"
+                                    Visibility="{Binding Dns.HasValidationError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="{Binding Dns.ValidationMessage}" TextWrapping="Wrap" FontSize="12" FontWeight="SemiBold" Foreground="#22C55E" />
+                            </Border>
+
+                            <TextBlock Margin="0,8,0,0" Text="{Binding Dns.TestResult}" TextWrapping="Wrap" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       Visibility="{Binding Dns.HasTestResultToShow, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
             <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsAetherTab, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <StackPanel HorizontalAlignment="Stretch">
                     
@@ -2504,7 +2682,7 @@ cloudflare.com" AutomationProperties.Name="{DynamicResource Loc_customSniLabel}"
                             </Grid>
                         </Border>
 
-                        
+                        <!-- Fragment Size & Delay -->
                         <Border Padding="0,4" Margin="0,0,0,4" Visibility="{Binding AetherFragment, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -2526,8 +2704,66 @@ cloudflare.com" AutomationProperties.Name="{DynamicResource Loc_customSniLabel}"
                         </Border>
                     </StackPanel>
 
-                    
-                    <Border Padding="0,6" Visibility="{Binding IsAetherWiwSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                    <!-- Gool / Warp-on-Warp Options -->
+                    <StackPanel Visibility="{Binding IsAetherWiwSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <!-- Gool Mode ComboBox (masque vs classic) -->
+                        <Border Padding="0,6">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Text="{Binding GoolLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{Binding GoolHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="250" Height="36" Style="{StaticResource UI.CustomComboBox}"
+                                          ItemsSource="{Binding AetherGoolModes}" SelectedValue="{Binding AetherGoolMode, Mode=TwoWay}"
+                                          SelectedValuePath="Key" DisplayMemberPath="Display" VerticalAlignment="Center"
+                                          AutomationProperties.Name="{Binding GoolLabel}" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Gool Fragment Toggle -->
+                        <Border Padding="0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Text="{Binding GoolFragmentLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{Binding GoolFragmentHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" AutomationProperties.Name="{Binding GoolFragmentLabel}" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherFragmentWireguard, Mode=TwoWay}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Classic WiW Endpoints (Outer / Inner) - shown only when Classic is selected -->
+                        <Border Padding="0,6" Visibility="{Binding CanEditWiwPeers, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{DynamicResource Loc_aetherOuterEndpoint}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{DynamicResource Loc_aetherOuterEndpointDesc}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,5" TextWrapping="Wrap" />
+                                    <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherWiwOuterPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="162.159.192.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" Height="36" FontSize="12" AutomationProperties.Name="{DynamicResource Loc_aetherOuterEndpoint}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="{DynamicResource Loc_aetherInnerEndpoint}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Text="{DynamicResource Loc_aetherInnerEndpointDesc}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,5" TextWrapping="Wrap" />
+                                    <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherWiwInnerPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="188.114.96.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" Height="36" FontSize="12" AutomationProperties.Name="{DynamicResource Loc_aetherInnerEndpoint}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Outer/Inner Endpoints (MiM) -->
+                    <Border Padding="0,6" Visibility="{Binding IsAetherMimSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -2537,18 +2773,16 @@ cloudflare.com" AutomationProperties.Name="{DynamicResource Loc_customSniLabel}"
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="{DynamicResource Loc_aetherOuterEndpoint}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
                                 <TextBlock Text="{DynamicResource Loc_aetherOuterEndpointDesc}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,5" TextWrapping="Wrap" />
-                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherWiwOuterPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="162.159.192.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" Height="36" FontSize="12" AutomationProperties.Name="{DynamicResource Loc_aetherOuterEndpoint}" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherMimOuterPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="162.159.192.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" Height="36" FontSize="12" AutomationProperties.Name="{DynamicResource Loc_aetherOuterEndpoint}" />
                             </StackPanel>
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="{DynamicResource Loc_aetherInnerEndpoint}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
                                 <TextBlock Text="{DynamicResource Loc_aetherInnerEndpointDesc}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,5" TextWrapping="Wrap" />
-                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherWiwInnerPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="188.114.96.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" Height="36" FontSize="12" AutomationProperties.Name="{DynamicResource Loc_aetherInnerEndpoint}" />
+                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherMimInnerPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="engage.cloudflareclient.com:2408" FontFamily="{StaticResource UI.MonoFontFamily}" Height="36" FontSize="12" AutomationProperties.Name="{DynamicResource Loc_aetherInnerEndpoint}" />
                             </StackPanel>
                         </Grid>
                     </Border>
 
-
-                    
                     <Border Padding="0,6">
                         <StackPanel>
                             <TextBlock Text="{DynamicResource Loc_aetherManualEndpoint}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
@@ -2558,6 +2792,226 @@ cloudflare.com" AutomationProperties.Name="{DynamicResource Loc_customSniLabel}"
                     </Border>
                 </StackPanel>
             </Border>
+
+            <!-- Aether Card 2: Advanced Evasion & Security -->
+            <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsAetherTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Stretch">
+                    <!-- Section Header -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <materialDesign:PackIcon Kind="ShieldCheckOutline" Width="18" Height="18" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" Margin="0,1,10,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{Binding OptionalCapsTitle}" />
+                            <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{Binding OptionalFlagsHint}" Margin="0,2,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ECH (Encrypted ClientHello) -->
+                    <Border Padding="0,8" IsEnabled="{Binding CanShapeTls}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="LockOutline" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding EchLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding EchHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="2" AutomationProperties.Name="{Binding EchLabel}" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherEch, Mode=TwoWay}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- ECH Domain (When ECH is enabled) -->
+                    <Border Padding="0,8" Visibility="{Binding AetherEch, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding CanShapeTls}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="240" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="Web" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding EchDomainLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding EchDomainHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <TextBox Grid.Column="2" Style="{StaticResource UI.CustomTextBox}" Height="36" FontSize="12"
+                                     FontFamily="{StaticResource UI.MonoFontFamily}"
+                                     Text="{Binding AetherEchDomain, UpdateSourceTrigger=LostFocus}"
+                                     materialDesign:HintAssist.Hint="cloudflare-ech.com"
+                                     AutomationProperties.Name="{Binding EchDomainLabel}" />
+                        </Grid>
+                    </Border>
+
+                    <!-- ECH Resolver (DoH) (When ECH is enabled) -->
+                    <Border Padding="0,8" Visibility="{Binding AetherEch, Converter={StaticResource BooleanToVisibilityConverter}}" IsEnabled="{Binding CanShapeTls}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="240" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="Dns" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding EchDnsLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding EchDnsHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding EchDnsEffective}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Brand.AccentBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <TextBox Grid.Column="2" Style="{StaticResource UI.CustomTextBox}" Height="36" FontSize="12"
+                                     FontFamily="{StaticResource UI.MonoFontFamily}"
+                                     Text="{Binding AetherEchDns, UpdateSourceTrigger=LostFocus}"
+                                     materialDesign:HintAssist.Hint="https://cloudflare-dns.com/dns-query"
+                                     AutomationProperties.Name="{Binding EchDnsLabel}" />
+                        </Grid>
+                    </Border>
+
+                    <Separator Margin="0,4" Background="{DynamicResource Surface.SubtleBorder}" Height="1" />
+
+                    <!-- Verify TLS Certificates -->
+                    <Border Padding="0,8" IsEnabled="{Binding CanShapeTls}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="CertificateOutline" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding TlsVerifyLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding TlsVerifyHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="2" AutomationProperties.Name="{Binding TlsVerifyLabel}" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherTlsVerify, Mode=TwoWay}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <Separator Margin="0,4" Background="{DynamicResource Surface.SubtleBorder}" Height="1" />
+
+                    <!-- Omit GREASE values -->
+                    <Border Padding="0,8" IsEnabled="{Binding CanShapeTls12}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="Fingerprint" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding DisableGreaseLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding DisableGreaseHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="2" AutomationProperties.Name="{Binding DisableGreaseLabel}" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherDisableGrease, Mode=TwoWay}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <Separator Margin="0,4" Background="{DynamicResource Surface.SubtleBorder}" Height="1" />
+
+                    <!-- TLS 1.2 Cipher Suites -->
+                    <Border Padding="0,8" IsEnabled="{Binding CanShapeTls12}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="240" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="Tune" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding TlsCiphersLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding TlsCiphersHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <TextBox Grid.Column="2" Style="{StaticResource UI.CustomTextBox}" Height="36" FontSize="12"
+                                     FontFamily="{StaticResource UI.MonoFontFamily}"
+                                     Text="{Binding AetherTlsCiphers, UpdateSourceTrigger=LostFocus}"
+                                     materialDesign:HintAssist.Hint="ALL:!aPSK:!ECDSA+SHA1:!3DES"
+                                     AutomationProperties.Name="{Binding TlsCiphersLabel}" />
+                        </Grid>
+                    </Border>
+
+                    <Separator Margin="0,4" Background="{DynamicResource Surface.SubtleBorder}" Height="1" />
+
+                    <!-- TLS Groups -->
+                    <Border Padding="0,8" IsEnabled="{Binding CanShapeTls12}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="240" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="LayersOutline" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding TlsGroupsLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding TlsGroupsHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <TextBox Grid.Column="2" Style="{StaticResource UI.CustomTextBox}" Height="36" FontSize="12"
+                                     FontFamily="{StaticResource UI.MonoFontFamily}"
+                                     Text="{Binding AetherTlsGroups, UpdateSourceTrigger=LostFocus}"
+                                     materialDesign:HintAssist.Hint="P-256:X25519:P-384"
+                                     AutomationProperties.Name="{Binding TlsGroupsLabel}" />
+                        </Grid>
+                    </Border>
+
+                    <Separator Margin="0,4" Background="{DynamicResource Surface.SubtleBorder}" Height="1" />
+
+                    <!-- Tor Routing -->
+                    <Border Padding="0,8">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="Earth" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding TorLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding TorHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="2" AutomationProperties.Name="{Binding TorLabel}" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherTor, Mode=TwoWay}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Tor Relays Sub-option (Only when Tor is enabled) -->
+                    <Border Padding="0,8" Visibility="{Binding AetherTor, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="Bridge" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding TorRelaysLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding TorRelaysHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="2" AutomationProperties.Name="{Binding TorRelaysLabel}" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherTorRelays, Mode=TwoWay}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Exit Country Recheck Interval (conditional) -->
+                    <Border Padding="0,8" Visibility="{Binding HasAetherExitLoc, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon Grid.Column="0" Kind="TimerOutline" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{Binding ExitLocSecsLabel}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding ExitLocSecsHint}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <TextBox Grid.Column="2" Style="{StaticResource UI.CustomTextBox}" Height="36"
+                                     FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="12"
+                                     Text="{Binding AetherExitLocSecs, UpdateSourceTrigger=LostFocus}"
+                                     materialDesign:HintAssist.Hint="60"
+                                     AutomationProperties.Name="{Binding ExitLocSecsLabel}" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
 
             
             <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsTorTab, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -2583,7 +3037,7 @@ cloudflare.com" AutomationProperties.Name="{DynamicResource Loc_customSniLabel}"
                         <Button Content="{DynamicResource Loc_clearLogs}" Command="{Binding ClearTorBridgesCommand}" Style="{StaticResource UI.Btn.Danger}" Padding="12,0" Margin="0,0,8,6" FontSize="11.5" />
                     </WrapPanel>
 
-                    <TextBox Text="{Binding TorBridges, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" Height="110" Background="{DynamicResource BgInput}" BorderBrush="{DynamicResource BorderBrushDefault}" BorderThickness="1" Padding="10,8" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="12" materialDesign:HintAssist.Hint="{DynamicResource Loc_torBridgesInputHint}" AutomationProperties.Name="{DynamicResource Loc_torBridgesInputHint}" />
+                    <TextBox Text="{Binding TorBridges, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" Height="110" Background="{DynamicResource BgInput}" BorderBrush="{DynamicResource BorderBrushDefault}" BorderThickness="1" Padding="10,8" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="12" materialDesign:HintAssist.Hint="{DynamicResource Loc_torBridgesInputHint}" AutomationProperties.Name="{DynamicResource Loc_torBridgesInputHint}" />
                     <TextBlock Style="{StaticResource UI.FieldHelper}" Text="{DynamicResource Loc_torBridgesFootnote}" TextWrapping="Wrap" Margin="0,4,0,0" />
                 </StackPanel>
             </Border>

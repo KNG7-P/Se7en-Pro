@@ -148,7 +148,7 @@ public sealed class UserSettings
     public string AetherScanModeMasque { get; set; } = "balanced";
 
     [JsonPropertyName("aetherScanModeMim")]
-    public string AetherScanModeMim { get; set; } = "balanced";
+    public string AetherScanModeMim { get; set; } = "turbo";
 
     [JsonPropertyName("aetherScanModeWireguard")]
     public string AetherScanModeWireguard { get; set; } = "balanced";
@@ -193,6 +193,89 @@ public sealed class UserSettings
     
     [JsonPropertyName("aetherManualPeer")]
     public string AetherManualPeer { get; set; } = "";
+
+    // ---- Aether 2.3.0: --gool changed meaning ----
+    //
+    // In aether 2.1.x "--gool" was WARP-in-WARP. In 2.3.0 it carries a WireGuard WARP
+    // identity inside the MASQUE tunnel and registers it THROUGH that tunnel, so the exit
+    // is foreign; the old behaviour moved to "--gool-classic".
+    //
+    // "masque" is the default because it is the one that solves the blocked-registration
+    // problem. Choosing "classic" keeps the manual wiw peers meaningful.
+    [JsonPropertyName("aetherGoolMode")]
+    public string AetherGoolMode { get; set; } = "masque";
+
+    // ---- Aether 2.3.0: optional capabilities ----
+    //
+    // Every one of these is withheld unless the bundled aether.exe advertises the flag, so
+    // a missing or older binary degrades to the previous behaviour instead of failing to
+    // start. See AetherCapabilities.
+    //
+    // Note: aetherEch, aetherExitLocSecs and aetherFragmentWireguard already existed in this
+    // model but were never read by anything. They are wired now rather than redeclared.
+
+    /// <summary>Certificate verification. aether leaves it off by default.</summary>
+    [JsonPropertyName("aetherTlsVerify")]
+    public bool AetherTlsVerify { get; set; } = false;
+
+    // ---- TLS fingerprint shaping ----
+    //
+    // Aether writes Chrome's ClientHello by default. Deep packet inspection does not match
+    // on "is this TLS", it matches on "does this look exactly like the browser I claim to
+    // be", so the cipher list, the group order and the GREASE values are all part of the
+    // fingerprint and all of them are levers. They exist because some mobile operators'
+    // middleboxes are known to fingerprint rather than simply block.
+
+    /// <summary>
+    /// TLS 1.2 cipher suites, ':' separated, e.g. "ECDHE-ECDSA-AES128-GCM-SHA256".
+    /// Blank keeps Chrome's default. TLS 1.3 suites cannot be changed and are ignored.
+    /// </summary>
+    [JsonPropertyName("aetherTlsCiphers")]
+    public string AetherTlsCiphers { get; set; } = "";
+
+    /// <summary>
+    /// TLS groups in preference order; the first with a usable key share wins.
+    /// Blank keeps Chrome's "P-256:X25519:P-384".
+    /// </summary>
+    [JsonPropertyName("aetherTlsGroups")]
+    public string AetherTlsGroups { get; set; } = "";
+
+    /// <summary>Drop the GREASE values in TLS handshake.</summary>
+    [JsonPropertyName("aetherDisableGrease")]
+    public bool AetherDisableGrease { get; set; } = false;
+
+    /// <summary>Domain for ECH key lookup. Defaults to cloudflare-ech.com.</summary>
+    [JsonPropertyName("aetherEchDomain")]
+    public string AetherEchDomain { get; set; } = "";
+
+    /// <summary>Resolver for ECH key lookup. Defaults to Custom DNS.</summary>
+    [JsonPropertyName("aetherEchDns")]
+    public string AetherEchDns { get; set; } = "";
+
+    /// <summary>Carry Tor inside the tunnel; bridges are then fetched through it.</summary>
+    [JsonPropertyName("aetherTor")]
+    public bool AetherTor { get; set; } = false;
+
+    /// <summary>Use running onionoo relays as plain bridges, for a network that blocks Tor outright.</summary>
+    [JsonPropertyName("aetherTorRelays")]
+    public bool AetherTorRelays { get; set; } = false;
+
+    /// <summary>
+    /// Fragment the TLS ClientHello on the WireGuard carrier too, not just HTTP/2.
+    ///
+    /// WireGuard mode opens a plain UDP socket with no TLS, so this only has an effect on
+    /// the transports that actually negotiate TLS; the flag is therefore gated on those.
+    /// </summary>
+    [JsonPropertyName("aetherFragmentWireguard")]
+    public bool AetherFragmentWireguard { get; set; } = false;
+
+    /// <summary>
+    /// How often the exit country is rechecked, in seconds. 0 keeps aether's own default.
+    ///
+    /// Only sent alongside --exit-loc, since there is nothing to recheck without it.
+    /// </summary>
+    [JsonPropertyName("aetherExitLocSecs")]
+    public int AetherExitLocSecs { get; set; } = 0;
 
     [JsonPropertyName("aetherEndpointMasque")]
     public string AetherEndpointMasque { get; set; } = "";
@@ -296,14 +379,35 @@ public sealed class UserSettings
 
     
     [JsonPropertyName("aetherFragment")]
-    public bool AetherFragment { get; set; } = false;
+    public bool AetherFragment { get; set; } = true;
 
     
     [JsonPropertyName("aetherFragmentSize")]
-    public string AetherFragmentSize { get; set; } = "";
+    public string AetherFragmentSize { get; set; } = "16-32";
 
     [JsonPropertyName("aetherFragmentDelay")]
-    public string AetherFragmentDelay { get; set; } = "";
+    public string AetherFragmentDelay { get; set; } = "2-10";
+
+    [JsonPropertyName("aetherUpstreamProxy")]
+    public string AetherUpstreamProxy { get; set; } = "";
+
+    [JsonPropertyName("aetherUpstreamProxyEnabled")]
+    public bool AetherUpstreamProxyEnabled { get; set; } = false;
+
+    [JsonPropertyName("aetherUpstreamProxyScheme")]
+    public string AetherUpstreamProxyScheme { get; set; } = "socks5";
+
+    [JsonPropertyName("aetherUpstreamProxyHost")]
+    public string AetherUpstreamProxyHost { get; set; } = "";
+
+    [JsonPropertyName("aetherUpstreamProxyPort")]
+    public string AetherUpstreamProxyPort { get; set; } = "";
+
+    [JsonPropertyName("aetherUpstreamProxyUsername")]
+    public string AetherUpstreamProxyUsername { get; set; } = "";
+
+    [JsonPropertyName("aetherUpstreamProxyPassword")]
+    public string AetherUpstreamProxyPassword { get; set; } = "";
 
     
     [JsonPropertyName("torExitCountry")]
@@ -349,6 +453,34 @@ public sealed class UserSettings
     
     [JsonPropertyName("v2rayCore")]
     public string V2RayCore { get; set; } = "xray";
+
+    // ---- Custom DNS resolvers (tab: Network) ----
+    // Blank means "automatic": the tunnel keeps using the resolvers it picks today.
+    // Populated lists take precedence over those defaults, in the order typed.
+
+    [JsonPropertyName("customDnsUdp")]
+    public string CustomDnsUdp { get; set; } = "";
+
+    [JsonPropertyName("customDnsDot")]
+    public string CustomDnsDot { get; set; } = "";
+
+    [JsonPropertyName("customDnsDoh")]
+    public string CustomDnsDoh { get; set; } = "";
+
+    /// <summary>
+    /// When true the tunnel refuses to fall back to any resolver the user did not list.
+    /// Off by default: a typo in a list should degrade to working DNS, not to none.
+    /// </summary>
+    [JsonPropertyName("customDnsStrict")]
+    public bool CustomDnsStrict { get; set; } = false;
+
+    /// <summary>Target number of pre-provisioned Cloudflare identities in pool.</summary>
+    [JsonPropertyName("identityPoolTarget")]
+    public int IdentityPoolTarget { get; set; } = 3;
+
+    /// <summary>Base URLs of bootstrap relays for identity provisioning.</summary>
+    [JsonPropertyName("identityRelayUrls")]
+    public string IdentityRelayUrls { get; set; } = "";
 
     [JsonPropertyName("v2rayInboundPort")]
     public int V2RayInboundPort { get; set; } = 10808;

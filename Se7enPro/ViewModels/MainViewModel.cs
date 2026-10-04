@@ -49,7 +49,11 @@ public sealed partial class MainViewModel : ObservableObject
 
         
         
-        Loc.Changed += () => OnPropertyChanged(nameof(PageHeaderTitle));
+        Loc.Changed += () =>
+        {
+            OnPropertyChanged(nameof(PageHeaderTitle));
+            OnPropertyChanged(nameof(ClientVersionText));
+        };
 
         _settings.SettingsChanged += (_, _) =>
         {
@@ -134,6 +138,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private static void CloseWindow() => Ui.RequestCloseMainWindow();
+
+    public string ClientVersionText =>
+        $"{Loc.T("clientVersion", "v1.0.6")} \u2022 {Loc.T("Loc_windowsEdition", "Windows Client")}";
 
     [RelayCommand]
     private static void OpenTelegramChannel()

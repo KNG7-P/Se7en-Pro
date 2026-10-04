@@ -33,9 +33,7 @@ public static class LogTags
         public static string ForMethod(ConnectionMethod method) => method switch
     {
         ConnectionMethod.Psiphon => Psiphon,
-        ConnectionMethod.Masque
-            or ConnectionMethod.WireGuard
-            or ConnectionMethod.WarpOnWarp => Aether,
+        var m when m.IsAether() => Aether,
         ConnectionMethod.Tor => Tor,
         ConnectionMethod.Shard => Shard,
         ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray => V2Ray,

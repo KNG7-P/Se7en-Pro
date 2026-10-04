@@ -14,7 +14,7 @@
     <sys:String x:Key="Loc_aboutTechStack">底层核心引擎技术</sys:String>
     <sys:String x:Key="Loc_aboutTelegramSubtitle">官方更新、配置与技术交流频道</sys:String>
     <sys:String x:Key="Loc_aboutTitle">Se7en Pro</sys:String>
-    <sys:String x:Key="Loc_aboutVersion">v1.0.5</sys:String>
+    <sys:String x:Key="Loc_aboutVersion">v1.0.6</sys:String>
     <sys:String x:Key="Loc_Achainhop0isreestablishing">多跳链路中的 {0} 正在重新建立连接...</sys:String>
     <sys:String x:Key="Loc_activeBadge">已激活</sys:String>
     <sys:String x:Key="Loc_Activeonlythe0listedrulesgothrough">已生效——只有下列 {0} 条规则走 VPN。</sys:String>
@@ -885,7 +885,7 @@
     <sys:String x:Key="Loc_UserIDUUIDPasswordisrequired">必须填写用户 ID / UUID / 密码。</sys:String>
     <sys:String x:Key="Loc_Username">用户名</sys:String>
     <sys:String x:Key="Loc_UUIDorpasswordkey">UUID 或密码密钥</sys:String>
-    <sys:String x:Key="Loc_v103WindowsClient">v1.0.5 • Windows 客户端</sys:String>
+    <sys:String x:Key="Loc_v103WindowsClient">v1.0.6 • Windows 客户端</sys:String>
     <sys:String x:Key="Loc_v2rayAddConfig">添加节点配置</sys:String>
     <sys:String x:Key="Loc_v2rayAddConfigDesc">手动输入服务器地址或出站连接凭证</sys:String>
     <sys:String x:Key="Loc_v2rayBridgeTitle">Psiphon 上游桥接配置</sys:String>
@@ -978,4 +978,76 @@
     <sys:String x:Key="Loc_WoWWARPonWARP">WoW（WARP 套 WARP）</sys:String>
     <sys:String x:Key="Loc_WoWWARPonWARPslowestforthemostfilt">• WoW：WARP 套 WARP — 速度最慢，用于过滤最严格的网络</sys:String>
     <sys:String x:Key="Loc_XrayCore">Xray 内核</sys:String>
+
+    <!-- Custom DNS (Network tab) -->
+    <sys:String x:Key="Loc_dnsCardTitle">自定义 DNS</sys:String>
+    <sys:String x:Key="Loc_dnsCardSubtitle">隧道获取 DNS 答案的解析器。留空表示自动：使用内置公共解析器。更改会自动保存。</sys:String>
+    <sys:String x:Key="Loc_dnsUdpLabel">普通 DNS (UDP)</sys:String>
+    <sys:String x:Key="Loc_dnsUdpHint">直接填写地址或主机名，端口 53。</sys:String>
+    <sys:String x:Key="Loc_dnsDotLabel">DNS over TLS (DoT)</sys:String>
+    <sys:String x:Key="Loc_dnsDotHint">每一条都需要 tls:// 前缀，默认端口 853。</sys:String>
+    <sys:String x:Key="Loc_dnsDohLabel">DNS over HTTPS (DoH)</sys:String>
+    <sys:String x:Key="Loc_dnsDohHint">完整的 https:// 地址，或带 doh: 前缀的主机名。查询搭载在普通 HTTPS 请求中，因此最难被封锁。</sys:String>
+    <sys:String x:Key="Loc_dnsStrictLabel">仅使用我的解析器</sys:String>
+    <sys:String x:Key="Loc_dnsStrictHint">绝不回退到内置解析器。建议关闭，以免某个解析器故障时 DNS 全部中断。</sys:String>
+    <sys:String x:Key="Loc_dnsAutomatic">自动解析器</sys:String>
+    <sys:String x:Key="Loc_dnsTesting">测试中...</sys:String>
+    <sys:String x:Key="Loc_dnsEnterOneFirst">请先输入至少一个地址</sys:String>
+    <sys:String x:Key="Loc_dnsNoneAnswered">没有解析器响应。在此不响应的解析器，通过隧道也不会响应。</sys:String>
+    <sys:String x:Key="Loc_dnsTest">测试</sys:String>
+    <sys:String x:Key="Loc_dnsSave">保存</sys:String>
+    <sys:String x:Key="Loc_dnsClear">清除列表</sys:String>
+    <sys:String x:Key="Loc_dnsTunnelWarning">严格模式但没有普通 UDP 解析器：在 TUN 模式下本地转发器只能发起普通 DNS，因此通过隧道适配器解析的程序将得不到回应。请添加一个普通 UDP 解析器，或关闭严格模式。</sys:String>
+
+    <sys:String x:Key="Loc_dnsStrictLabelOn">仅我的</sys:String>
+
+    <sys:String x:Key="Loc_dnsAutoSaved">已保存</sys:String>
+
+    <sys:String x:Key="Loc_dnsReset">清除列表</sys:String>
+
+    <sys:String x:Key="Loc_dnsUdpPlaceholder">9.9.9.9, 149.112.112.112</sys:String>
+
+    <sys:String x:Key="Loc_dnsDotPlaceholder">tls://dns.google, tls://dns.quad9.net</sys:String>
+
+    <sys:String x:Key="Loc_dnsDohPlaceholder">https://cloudflare-dns.com/dns-query, doh:dns.quad9.net</sys:String>
+
+    <!-- Aether 2.3.0 -->
+    <sys:String x:Key="Loc_aetherGoolMode">gool 模式</sys:String>
+    <sys:String x:Key="Loc_aetherGoolMasque">MASQUE 内的 WARP（境外出口）</sys:String>
+    <sys:String x:Key="Loc_aetherGoolClassic">经典 WARP-in-WARP</sys:String>
+    <sys:String x:Key="Loc_aetherGoolHintMasque">WARP 承载在 MASQUE 隧道内，并通过该隧道注册，因此出口地址是境外的。下方的手动跳点不会被使用。</sys:String>
+    <sys:String x:Key="Loc_aetherGoolHintClassic">WARP 套在 WARP 里。外层和内层跳点在下方配置。</sys:String>
+    <sys:String x:Key="Loc_aetherGoolFragment">在 gool 上拆分 ClientHello</sys:String>
+    <sys:String x:Key="Loc_aetherGoolFragmentDesc">gool 的跳点走 MASQUE，因此在服务器名被丢弃的网络中，拆分 ClientHello 会有帮助。</sys:String>
+    <sys:String x:Key="Loc_aetherExtraCaps">附加能力</sys:String>
+    <sys:String x:Key="Loc_aetherExtraCapsDesc">仅在自带的 Aether 构建支持时才生效；连接日志会记录实际发送了哪些。</sys:String>
+    <sys:String x:Key="Loc_aetherEch">加密 ClientHello（ECH）</sys:String>
+    <sys:String x:Key="Loc_aetherEchDesc">对检查服务器名的过滤隐藏真实名称。启用 ECH 后，Aether 会通过加密握手自行注册 WARP 身份，只有失败时才使用 SHARD。</sys:String>
+    <sys:String x:Key="Loc_aetherTlsVerify">验证 TLS 证书</sys:String>
+    <sys:String x:Key="Loc_aetherTlsVerifyDesc">Aether 默认关闭。在证书无法验证的网络上，开启后可能连不上。</sys:String>
+    <sys:String x:Key="Loc_aetherTor">在隧道内承载 Tor</sys:String>
+    <sys:String x:Key="Loc_aetherTorDesc">此后网桥通过隧道获取，这正是 Tor 在被完全封锁时仍可用的原因。</sys:String>
+    <sys:String x:Key="Loc_aetherTorRelays">使用运行中的 Tor 中继作为网桥</sys:String>
+    <sys:String x:Key="Loc_aetherTorRelaysDesc">适用于 Tor 和 bridgedb 一起被封的网络。只尝试严格防火墙通常放行的端口。</sys:String>
+    <sys:String x:Key="Loc_aetherExitLocSecs">重新检查出口国家间隔（秒）</sys:String>
+    <sys:String x:Key="Loc_aetherExitLocSecsDesc">迁移到被拒国家的隧道会被丢弃并重建。留空则使用 Aether 自身的间隔。</sys:String>
+
+    <!-- TLS fingerprint -->
+    <sys:String x:Key="Loc_aetherTlsCiphers">TLS 1.2 密码套件</sys:String>
+    <sys:String x:Key="Loc_aetherTlsCiphersDesc">用冒号分隔，例如 ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256。留空则保持 Chrome 的列表。TLS 1.3 套件不可更改。</sys:String>
+    <sys:String x:Key="Loc_aetherTlsGroups">TLS 组，按顺序</sys:String>
+    <sys:String x:Key="Loc_aetherTlsGroupsDesc">第一个具有可用密钥共享的组获胜。留空则保持 Chrome 的 P-256:X25519:P-384。</sys:String>
+    <sys:String x:Key="Loc_aetherDisableGrease">省略 GREASE 值</sys:String>
+    <sys:String x:Key="Loc_aetherDisableGreaseDesc">通常会让指纹更糟，因为 Chrome 确实会发送 GREASE。仅用于会错误处理这些未使用值的设备。</sys:String>
+    <sys:String x:Key="Loc_aetherFingerprintHint">仅用于 HTTP/2 连接。除非连接因外观不对被丢弃，否则请留空。</sys:String>
+    <sys:String x:Key="Loc_aetherEchDomain">ECH 密钥域名</sys:String>
+    <sys:String x:Key="Loc_aetherEchDomainDesc">获取加密密钥的域名。留空则使用 cloudflare-ech.com。密钥域名被封会让整个功能失去意义。</sys:String>
+    <sys:String x:Key="Loc_aetherEchDns">ECH 密钥的解析器</sys:String>
+    <sys:String x:Key="Loc_aetherEchDnsDesc">留空则使用你的 Custom DNS 列表，优先选择加密解析器。密钥查询发生在隧道建立之前，是唯一无法依靠隧道的查询。</sys:String>
+    <sys:String x:Key="Loc_aetherEchDnsEffective">当前：</sys:String>
+    <sys:String x:Key="Loc_aetherEchDnsDefault">Aether 自身的默认值（1.1.1.1）</sys:String>
+
+    <sys:String x:Key="Loc_aetherNoTlsSurface">此协议不承载 TLS，因此没有可修改的握手。</sys:String>
+    <sys:String x:Key="Loc_aetherQuicNoTls12">此连接使用 QUIC，只协商 TLS 1.3。Aether 在此不接受 TLS 1.2 密码列表。</sys:String>
+
 </ResourceDictionary>

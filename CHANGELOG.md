@@ -10,86 +10,82 @@
 
 ## 🇬🇧 English
 
-## [1.0.5]
+## [1.0.6]
 
-High-performance native single-process WPF application (.NET 8) with Material Design 3.
+Comprehensive upgrade to Aether 2.3.0, custom DNS resolvers, pre-provisioned identity pooling, ECH & TLS fingerprint shaping, and critical security hardening.
 
 ### 🚀 Highlights & Features
-- **Single-Process Native Architecture**: Built on .NET 8 WPF with Material Design 3, streamlined execution paths, and minimal memory usage.
-- **Protocol Configuration**: **WireGuard Warp** is configured as the primary out-of-the-box connection protocol.
-- **Aether Engine Upgrade**: MASQUE transport with dual HTTP/3 (QUIC over UDP) and HTTP/2 (TCP) support, automatic fallback, and Warp-on-Warp chaining.
-- **Complete Packaging Suite**: Official releases now provide both Self-Contained (with .NET) and Framework-Dependent (without .NET) installers and portable ZIPs for x64 and x86 (8 packages total).
-- **Security Decoupling**: Build secrets and Psiphon credentials are encrypted via AES-256-GCM; source code contains zero embedded keys.
+- **Aether 2.3.0 Core & MASQUE in MASQUE (MIM)**: Integrated latest Aether core with native support for dual-nested MASQUE in MASQUE tunneling and turbo scanning mode.
+- **ECH & TLS Fingerprint Shaping**: Added Encrypted Client Hello (ECH) support with automated fallback, plus customizable TLS fingerprint profiles (Chrome, Safari, iOS, Random, Off).
+- **Identity Pool & Bootstrap Relays**: Background pre-provisioned Cloudflare identity pool with decentralized bootstrap relay fallbacks, guaranteeing zero-bootstrapping connectivity even on restricted networks without an active secondary VPN.
+- **Custom DNS Subsystem**: Added fine-grained resolver management supporting Plain DNS (UDP), DNS over TLS (DoT), and DNS over HTTPS (DoH), with strict-resolver enforcement and live diagnostics probe.
+- **Chained Multi-Hop Progress & Isolation**: Clear multi-step status feedback (`[1/2] Outer -> [2/2] Inner`), instant cancellation during tunnel establishment, and isolated transport settings per protocol.
 
 ### 🔧 Fixes & Improvements
-- **Enforced Kill Switch**: Leak protection is triggered immediately on unexpected tunnel collapse, eliminating route drop leaks.
-- **TUN DNS Race Condition**: Fixed a race condition between Wintun teardown and system DNS restoration.
-- **SHARD & Tor Lifecycles**: Resolved disposal memory leaks and reconnection state tracking.
-- **ReadyToRun PGO**: Enabled ahead-of-time compilation for near-instant client startup.
-- **Automated CI/CD**: Automated release workflow produces certified installers, portables, and SHA-256 checksums.
+- **Route Table Zero-Leak Protection**: Restructured route reapplication logic to preserve catch-all default routes during dynamic route updates, eliminating full-tunnel leak windows.
+- **WFP Kill Switch Synchronization**: Hardened persistent WFP firewall filter state handling, preventing DNS or route leakage across reconnects and tunnel interruptions.
+- **Identity ACL Hardening**: Enforced strict Windows ACL security permissions restricting stored identity files exclusively to SYSTEM, Administrators, and the active user.
+- **Offline Reliability & Test Harness**: Added comprehensive offline test harness (371 checks) validating contract integrity, route invariants, DNS resolution policies, and identity failover.
 
 ---
 
 ## 🇮🇷 فارسی
 
-## [نسخه 1.0.5]
+## [نسخه 1.0.6]
 
-کلاینت نِیتیو تک‌پروسسی پرسرعت بر پایه WPF (.NET 8) و طراحی مدرن Material Design 3.
+ارتقای جامع هسته به Aether 2.3.0، دی‌ان‌اس اختصاصی (Custom DNS)، استخر پیش‌ساخته هویت وارپ، ECH و فرم‌دهی TLS، و ایمن‌سازی عمیق ارتباطات و تانلینگ.
 
 ### 🚀 قابلیت‌ها و تغییرات کلیدی
-- **معماری یکپارچه تک‌پروسسی (Single-Process)**: توسعه‌یافته بر بستر دات‌نت ۸ با متریال دیزاین ۳ با حداقل مصرف حافظه رم و سرعت پاسخ‌دهی بالا.
-- **پروتکل ارتباطی اصلی**: پروتکل پرسرعت **WireGuard Warp** به عنوان اتصال پیش‌فرض و اصلی برنامه تنظیم شد.
-- **ارتقای هسته Aether**: پشتیبانی از پروتکل MASQUE بر بستر هر دو استاندارد HTTP/3 (QUIC over UDP) و HTTP/2 (TCP) با قابلیت برگشت خودکار و زنجیره Warp-on-Warp.
-- **پکیج‌های متنوع ریلیز**: انتشار رسمی ۸ بسته مختلف شامل نسخه‌های نصبی و پرتابل ۳۲ و ۶۴ بیتی در دو حالت همراه با دات‌نت و بدون دات‌نت.
-- **امنیت کامل سورس و بیلد خودکار**: هیچ کلید یا لینکی در سورس قرار ندارد و مقادیر حساس از طریق GitHub Actions با استاندارد AES-256-GCM رمزگذاری می‌شوند.
+- **ارتقا به هسته Aether 2.3.0 و Masque in Masque (MIM)**: پشتیبانی از پروتکل جدید تانل تو در توی مسک، اسکن بسیار سریع Turbo و گزینه‌های بهینه‌سازی پیشرفته.
+- **پشتیبانی از ECH و جعل اثرانگشت TLS**: ثبت‌نام امن از طریق Encrypted Client Hello با مکانیزم بازگشت خودکار، و پروفایل‌های شبیه‌سازی اثرانگشت TLS (کروم، سافاری، iOS و تصادفی).
+- **استخر هویت و رله‌های پشتیبان (Identity Pool & Relays)**: ساخت خودکار مخزن هویت‌های وارپ در پس‌زمینه و رله‌های مستقل جهت عبور از فیلترینگ بدون نیاز به فیلترشکن اولیه برای دریافت کلید.
+- **مدیریت پیشرفته DNS اختصاصی**: پشتیبانی کامل از UDP معمولی، DNS over TLS (DoT) و DNS over HTTPS (DoH) با امکان تست زنده اتصال و حالت ایزوله سخت‌گیرانه (Strict).
+- **نمایش گام‌به‌گام اتصال Chained و لغو سریع**: ارائه جزئیات اتصال در هر مرحله (`[1/2] لایه بیرونی -> [2/2] لایه درونی`) و امکان لغو فوری در حال اتصال.
 
 ### 🔧 بهینه‌سازی‌ها و رفع اشکالات
-- **کیل سوییچ سخت‌گیرانه (Kill Switch)**: فعال‌سازی آنی ایزولاسیون شبکه در صورت قطعی غیرمنتظره تانل به منظور جلوگیری از نشت IP.
-- **رفع خطای DNS در Wintun TUN**: اصلاح تداخل زمانی بین بسته‌شدن کارت شبکه مجازی و بازگردانی DNS سیستم.
-- **بهبود چرخه حیات هسته‌های SHARD و Tor**: رفع مشکل نشت حافظه و باگ‌های اتصال مجدد در ترنسپورت‌های Lyrebird.
-- **استارتاپ سریع با ReadyToRun**: فعال‌سازی کامپایل زودهنگام کدهای IL برای حذف مکث صفحه آغازین.
-- **سیستم ریلیز خودکار**: ساخت خودکار فایل‌های نصبی و پرتابل ۳۲ و ۶۴ بیتی و هش‌های SHA-256 در گیت‌هاب.
+- **حذف نشت ترافیک در روتینگ**: بازنویسی الگوی اعمال روت‌های ویندوز بدون حذف روت پیش‌فرض در حین به‌روزرسانی (Zero-Leak).
+- **پایداری کیل‌سوییچ WFP**: هماهنگ‌سازی ایزولاسیون فایروال در قطع و وصل مکرر و جلوگیری قطعی از هرگونه نشت DNS یا ترافیک.
+- **امن‌سازی دسترسی فایل‌های هویت**: اعمال سطوح دسترسی امنیتی ACL ویندوز به منظور دسترسی انحصاری کلاینت و جلوگیری از خوانده شدن هویت‌ها توسط سایر پروسس‌ها.
+- **آزمون‌های جامع اعتبارسنجی**: افزودن ۳۷۱ تست آفلاین مستقل برای راستی‌آزمایی دقیق الگوریتم‌های تانل، روت، دی‌ان‌اس و مدیریت سوییچینگ.
 
 ---
 
 ## 🇷🇺 Русский
 
-## [1.0.5]
+## [1.0.6]
 
-Нативное высокопроизводительное однопроцессное приложение на WPF (.NET 8) с дизайном Material Design 3.
+Масштабное обновление: ядро Aether 2.3.0, поддержка пользовательских DNS, пул идентификаторов Cloudflare, ECH и маскировка TLS, а также устранение утечек трафика.
 
 ### 🚀 Ключевые изменения
-- **Однопроцессная архитектура**: Разработано на .NET 8 WPF с Material Design 3, оптимизированным расходом памяти и плавным откликом.
-- **Основной протокол**: **WireGuard Warp** настроен как основной протокол соединения из коробки.
-- **Обновление ядра Aether**: Протокол MASQUE с поддержкой HTTP/3 (QUIC over UDP) и HTTP/2 (TCP), автоматическим переключением и Warp-on-Warp.
-- **Расширенный набор дистрибутивов**: Официальный выпуск включает 8 пакетов (установщики и портативные версии с .NET и без .NET для x64 и x86).
-- **Безопасность сборки**: Секреты Psiphon внедряются через GitHub Actions с шифрованием AES-256-GCM; исходный код чист от ключей.
+- **Обновление ядра Aether 2.3.0 и MASQUE in MASQUE (MIM)**: Поддержка вложенного туннелирования MIM, турбо-сканирование и обновленный стек обхода блокировок.
+- **Поддержка ECH и профилирование отпечатков TLS**: Шифрование приветствия клиента (ECH) с автопереключением и шаблоны маскировки TLS (Chrome, Safari, iOS, Random, Off).
+- **Пул идентификаторов и резервные реле**: Фоновый пул готовых ключей WARP и независимые реле для первого запуска без стороннего VPN.
+- **Пользовательские DNS-серверы**: Поддержка Plain UDP, DoT и DoH с проверкой доступности в реальном времени и строгой изоляцией.
+- **Индикация многоэтапного подключения**: Пошаговый статус цепочек (`[1/2] Внешний -> [2/2] Внутренний`) и возможность мгновенной отмены подключения.
 
 ### 🔧 Исправления и улучшения
-- **Усиленный Kill Switch**: Мгновенная блокировка утечки IP при аварийном разрыве туннеля.
-- **Стабильность Wintun TUN**: Устранена гонка потоков при очистке DNS и демонтаже виртуального адаптера.
-- **Оптимизация SHARD и Tor**: Устранены утечки памяти при переподключении и перезапуске мостов Lyrebird.
-- **Ускорение запуска (ReadyToRun)**: Использование pre-JIT компиляции для мгновенного отклика интерфейса.
-- **Автоматизация релизов**: Автоматическая сборка установщиков x64/x86, портативных архивов и хэшей SHA-256.
+- **Устранение утечек маршрутизации (Zero-Leak)**: Безопасное обновление таблицы маршрутизации без временного сброса шлюза по умолчанию.
+- **Надежность Kill Switch**: Синхронизация правил WFP при разрывах связи и предотвращение утечек DNS.
+- **Защита файлов учетных данных**: Ограничение прав доступа Windows ACL только для пользователя и системы.
+- **Тестовый комплекс**: 371 автоматический тест валидации логики туннелирования, маршрутизации и отказоустойчивости.
 
 ---
 
 ## 🇨🇳 中文
 
-## [1.0.5]
+## [1.0.6]
 
-基于 WPF (.NET 8) 与 Material Design 3 开发的高性能原生单进程应用程序。
+全面升级至 Aether 2.3.0 核心、自定义 DNS 解析器子系统、WARP 身份池与引导中继、ECH 与 TLS 指纹伪装，以及多项底层安全防护加固。
 
 ### 🚀 核心更新与亮点
-- **单进程原生架构**：采用 .NET 8 WPF 与 Material Design 3，深度优化运行路径，降低内存开销。
-- **默认连接协议**：将 **WireGuard Warp** 配置为开箱即用的第一主协议。
-- **Aether 引擎全面升级**：MASQUE 协议支持 HTTP/3 (基于 UDP 的 QUIC) 与 HTTP/2 (TCP) 双通道自动回退及 Warp-on-Warp 嵌套。
-- **全系分发包支持**：官方发布提供共计 8 款安装包（包含含 .NET 独立版与免 .NET 框架依赖版的 x64/x86 安装程序及免安装便携版）。
-- **构建凭据安全解耦**：所有接入私钥经由 GitHub Actions 并在构建时以 AES-256-GCM 加密注入，代码库完全公开且安全。
+- **升级至 Aether 2.3.0 及 MASQUE in MASQUE (MIM)**：原生集成双层嵌套 MIM 协议，引入 Turbo 高速并发探测模式。
+- **ECH 与 TLS 指纹模拟**：支持 Encrypted Client Hello (ECH) 安全注册与多级回退机制，提供多种主流浏览器 TLS 指纹模拟策略。
+- **预热身份池与自建引导中继**：后台自动储备 Cloudflare WARP 节点身份凭据，配合去中心化中继，首次启动无需前置网络工具辅助。
+- **自定义 DNS 子系统**：全面支持标准 UDP、DoT 及 DoH 协议，内置在线延迟与连通性测试及严格隔离模式。
+- **链式多跳状态优化与即时取消**：清晰展示双层节点就绪进度（`[1/2] 外层 -> [2/2] 内层`），支持在任意连接握手阶段即时取消。
 
 ### 🔧 修复与优化
-- **强制 Kill Switch**：当隧道异常中断时立即切断流量，确保零 IP 泄漏。
-- **修复 Wintun DNS 竞争**：解决虚拟网卡关闭与系统 DNS 恢复时的冲突。
-- **完善 SHARD 与 Tor 生命周期**：修复节点热重载与 Lyrebird 可插拔传输时的资源释放问题。
-- **ReadyToRun 启动优化**：消除冷启动等待，实现毫秒级快速启动。
-- **全自动 CI/CD**：一键生成经过校验的 x64/x86 安装程序、便携版压缩包及 SHA-256 校验文件。
+- **路由无泄漏保护 (Zero-Leak)**：重构路由表增量更新机制，杜绝动态路由切换过程中的瞬时流量旁路泄露。
+- **WFP 阻断机制强化**：完善重连与异常中断场景下的防火墙规则隔离，彻底杜绝 DNS 污染及真实 IP 暴露。
+- **凭据文件访问控制强化**：为本地身份凭据文件严格应用 Windows ACL 权限，仅允许当前系统和用户访问。
+- **完备的离线测试验证**：新增 371 项自动化离线决策测试，确保路由状态、DNS 转发和故障转移逻辑高度可靠。

@@ -78,6 +78,9 @@ public sealed partial class WintunTunManager
             }
         }
 
+        List<WintunRouteApi.RouteEntry> previouslyApplied;
+        lock (_routeLock) previouslyApplied = _appliedRoutes.ToList();
+
         void Track(WintunRouteApi.RouteEntry e) { lock (_routeLock) _appliedRoutes.Add(e); }
 
         if (!include)
@@ -193,6 +196,30 @@ public sealed partial class WintunTunManager
             {
                 Track(WintunRouteApi.AddRoute(tunIfIndex, IPAddress.Parse("::"), 1, TunAddressV6));
                 Track(WintunRouteApi.AddRoute(tunIfIndex, IPAddress.Parse("8000::"), 1, TunAddressV6));
+            }
+        }
+
+        if (previouslyApplied.Count > 0)
+        {
+            List<WintunRouteApi.RouteEntry> staleStatics;
+            lock (_routeLock)
+            {
+                staleStatics = previouslyApplied
+                    .Distinct()
+                    .Where(e => !_appliedRoutes.Contains(e))
+                    .ToList();
+                foreach (var e in staleStatics) _appliedRoutes.Remove(e);
+            }
+
+            foreach (var r in staleStatics)
+            {
+                try { WintunRouteApi.DeleteRoute(r); }
+                catch { }
+            }
+
+            if (staleStatics.Count > 0)
+            {
+                WriteDiag($"routes applied: retired {staleStatics.Count} stale route(s)");
             }
         }
 

@@ -69,6 +69,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 Interlocked.Exchange(ref _progressUpdateQueued, 0);
                 OnPropertyChanged(nameof(ConnectingProgress));
                 OnPropertyChanged(nameof(ConnectingProgressText));
+                OnPropertyChanged(nameof(StatusSubtext));
             });
         };
         _tunnel.BytesTransferredChanged += (_, _) =>
@@ -213,7 +214,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
         var targetTab = CurrentMethod switch
         {
             ConnectionMethod.Psiphon => SettingsTab.Psiphon,
-            ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp => SettingsTab.Aether,
+            ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp or ConnectionMethod.MasqueInMasque => SettingsTab.Aether,
             ConnectionMethod.Tor => SettingsTab.Tor,
             ConnectionMethod.Shard => SettingsTab.Shard,
             ConnectionMethod.PsiphonOverWarp or ConnectionMethod.TorOverWarp or
@@ -226,7 +227,11 @@ public sealed partial class HomeViewModel : PageViewModelBase
             if (settingsVm != null)
             {
                 settingsVm.SelectedTab = targetTab;
-                if (CurrentMethod == ConnectionMethod.PsiphonOverWarp) settingsVm.SelectedChainedSubMode = "psiphon_warp";
+                if (CurrentMethod == ConnectionMethod.WireGuard) settingsVm.SelectedAetherProtocol = "wireguard";
+                else if (CurrentMethod == ConnectionMethod.WarpOnWarp) settingsVm.SelectedAetherProtocol = "warp";
+                else if (CurrentMethod == ConnectionMethod.MasqueInMasque) settingsVm.SelectedAetherProtocol = "mim";
+                else if (CurrentMethod == ConnectionMethod.Masque) settingsVm.SelectedAetherProtocol = "masque";
+                else if (CurrentMethod == ConnectionMethod.PsiphonOverWarp) settingsVm.SelectedChainedSubMode = "psiphon_warp";
                 else if (CurrentMethod == ConnectionMethod.TorOverWarp) settingsVm.SelectedChainedSubMode = "tor_warp";
                 else if (CurrentMethod == ConnectionMethod.PsiphonOverV2Ray) settingsVm.SelectedChainedSubMode = "psiphon_v2ray";
                 else if (CurrentMethod == ConnectionMethod.TorOverV2Ray) settingsVm.SelectedChainedSubMode = "tor_v2ray";
@@ -336,12 +341,13 @@ public sealed partial class HomeViewModel : PageViewModelBase
         
         
         
-        if (token is "masque" or "wireguard" or "warp_on_warp")
+        if (token is "masque" or "wireguard" or "warp_on_warp" or "masque_in_masque")
         {
             _settings.Settings.AetherProtocol = token switch
             {
                 "wireguard" => "wireguard",
                 "warp_on_warp" => "warp",
+                "masque_in_masque" => "mim",
                 _ => "masque",
             };
         }
@@ -631,17 +637,32 @@ public sealed partial class HomeViewModel : PageViewModelBase
     
     
 
-        public bool IsUsingUpstreamProxy =>
-        CurrentMethod == ConnectionMethod.Psiphon
-        && !TunnelCoreManager.BypassesUpstreamProxy(_settings.Settings.ProtocolMode)
-        && _settings.Settings.UpstreamProxyEnabled
-        && !string.IsNullOrWhiteSpace(_settings.Settings.UpstreamProxy);
+    public bool IsUsingUpstreamProxy
+    {
+        get
+        {
+            var s = _settings.Settings;
+            if (CurrentMethod == ConnectionMethod.Psiphon)
+            {
+                return !TunnelCoreManager.BypassesUpstreamProxy(s.ProtocolMode)
+                    && s.UpstreamProxyEnabled
+                    && !string.IsNullOrWhiteSpace(s.UpstreamProxy);
+            }
+            return false;
+        }
+    }
 
-        public bool ShowProxyBadge =>
+    public bool ShowProxyBadge =>
         IsUsingUpstreamProxy && State == ConnectionState.Connected;
 
-        public string ProxyDisplay => BuildProxyDisplay(
-        _settings.Settings.UpstreamProxy, _settings.Settings.UpstreamProxyScheme);
+    public string ProxyDisplay
+    {
+        get
+        {
+            var s = _settings.Settings;
+            return BuildProxyDisplay(s.UpstreamProxy, s.UpstreamProxyScheme);
+        }
+    }
 
     private static string BuildProxyDisplay(string? raw, string? scheme)
     {
@@ -876,22 +897,26 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
     private int _isToggling;
 
-    [RelayCommand(CanExecute = nameof(CanToggle))]
+    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanToggle))]
     private async System.Threading.Tasks.Task ToggleConnection()
     {
         if (State == ConnectionState.Connecting)
         {
             _tunnel.CancelInFlightConnection();
-            await _tunnel.StopAsync();
+            try
+            {
+                await _tunnel.StopAsync();
+            }
+            catch { }
+            finally
+            {
+                ApplyState(ConnectionState.Disconnected);
+                Interlocked.Exchange(ref _isToggling, 0);
+                ToggleConnectionCommand.NotifyCanExecuteChanged();
+            }
             return;
         }
 
-        
-        
-        
-        
-        
-        
         if (Interlocked.Exchange(ref _isToggling, 1) == 1) return;
         ToggleConnectionCommand.NotifyCanExecuteChanged();
         try
@@ -899,12 +924,10 @@ public sealed partial class HomeViewModel : PageViewModelBase
             if (State == ConnectionState.Connected)
             {
                 await _tunnel.StopAsync();
+                ApplyState(ConnectionState.Disconnected);
             }
             else if (State == ConnectionState.Disconnected || State == ConnectionState.Error)
             {
-                
-                
-                
                 await Task.Run(() => _tunnel.StartAsync());
             }
         }
@@ -920,7 +943,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
     }
 
     private bool CanToggle() =>
-        _isToggling == 0 && State is not ConnectionState.Disconnecting;
+        (_isToggling == 0 || State == ConnectionState.Connecting) && State is not ConnectionState.Disconnecting;
 
     [ObservableProperty]
     private bool _isHttpCopied;

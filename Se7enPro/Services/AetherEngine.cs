@@ -29,12 +29,66 @@ public sealed class AetherEngine : LocalSocksEngineBase
             return;
         }
 
+        var settings = _settings.Settings;
+
+        // ECH-first: stand aside and let aether register its own identity.
+        //
+        // Our provisioner registers with HttpClient, which cannot encrypt the server name, so
+        // on a network filtering the WARP API it is the very request that fails. With ECH
+        // aether hides that name for the same calls, and does the registration itself - no
+        // second VPN, no extra hop, nothing on the critical path but the tunnel we wanted
+        // anyway. If that does not deliver, ConnectionManager claims the fallback and this
+        // method runs the full pool -> relay -> direct -> SHARD -> V2Ray chain next time.
+        if (AetherExtras.ShouldDeferProvisioning(settings))
+        {
+            Log("[Aether] ECH is on; letting aether register its own WARP identity through the encrypted handshake. SHARD stands by as the fallback.");
+            return;
+        }
+
         SetConnectProgress(10, Loc.Of("Checking Cloudflare WARP identity..."));
         await _identityProvisioner.EnsureIdentityAsync(
             workDir,
             Method,
             p => SetConnectProgress(p.Percent, Loc.Of(p.Text)),
             ct);
+    }
+
+    /// <summary>
+    /// The SHARD fallback, taken only when an ECH-first connect has already failed.
+    /// </summary>
+    /// <remarks>
+    /// Called by ConnectionManager after StartAsync threw. Deliberately once per connect:
+    /// aether is given aether's chance, then this, and then the connect is reported as
+    /// failed rather than escalating into a third full registration attempt.
+    /// </remarks>
+    public override async Task<bool> RecoverFromMissingPrerequisitesAsync(CancellationToken ct)
+    {
+        if (!AetherExtras.ShouldDeferProvisioning(_settings.Settings))
+        {
+            // ECH is off, so BeforeStartAsync already ran the full chain. Nothing new to try;
+            // retrying would repeat the same registration against the same blocked network.
+            return false;
+        }
+
+        if (!AetherExtras.TryClaimEchFallback())
+        {
+            Log("[Aether] SHARD fallback already attempted for this connect; not repeating it.");
+            return false;
+        }
+
+        Log("[Aether] ECH could not register the WARP identity. Acquiring one through a relay or SHARD instead.");
+
+        SetConnectProgress(15, Loc.Of("Acquiring a WARP identity through SHARD..."));
+
+        // Now the app registers itself, over a route we control rather than one that just
+        // failed. This is the pool -> relays -> direct -> SHARD -> V2Ray chain.
+        await _identityProvisioner.EnsureIdentityAsync(
+            WorkDirectory,
+            Method,
+            p => SetConnectProgress(p.Percent, Loc.Of(p.Text)),
+            ct);
+
+        return _identityProvisioner.HasValidIdentity(WorkDirectory, Method);
     }
 
     
@@ -87,6 +141,7 @@ public sealed class AetherEngine : LocalSocksEngineBase
             {
                 ConnectionMethod.WireGuard => !string.IsNullOrEmpty(s.AetherScanModeWireguard) ? s.AetherScanModeWireguard : s.AetherScanMode,
                 ConnectionMethod.WarpOnWarp => !string.IsNullOrEmpty(s.AetherScanModeWarp) ? s.AetherScanModeWarp : s.AetherScanMode,
+                ConnectionMethod.MasqueInMasque => !string.IsNullOrEmpty(s.AetherScanModeMim) ? s.AetherScanModeMim : s.AetherScanMode,
                 _ => !string.IsNullOrEmpty(s.AetherScanModeMasque) ? s.AetherScanModeMasque : s.AetherScanMode,
             };
             return NormalizeScan(scan) switch
@@ -118,6 +173,30 @@ public sealed class AetherEngine : LocalSocksEngineBase
         }
         var exePath = StageFile(source, Path.Combine(workDir, EngineProcessNames.Aether));
 
+        // The staged core is what actually runs, and replacing the bundled binary does not by
+        // itself change that. If the two disagree, force a refresh and say so - a silently
+        // stale core means an upgrade that appears to have done nothing.
+        var bundledVersion = AetherCapabilities.Version(source);
+        var stagedVersion = AetherCapabilities.Version(exePath);
+        if (AetherExtras.ShouldRefreshStagedCore(bundledVersion, stagedVersion))
+        {
+            Log($"[Aether] The staged core reports '{stagedVersion}' but the bundled core is "
+                + $"'{bundledVersion}'. Refreshing the staged copy so the upgrade takes effect.");
+
+            try
+            {
+                File.Delete(exePath);
+                exePath = StageFile(source, Path.Combine(workDir, EngineProcessNames.Aether));
+                AetherCapabilities.Invalidate();
+                Log($"[Aether] Staged core refreshed: {AetherCapabilities.Version(exePath)}");
+            }
+            catch (Exception ex)
+            {
+                Log($"[Aether] Could not refresh the staged core ({ex.Message}). "
+                    + "It will keep running the older version.");
+            }
+        }
+
         var s = _settings.Settings;
         var method = Method;
         var actualSocks = SocksPortOverride ?? socksPort;
@@ -141,14 +220,36 @@ public sealed class AetherEngine : LocalSocksEngineBase
                 args.Add("--warp");
                 break;
             case ConnectionMethod.WarpOnWarp:
-                args.Add("--gool");
+                // aether 2.3.0 changed what --gool means: it now carries the WARP identity
+                // inside MASQUE and registers it through that tunnel, which is what makes
+                // the exit foreign. The old WARP-in-WARP is --gool-classic.
+                // Whichever the user picked, only sent if the bundled binary knows it -
+                // otherwise an older aether would be handed a flag it cannot parse.
+                if (AetherExtras.IsClassicGool(s))
+                {
+                    if (AetherCapabilities.Supports(exePath, "--gool-classic"))
+                    {
+                        args.Add("--gool-classic");
+                    }
+                    else
+                    {
+                        // Older builds only have the original meaning.
+                        args.Add("--gool");
+                    }
+                }
+                else if (AetherCapabilities.Supports(exePath, "--gool"))
+                {
+                    args.Add("--gool");
+                }
+                break;
+            case ConnectionMethod.MasqueInMasque:
+                args.Add("--mim");
                 break;
             default: 
                 args.Add("--masque");
                 break;
         }
 
-        
         string peer;
         string scanRaw;
         string noizeRaw;
@@ -168,6 +269,12 @@ public sealed class AetherEngine : LocalSocksEngineBase
                 noizeRaw = !string.IsNullOrWhiteSpace(s.AetherNoizeWarp) ? s.AetherNoizeWarp : s.AetherNoize;
                 ipVerRaw = !string.IsNullOrWhiteSpace(s.AetherIpVersionWarp) ? s.AetherIpVersionWarp : s.AetherIpVersion;
                 break;
+            case ConnectionMethod.MasqueInMasque:
+                peer = !string.IsNullOrWhiteSpace(s.AetherEndpointMim) ? s.AetherEndpointMim : s.AetherManualPeer;
+                scanRaw = !string.IsNullOrWhiteSpace(s.AetherScanModeMim) ? s.AetherScanModeMim : (string.IsNullOrWhiteSpace(s.AetherScanMode) ? "turbo" : s.AetherScanMode);
+                noizeRaw = !string.IsNullOrWhiteSpace(s.AetherNoizeMim) ? s.AetherNoizeMim : s.AetherNoize;
+                ipVerRaw = !string.IsNullOrWhiteSpace(s.AetherIpVersionMim) ? s.AetherIpVersionMim : s.AetherIpVersion;
+                break;
             default: 
                 peer = !string.IsNullOrWhiteSpace(s.AetherEndpointMasque) ? s.AetherEndpointMasque : s.AetherManualPeer;
                 scanRaw = !string.IsNullOrWhiteSpace(s.AetherScanModeMasque) ? s.AetherScanModeMasque : s.AetherScanMode;
@@ -176,27 +283,47 @@ public sealed class AetherEngine : LocalSocksEngineBase
                 break;
         }
 
-        
         bool hasMultiHopPeers = false;
         if (method == ConnectionMethod.WarpOnWarp)
         {
-            var wiwOuter = s.AetherWiwOuterPeer?.Trim() ?? "";
-            var wiwInner = s.AetherWiwInnerPeer?.Trim() ?? "";
-            if (wiwOuter.Length > 0)
+            // Only classic gool accepts --wiw-outer / --wiw-inner.
+            // In aether 2.3.0, specifying either of those flags forces classic WARP-in-WARP.
+            if (AetherExtras.IsClassicGool(s))
             {
-                args.Add("--wiw-outer");
-                args.Add(wiwOuter);
+                var wiwOuter = s.AetherWiwOuterPeer?.Trim() ?? "";
+                var wiwInner = s.AetherWiwInnerPeer?.Trim() ?? "";
+                if (wiwOuter.Length > 0)
+                {
+                    args.Add("--wiw-outer");
+                    args.Add(wiwOuter);
+                    hasMultiHopPeers = true;
+                }
+                if (wiwInner.Length > 0)
+                {
+                    args.Add("--wiw-inner");
+                    args.Add(wiwInner);
+                    hasMultiHopPeers = true;
+                }
+            }
+        }
+        else if (method == ConnectionMethod.MasqueInMasque)
+        {
+            var mimOuter = s.AetherMimOuterPeer?.Trim() ?? "";
+            var mimInner = s.AetherMimInnerPeer?.Trim() ?? "";
+            if (mimOuter.Length > 0)
+            {
+                args.Add("--mim-outer");
+                args.Add(mimOuter);
                 hasMultiHopPeers = true;
             }
-            if (wiwInner.Length > 0)
+            if (mimInner.Length > 0)
             {
-                args.Add("--wiw-inner");
-                args.Add(wiwInner);
+                args.Add("--mim-inner");
+                args.Add(mimInner);
                 hasMultiHopPeers = true;
             }
         }
 
-        
         peer = (peer ?? "").Trim();
         var scan = NormalizeScan(scanRaw);
         if (peer.Length > 0 && !hasMultiHopPeers)
@@ -214,16 +341,15 @@ public sealed class AetherEngine : LocalSocksEngineBase
         }
         else if (!hasMultiHopPeers)
         {
-            
             args.Add("--scan");
             args.Add(scan);
         }
 
-        
         var exitLocRaw = method switch
         {
             ConnectionMethod.WireGuard => !string.IsNullOrWhiteSpace(s.AetherExitLocWireguard) ? s.AetherExitLocWireguard : s.AetherExitLoc,
             ConnectionMethod.WarpOnWarp => !string.IsNullOrWhiteSpace(s.AetherExitLocWarp) ? s.AetherExitLocWarp : s.AetherExitLoc,
+            ConnectionMethod.MasqueInMasque => !string.IsNullOrWhiteSpace(s.AetherExitLocMim) ? s.AetherExitLocMim : s.AetherExitLoc,
             _ => !string.IsNullOrWhiteSpace(s.AetherExitLocMasque) ? s.AetherExitLocMasque : s.AetherExitLoc,
         };
         var exitLoc = (exitLocRaw ?? "").Trim();
@@ -256,13 +382,10 @@ public sealed class AetherEngine : LocalSocksEngineBase
                 break;
         }
 
-        
+        // MASQUE transport: h3 (QUIC / UDP) vs h2 (TCP)
         var transport = NormalizeTransport(s.AetherMasqueTransport);
-        if (method == ConnectionMethod.Masque)
+        if (method is ConnectionMethod.Masque or ConnectionMethod.MasqueInMasque)
         {
-            
-            
-            
             if (s.AetherMasqueQuic || transport == "h3")
             {
                 args.Add("--h3");
@@ -271,29 +394,34 @@ public sealed class AetherEngine : LocalSocksEngineBase
             {
                 args.Add("--h2");
 
-                
-                
-                if (s.AetherFragment)
+                if (s.AetherFragment || string.IsNullOrWhiteSpace(s.AetherMasqueTransport) || transport == "h2")
                 {
                     args.Add("--fragment");
-                    if (!string.IsNullOrWhiteSpace(s.AetherFragmentSize))
-                    {
-                        args.Add("--fragment-size");
-                        args.Add(s.AetherFragmentSize.Trim());
-                    }
-                    if (!string.IsNullOrWhiteSpace(s.AetherFragmentDelay))
-                    {
-                        args.Add("--fragment-delay");
-                        args.Add(s.AetherFragmentDelay.Trim());
-                    }
+                    var fragSize = !string.IsNullOrWhiteSpace(s.AetherFragmentSize) ? s.AetherFragmentSize.Trim() : "16-32";
+                    args.Add("--fragment-size");
+                    args.Add(fragSize);
+
+                    var fragDelay = !string.IsNullOrWhiteSpace(s.AetherFragmentDelay) ? s.AetherFragmentDelay.Trim() : "2-10";
+                    args.Add("--fragment-delay");
+                    args.Add(fragDelay);
                 }
             }
         }
+        else if (method is ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp
+                 && s.AetherFragmentWireguard
+                 && AetherCapabilities.Supports(exePath, "--fragment"))
+        {
+            args.Add("--fragment");
+            var fragSize = !string.IsNullOrWhiteSpace(s.AetherFragmentSize) ? s.AetherFragmentSize.Trim() : "16-32";
+            args.Add("--fragment-size");
+            args.Add(fragSize);
+            var fragDelay = !string.IsNullOrWhiteSpace(s.AetherFragmentDelay) ? s.AetherFragmentDelay.Trim() : "2-10";
+            args.Add("--fragment-delay");
+            args.Add(fragDelay);
+        }
 
-        
-        
-        
-        
+        AetherExtras.AddOptional(args, s, exePath, method, Log);
+
         if (s.AetherCacheEdges)
         {
             args.Add("--quick-reconnect");
@@ -303,30 +431,33 @@ public sealed class AetherEngine : LocalSocksEngineBase
             args.Add("--no-quick-reconnect");
         }
 
-        
         args.Add("--validate-secs");
         args.Add("4");
 
-        
+        var dnsField = AetherExtras.BuildDnsField(s);
         args.Add("--dns");
-        args.Add("1.1.1.1,1.0.0.1");
+        args.Add(dnsField);
 
-        
         if (method == ConnectionMethod.WireGuard)
         {
             args.Add("--keepalive");
             args.Add("5");
         }
 
-        
-        _transportLabel = method == ConnectionMethod.Masque
-            ? (transport == "h2" ? "HTTP/2 (TCP)" : "HTTP/3 (QUIC)")
-            : method.ToDisplayName();
+        _transportLabel = method switch
+        {
+            ConnectionMethod.Masque => transport == "h2" ? "HTTP/2 (TCP)" : "HTTP/3 (QUIC)",
+            ConnectionMethod.MasqueInMasque => "MASQUE on MASQUE (MiM)",
+            _ => method.ToDisplayName()
+        };
+
+        Log($"[Aether] {AetherCapabilities.Version(exePath)}; "
+            + $"dns={dnsField}; optional=[{string.Join(",", AetherExtras.AppliedOptionalFlags)}]");
         _obfuscationLabel = "";
         PublishRoute();
 
         Log($"Launching Aether ({method.ToDisplayName()}, scan={scan}"
-          + (method == ConnectionMethod.Masque ? $", transport={_transportLabel}" : "")
+          + (method is ConnectionMethod.Masque or ConnectionMethod.MasqueInMasque ? $", transport={_transportLabel}" : "")
           + (noize.Length > 0 ? $", noize={noize}" : "") + ").");
 
         _candidatesFound = 0;
@@ -440,6 +571,27 @@ public sealed class AetherEngine : LocalSocksEngineBase
         else if (line.Contains("tls established", StringComparison.OrdinalIgnoreCase))
         {
             SetConnectProgress(85, Loc.Of("TLS handshake established..."));
+        }
+        else if (line.Contains("trying inner MASQUE edge", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(82, Loc.Of("Outer connected (1/2) -> Connecting inner MASQUE (2/2)..."));
+        }
+        else if (line.Contains("[inner]", StringComparison.OrdinalIgnoreCase))
+        {
+            if (line.Contains("connecting tcp to", StringComparison.OrdinalIgnoreCase))
+                SetConnectProgress(85, Loc.Of("MASQUE [2/2]: Connecting to inner edge..."));
+            else if (line.Contains("tls established", StringComparison.OrdinalIgnoreCase))
+                SetConnectProgress(88, Loc.Of("MASQUE [2/2]: Inner TLS established..."));
+            else if (line.Contains("connect-ip status: 200", StringComparison.OrdinalIgnoreCase))
+                SetConnectProgress(94, Loc.Of("MASQUE [2/2]: Inner tunnel established (200 OK)..."));
+        }
+        else if (line.Contains("inner MASQUE tunnel established", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(96, Loc.Of("Both MASQUE hops established!"));
+        }
+        else if (line.Contains("masque-in-masque ready", StringComparison.OrdinalIgnoreCase) || line.Contains("warp-in-warp ready", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(98, Loc.Of("Double-hop tunnel ready!"));
         }
         else if (line.Contains("connect-ip request sent", StringComparison.OrdinalIgnoreCase))
         {

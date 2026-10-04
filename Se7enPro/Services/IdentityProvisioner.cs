@@ -29,19 +29,34 @@ public sealed class IdentityProvisioner
     };
 
     private readonly ILogger<IdentityProvisioner> _logger;
+    private readonly ISettingsService _settings;
     private readonly ShardEngine _shardEngine;
     private readonly V2RayEngine _v2rayEngine;
+
+    /// <summary>
+    /// Pre-provisioned identities, so the registration endpoint is not on the critical
+    /// path of every connect.
+    /// </summary>
+    private readonly IdentityPool _pool;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public IdentityProvisioner(
         ILogger<IdentityProvisioner> logger,
+        ISettingsService settings,
         ShardEngine shardEngine,
-        V2RayEngine v2rayEngine)
+        V2RayEngine v2rayEngine,
+        IdentityPool pool)
     {
         _logger = logger;
+        _settings = settings;
         _shardEngine = shardEngine;
         _v2rayEngine = v2rayEngine;
+        _pool = pool;
     }
+
+    /// <summary>How many identities of each kind to keep on hand. 0 disables the pool.</summary>
+    private int PoolTarget => Math.Clamp(_settings.Settings.IdentityPoolTarget, 0, 8);
 
         public bool HasValidIdentity(string workDir, ConnectionMethod method)
     {
@@ -50,9 +65,10 @@ public sealed class IdentityProvisioner
             return method switch
             {
                 ConnectionMethod.WireGuard => IsValidWarpToml(Path.Combine(workDir, "aether.toml")),
-                ConnectionMethod.WarpOnWarp => IsValidWarpToml(Path.Combine(workDir, "aether.toml"))
-                                            && IsValidWarpToml(Path.Combine(workDir, "aether-secondary.toml")),
+                ConnectionMethod.WarpOnWarp => GoolIsComplete(workDir),
                 ConnectionMethod.Masque => IsValidMasqueToml(Path.Combine(workDir, "aether-masque.toml")),
+                ConnectionMethod.MasqueInMasque => IsValidMasqueToml(Path.Combine(workDir, "aether-masque.toml"))
+                                                && IsValidMasqueToml(Path.Combine(workDir, "aether-masque-secondary.toml")),
                 _ => true,
             };
         }
@@ -61,6 +77,19 @@ public sealed class IdentityProvisioner
             _logger.LogWarning(ex, "Failed to inspect identity file in {WorkDir}", workDir);
             return false;
         }
+    }
+
+    /// <summary>Whether the work dir already holds both halves of the selected gool.</summary>
+    private bool GoolIsComplete(string workDir)
+    {
+        var layout = AetherExtras.GoolLayoutFor(_settings.Settings);
+        if (layout.DeviceIsMasque)
+        {
+            return IsValidMasqueToml(Path.Combine(workDir, layout.DeviceFile));
+        }
+
+        return IsValidWarpToml(Path.Combine(workDir, layout.DeviceFile))
+            && IsValidWarpToml(Path.Combine(workDir, layout.WireGuardFile));
     }
 
     private static bool IsValidWarpToml(string path)
@@ -91,7 +120,7 @@ public sealed class IdentityProvisioner
         return true;
     }
 
-        public async Task EnsureIdentityAsync(
+    public async Task EnsureIdentityAsync(
         string workDir,
         ConnectionMethod method,
         Action<(int Percent, string Text)>? progressCallback,
@@ -105,13 +134,50 @@ public sealed class IdentityProvisioner
         await _gate.WaitAsync(ct);
         try
         {
-            
             if (HasValidIdentity(workDir, method))
             {
                 return;
             }
 
-            
+            if (TryCheckoutFromPool(workDir, method, progressCallback))
+            {
+                return;
+            }
+
+            var relays = IdentityRelay.ParseRelays(_settings.Settings.IdentityRelayUrls);
+            if (relays.Count > 0)
+            {
+                progressCallback?.Invoke((12, "Trying a bootstrap relay..."));
+                try
+                {
+                    using var relayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    relayCts.CancelAfter(TimeSpan.FromSeconds(10 * relays.Count + 5));
+
+                    await ProvisionInternalAsync(
+                        workDir, method, proxy: null, relayCts.Token,
+                        IdentityRelay.BuildRoutes(
+                            directProxy: null, relayList: _settings.Settings.IdentityRelayUrls,
+                            tunnelProxy: null, tunnelLabel: "tunnel"));
+
+                    if (HasValidIdentity(workDir, method))
+                    {
+                        _logger.LogInformation(
+                            "[Identity] Provisioned through a bootstrap relay ({Count} configured).", relays.Count);
+                        progressCallback?.Invoke((55, "Cloudflare identity provisioned successfully."));
+                        return;
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogInformation(
+                        "[Identity] Bootstrap relay(s) did not work ({Msg}). Falling back.", ex.Message);
+                }
+            }
+
             progressCallback?.Invoke((15, "Checking Cloudflare WARP identity..."));
             try
             {
@@ -126,10 +192,9 @@ public sealed class IdentityProvisioner
             }
             catch (Exception ex)
             {
-                _logger.LogInformation("[Identity] Direct registration probe failed or blocked ({Msg}). Acquiring SHARD proxy...", ex.Message);
+                _logger.LogInformation("[Identity] Direct registration probe failed or blocked ({Msg}). Acquiring proxy...", ex.Message);
             }
 
-            
             _logger.LogWarning("[Identity] Cloudflare account API is blocked by carrier. Acquiring proxy to provision identity...");
             progressCallback?.Invoke((20, "Connecting to SHARD to provision WARP identity..."));
 
@@ -166,6 +231,208 @@ public sealed class IdentityProvisioner
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Tries to satisfy this method from the pool, writing the files the engine reads.
+    /// </summary>
+    /// <returns>True when the working directory now holds a usable identity.</returns>
+    private bool TryCheckoutFromPool(
+        string workDir,
+        ConnectionMethod method,
+        Action<(int Percent, string Text)>? progressCallback)
+    {
+        if (PoolTarget <= 0) return false;
+
+        var kind = method switch
+        {
+            ConnectionMethod.WireGuard => IdentityKind.WireGuard,
+            ConnectionMethod.WarpOnWarp => AetherExtras.IsClassicGool(_settings.Settings)
+                ? IdentityKind.WireGuard
+                : IdentityKind.Masque,
+            ConnectionMethod.Masque or ConnectionMethod.MasqueInMasque => IdentityKind.Masque,
+            _ => (IdentityKind?)null,
+        };
+        if (kind is null) return false;
+        var identityKind = kind.Value;
+
+        try
+        {
+            Directory.CreateDirectory(workDir);
+
+            switch (method)
+            {
+                case ConnectionMethod.WireGuard:
+                {
+                    if (!_pool.TryCheckout(identityKind, workDir, out var slot) || slot is null) return false;
+                    WriteWorkFile(Path.Combine(workDir, "aether.toml"), slot.Toml);
+                    break;
+                }
+
+                case ConnectionMethod.WarpOnWarp:
+                {
+                    if (!AetherExtras.IsClassicGool(_settings.Settings))
+                    {
+                        if (!_pool.TryCheckout(IdentityKind.Masque, workDir, out var slot) || slot is null) return false;
+                        WriteWorkFile(Path.Combine(workDir, "aether-masque.toml"), slot.Toml);
+                        _logger.LogInformation(
+                            "[IdentityPool] Checked out outer MASQUE identity from pool for gool; aether will register inner identity through the tunnel.");
+                        break;
+                    }
+
+                    if (!_pool.TryCheckout(identityKind, workDir, out var primary) || primary is null) return false;
+                    WriteWorkFile(Path.Combine(workDir, "aether.toml"), primary.Toml);
+
+                    // Same call again, which hands out a DIFFERENT identity: the second
+                    // leg exists so the two hops do not share an identity.
+                    if (!_pool.TryCheckout(identityKind, workDir, out var secondary) || secondary is null)
+                    {
+                        _logger.LogWarning(
+                            "[IdentityPool] Only one usable WireGuard identity; WARP-on-WARP needs two.");
+                        return false;
+                    }
+                    WriteWorkFile(Path.Combine(workDir, "aether-secondary.toml"), secondary.Toml);
+                    break;
+                }
+
+                case ConnectionMethod.Masque:
+                {
+                    if (!_pool.TryCheckout(identityKind, workDir, out var slot) || slot is null) return false;
+                    WriteWorkFile(Path.Combine(workDir, "aether-masque.toml"), slot.Toml);
+                    break;
+                }
+
+                case ConnectionMethod.MasqueInMasque:
+                {
+                    if (!_pool.TryCheckout(identityKind, workDir, out var primary) || primary is null) return false;
+                    WriteWorkFile(Path.Combine(workDir, "aether-masque.toml"), primary.Toml);
+
+                    if (!_pool.TryCheckout(identityKind, workDir, out var secondary) || secondary is null)
+                    {
+                        _logger.LogWarning(
+                            "[IdentityPool] Only one usable MASQUE identity; MASQUE-in-MASQUE needs two.");
+                        return false;
+                    }
+                    WriteWorkFile(Path.Combine(workDir, "aether-masque-secondary.toml"), secondary.Toml);
+                    break;
+                }
+            }
+
+            if (!HasValidIdentity(workDir, method))
+            {
+                // Do not keep a bad checkout recorded against this workDir; it would make
+                // a later failure retire an identity that was never actually used.
+                _pool.ReportFailure(workDir, "the pooled identity did not validate");
+                return false;
+            }
+
+            _logger.LogInformation(
+                "[IdentityPool] Satisfied {Method} from the pool; no registration needed.", method);
+            progressCallback?.Invoke((15, "Using a stored Cloudflare identity..."));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[IdentityPool] Checkout failed; falling back to registration");
+            return false;
+        }
+    }
+
+    private static void WriteWorkFile(string target, string content)
+    {
+        var temp = target + ".tmp";
+        File.WriteAllText(temp, content, new UTF8Encoding(false));
+        File.Move(temp, target, overwrite: true);
+    }
+
+    /// <summary>
+    /// Retires the identities a failed connection was using, so the next attempt picks a
+    /// different one instead of retrying a blocked identity forever.
+    /// </summary>
+    public void ReportConnectFailure(string workDir, string reason) => _pool.ReportFailure(workDir, reason);
+
+    /// <summary>Records that a connection succeeded, clearing the active mapping.</summary>
+    public void ReportConnectSuccess(string workDir) => _pool.ReportSuccess(workDir);
+
+    /// <summary>
+    /// Tops the pool up while connectivity exists.
+    ///
+    /// <summary>Tops up the identity pool while online connectivity is available.</summary>
+    public async Task RefillPoolAsync(
+        ConnectionMethod method,
+        int? targetOverride = null,
+        CancellationToken ct = default)
+    {
+        var target = targetOverride ?? PoolTarget;
+        if (target <= 0) return;
+
+        var kind = method switch
+        {
+            ConnectionMethod.WarpOnWarp => AetherExtras.IsClassicGool(_settings.Settings)
+                ? IdentityKind.WireGuard
+                : IdentityKind.Masque,
+            ConnectionMethod.WireGuard => IdentityKind.WireGuard,
+            ConnectionMethod.Masque or ConnectionMethod.MasqueInMasque => IdentityKind.Masque,
+            _ => (IdentityKind?)null,
+        };
+        if (kind is null) return;
+        var identityKind = kind.Value;
+        if (!_pool.NeedsRefill(identityKind, target)) return;
+
+        var want = target - _pool.Count(identityKind);
+        if (want <= 0) return;
+
+        var added = 0;
+        for (var i = 0; i < want; i++)
+        {
+            if (ct.IsCancellationRequested) break;
+            try
+            {
+                var material = await ProvisionOneAsync(identityKind, ct);
+                if (material is null) break;
+                if (_pool.Add(material, keepPerKind: target)) added++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(
+                    "[IdentityPool] Top-up stopped after {Added} identity/identities: {Msg}",
+                    added, ex.Message);
+                break;
+            }
+        }
+
+        if (added > 0)
+        {
+            _logger.LogInformation(
+                "[IdentityPool] Topped up to {Count} usable {Kind} identity/identities.",
+                _pool.Count(identityKind), identityKind);
+        }
+    }
+
+    /// <summary>Provisions a single identity for the reserve pool.</summary>
+    private async Task<PooledIdentity?> ProvisionOneAsync(IdentityKind kind, CancellationToken ct)
+    {
+        var relays = _settings.Settings.IdentityRelayUrls;
+        var routeCount = 1 + IdentityRelay.ParseRelays(relays).Count;
+        if (routeCount == 1) return null; // no relay configured and direct failed
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(12 * routeCount + 5));
+
+        var routes = IdentityRelay.BuildRoutes(
+            directProxy: null, relayList: relays, tunnelProxy: null, tunnelLabel: "tunnel");
+
+        var reg = await RegisterDeviceAsync(routes, cts.Token);
+        if (kind == IdentityKind.WireGuard)
+        {
+            return new PooledIdentity(
+                IdentityKind.WireGuard, reg.Id, BuildWarpToml(reg), CertIssuedAt: 0);
+        }
+
+        var (certPem, keyPem, assignedEndpoint) = await EnrollMasqueKeyAsync(reg, routes, cts.Token);
+        return new PooledIdentity(
+            IdentityKind.Masque, reg.Id, BuildMasqueToml(reg, certPem, keyPem, assignedEndpoint),
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     }
 
     private async Task<(int SocksPort, bool StartedOurselves)> AcquireProxyAsync(
@@ -238,99 +505,157 @@ public sealed class IdentityProvisioner
         return (-1, false);
     }
 
-    private async Task ProvisionInternalAsync(
+    private Task ProvisionInternalAsync(
         string workDir,
         ConnectionMethod method,
         int? socksPort,
         CancellationToken ct)
     {
+        System.Net.IWebProxy? proxy = socksPort.HasValue && socksPort.Value > 0
+            ? new System.Net.WebProxy($"socks5://127.0.0.1:{socksPort.Value}")
+            : null;
+        return ProvisionInternalAsync(workDir, method, proxy, ct);
+    }
+
+    private async Task ProvisionInternalAsync(
+        string workDir,
+        ConnectionMethod method,
+        System.Net.IWebProxy? proxy,
+        CancellationToken ct,
+        IReadOnlyList<ProvisioningRoute>? extraRoutes = null)
+    {
         Directory.CreateDirectory(workDir);
-        RestrictToCurrentUser(workDir);
+        IdentityFileGuard.RestrictToCurrentUser(workDir);
+
+        var routes = new List<ProvisioningRoute>
+        {
+            new("direct", proxy, RelayBaseUrl: null),
+        };
+        if (extraRoutes is not null) routes.AddRange(extraRoutes);
+        if (proxy is not null)
+        {
+            routes.Add(new ProvisioningRoute("tunnel", proxy, RelayBaseUrl: null));
+        }
 
         switch (method)
         {
             case ConnectionMethod.WireGuard:
             {
-                var reg = await RegisterDeviceAsync(socksPort, ct);
+                var reg = await RegisterDeviceAsync(routes, ct);
                 var toml = BuildWarpToml(reg);
                 var target = Path.Combine(workDir, "aether.toml");
                 await WriteSecretFileAsync(target, toml, ct);
+                SeedPool(IdentityKind.WireGuard, reg.Id, toml, certIssuedAt: 0);
                 break;
             }
 
             case ConnectionMethod.WarpOnWarp:
             {
-                var primary = await RegisterDeviceAsync(socksPort, ct);
-                var tomlPrimary = BuildWarpToml(primary);
-                var targetPrimary = Path.Combine(workDir, "aether.toml");
-                await WriteSecretFileAsync(targetPrimary, tomlPrimary, ct);
+                var layout = AetherExtras.GoolLayoutFor(_settings.Settings);
 
-                var secondary = await RegisterDeviceAsync(socksPort, ct);
+                if (layout.DeviceIsMasque)
+                {
+                    if (!IsValidMasqueToml(Path.Combine(workDir, layout.DeviceFile)))
+                    {
+                        var device = await RegisterDeviceAsync(routes, ct);
+                        var (certPem, keyPem, assignedEndpoint) =
+                            await EnrollMasqueKeyAsync(device, routes, ct);
+
+                        var masqueToml = BuildMasqueToml(device, certPem, keyPem, assignedEndpoint);
+                        await WriteSecretFileAsync(
+                            Path.Combine(workDir, layout.DeviceFile), masqueToml, ct);
+
+                        SeedPool(IdentityKind.Masque, device.Id, masqueToml,
+                            DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    }
+                    break;
+                }
+
+                // Classic gool is genuinely two independent WireGuard hops, so two devices.
+                var primary = await RegisterDeviceAsync(routes, ct);
+                var tomlPrimary = BuildWarpToml(primary);
+                var targetPrimary = Path.Combine(workDir, layout.DeviceFile);
+                await WriteSecretFileAsync(targetPrimary, tomlPrimary, ct);
+                SeedPool(IdentityKind.WireGuard, primary.Id, tomlPrimary, certIssuedAt: 0);
+
+                var secondary = await RegisterDeviceAsync(routes, ct);
                 var tomlSecondary = BuildWarpToml(secondary);
-                var targetSecondary = Path.Combine(workDir, "aether-secondary.toml");
+                var targetSecondary = Path.Combine(workDir, layout.WireGuardFile);
                 await WriteSecretFileAsync(targetSecondary, tomlSecondary, ct);
+                SeedPool(IdentityKind.WireGuard, secondary.Id, tomlSecondary, certIssuedAt: 0);
                 break;
             }
 
             case ConnectionMethod.Masque:
             {
-                var reg = await RegisterDeviceAsync(socksPort, ct);
-                var (certPem, keyPem, assignedEndpoint) = await EnrollMasqueKeyAsync(reg, socksPort, ct);
-                var toml = BuildMasqueToml(reg, certPem, keyPem, assignedEndpoint);
                 var target = Path.Combine(workDir, "aether-masque.toml");
-                await WriteSecretFileAsync(target, toml, ct);
+                if (!IsValidMasqueToml(target))
+                {
+                    var reg = await RegisterDeviceAsync(routes, ct);
+                    var (certPem, keyPem, assignedEndpoint) = await EnrollMasqueKeyAsync(reg, routes, ct);
+                    var toml = BuildMasqueToml(reg, certPem, keyPem, assignedEndpoint);
+                    await WriteSecretFileAsync(target, toml, ct);
+                    SeedPool(IdentityKind.Masque, reg.Id, toml, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                }
+                break;
+            }
+
+            case ConnectionMethod.MasqueInMasque:
+            {
+                var targetPrimary = Path.Combine(workDir, "aether-masque.toml");
+                if (!IsValidMasqueToml(targetPrimary))
+                {
+                    var primary = await RegisterDeviceAsync(routes, ct);
+                    var (certPrimary, keyPrimary, assignedPrimary) = await EnrollMasqueKeyAsync(primary, routes, ct);
+                    var tomlPrimary = BuildMasqueToml(primary, certPrimary, keyPrimary, assignedPrimary);
+                    await WriteSecretFileAsync(targetPrimary, tomlPrimary, ct);
+                    SeedPool(IdentityKind.Masque, primary.Id, tomlPrimary,
+                        DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                }
+
+                var targetSecondary = Path.Combine(workDir, "aether-masque-secondary.toml");
+                if (!IsValidMasqueToml(targetSecondary))
+                {
+                    var secondary = await RegisterDeviceAsync(routes, ct);
+                    var (certSecondary, keySecondary, assignedSecondary) = await EnrollMasqueKeyAsync(secondary, routes, ct);
+                    var tomlSecondary = BuildMasqueToml(secondary, certSecondary, keySecondary, assignedSecondary);
+                    await WriteSecretFileAsync(targetSecondary, tomlSecondary, ct);
+                    SeedPool(IdentityKind.Masque, secondary.Id, tomlSecondary,
+                        DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                }
                 break;
             }
         }
     }
 
-        private static async Task WriteSecretFileAsync(string target, string content, CancellationToken ct)
+    /// <summary>Stores an on-demand provisioned identity into the reserve pool.</summary>
+    private void SeedPool(IdentityKind kind, string deviceId, string toml, long certIssuedAt)
+    {
+        if (PoolTarget <= 0) return;
+
+        try
+        {
+            if (_pool.Add(
+                    new PooledIdentity(kind, deviceId, toml, certIssuedAt),
+                    keepPerKind: PoolTarget))
+            {
+                _logger.LogInformation(
+                    "[IdentityPool] Kept the freshly provisioned {Kind} identity as a reserve.", kind);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[IdentityPool] Could not keep the provisioned identity in reserve");
+        }
+    }
+
+    private static async Task WriteSecretFileAsync(string target, string content, CancellationToken ct)
     {
         var temp = target + ".tmp";
         await File.WriteAllTextAsync(temp, content, new UTF8Encoding(false), ct);
         File.Move(temp, target, overwrite: true);
     }
 
-        private void RestrictToCurrentUser(string dir)
-    {
-        try
-        {
-            var sd = new System.Security.AccessControl.DirectorySecurity();
-            sd.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-
-            var sids = new List<System.Security.Principal.SecurityIdentifier>
-            {
-                new(System.Security.Principal.WellKnownSidType.LocalSystemSid, null),
-                new(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null),
-            };
-            try
-            {
-                using var current = System.Security.Principal.WindowsIdentity.GetCurrent();
-                if (current.User is not null)
-                {
-                    sids.Add(new System.Security.Principal.SecurityIdentifier(current.User.Value!));
-                }
-            }
-            catch {  }
-
-            foreach (var sid in sids)
-            {
-                sd.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
-                    sid,
-                    System.Security.AccessControl.FileSystemRights.FullControl,
-                    System.Security.AccessControl.InheritanceFlags.ContainerInherit |
-                    System.Security.AccessControl.InheritanceFlags.ObjectInherit,
-                    System.Security.AccessControl.PropagationFlags.None,
-                    System.Security.AccessControl.AccessControlType.Allow));
-            }
-
-            new System.IO.DirectoryInfo(dir).SetAccessControl(sd);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Could not restrict the identity work directory ACL");
-        }
-    }
 
     private sealed record DeviceRegResult(
         string Id,
@@ -343,7 +668,9 @@ public sealed class IdentityProvisioner
         string GatewayProxy,
         string AssignedEndpoint);
 
-    private static async Task<DeviceRegResult> RegisterDeviceAsync(int? socksPort, CancellationToken ct)
+    private static async Task<DeviceRegResult> RegisterDeviceAsync(
+        IReadOnlyList<ProvisioningRoute> routes,
+        CancellationToken ct)
     {
         var (privB64, pubB64) = Curve25519Helper.GenerateKeyPair();
         var tos = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
@@ -364,29 +691,9 @@ public sealed class IdentityProvisioner
         };
         var json = JsonSerializer.Serialize(bodyObj, JsonOpts);
 
-        using var handler = new SocketsHttpHandler
-        {
-            ConnectTimeout = TimeSpan.FromSeconds(15)
-        };
-        if (socksPort.HasValue && socksPort.Value > 0)
-        {
-            handler.Proxy = new WebProxy($"socks5://127.0.0.1:{socksPort.Value}");
-        }
+        var respJson = await SendToRegistrationAsync(
+            HttpMethod.Post, "reg", json, bearer: null, routes, ct);
 
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{ApiBaseUrl}/{ApiVersion}/reg");
-        req.Content = new StringContent(json, Encoding.UTF8, "application/json");
-        req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
-        req.Headers.TryAddWithoutValidation("CF-Client-Version", ClientVersion);
-
-        using var resp = await client.SendAsync(req, ct);
-        if (!resp.IsSuccessStatusCode)
-        {
-            var errBody = await resp.Content.ReadAsStringAsync(ct);
-            throw new HttpRequestException($"Registration failed: {(int)resp.StatusCode} {resp.ReasonPhrase} - {errBody}");
-        }
-
-        var respJson = await resp.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(respJson);
         var root = doc.RootElement;
 
@@ -405,9 +712,83 @@ public sealed class IdentityProvisioner
         return new DeviceRegResult(id, token, privB64, peerPubKey, ipv4, ipv6, clientId, gatewayProxy, endpoint);
     }
 
+    /// <summary>Sends registration request across candidate routes until successful.</summary>
+    private static async Task<string> SendToRegistrationAsync(
+        HttpMethod method,
+        string path,
+        string bodyJson,
+        string? bearer,
+        IReadOnlyList<ProvisioningRoute> routes,
+        CancellationToken ct)
+    {
+        var failures = new List<string>();
+
+        foreach (var route in routes)
+        {
+            using var perRoute = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            perRoute.CancelAfter(TimeSpan.FromSeconds(12));
+
+            try
+            {
+                using var handler = new SocketsHttpHandler
+                {
+                    ConnectTimeout = TimeSpan.FromSeconds(8)
+                };
+                if (route.Proxy is not null) handler.Proxy = route.Proxy;
+
+                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(12) };
+
+                var target = route.IsRelay
+                    ? $"{route.RelayBaseUrl}/{ApiVersion}/{path}"
+                    : $"{ApiBaseUrl}/{ApiVersion}/{path}";
+
+                using var req = new HttpRequestMessage(method, target);
+                req.Content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
+                req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+                req.Headers.TryAddWithoutValidation("CF-Client-Version", ClientVersion);
+
+                if (bearer is not null)
+                {
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {bearer}");
+                }
+
+                if (route.IsRelay)
+                {
+                    req.Headers.TryAddWithoutValidation(IdentityRelay.RelayHeader, IdentityRelay.RelayHeaderValue);
+                }
+
+                using var resp = await client.SendAsync(req, perRoute.Token);
+
+                if (resp.IsSuccessStatusCode)
+                {
+                    return await resp.Content.ReadAsStringAsync(perRoute.Token);
+                }
+
+                var err = await resp.Content.ReadAsStringAsync(perRoute.Token);
+                failures.Add($"{route.Label}: HTTP {(int)resp.StatusCode}");
+                if (route.IsDirect)
+                {
+                    throw new HttpRequestException(
+                        $"Registration failed via {route.Label}: {(int)resp.StatusCode} - {err}");
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{route.Label}: {ex.GetType().Name}");
+            }
+        }
+
+        throw new HttpRequestException(
+            "Registration failed on every route -> " + string.Join("; ", failures));
+    }
+
     private async Task<(string CertPem, string KeyPem, string AssignedEndpoint)> EnrollMasqueKeyAsync(
         DeviceRegResult reg,
-        int? socksPort,
+        IReadOnlyList<ProvisioningRoute> routes,
         CancellationToken ct)
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -426,27 +807,13 @@ public sealed class IdentityProvisioner
             tunnel_type = "masque"
         }, JsonOpts);
 
-        using var handler = new SocketsHttpHandler
-        {
-            ConnectTimeout = TimeSpan.FromSeconds(15)
-        };
-        if (socksPort.HasValue && socksPort.Value > 0)
-        {
-            handler.Proxy = new WebProxy($"socks5://127.0.0.1:{socksPort.Value}");
-        }
-
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
-        using var req = new HttpRequestMessage(HttpMethod.Patch, $"{ApiBaseUrl}/{ApiVersion}/reg/{reg.Id}");
-        req.Content = new StringContent(patchBody, Encoding.UTF8, "application/json");
-        req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
-        req.Headers.TryAddWithoutValidation("CF-Client-Version", ClientVersion);
-        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {reg.Token}");
-
-        using var resp = await client.SendAsync(req, ct);
         var assignedEndpoint = reg.AssignedEndpoint;
-        if (resp.IsSuccessStatusCode)
+
+        try
         {
-            var respStr = await resp.Content.ReadAsStringAsync(ct);
+            var respStr = await SendToRegistrationAsync(
+                HttpMethod.Patch, $"reg/{reg.Id}", patchBody, reg.Token, routes, ct);
+
             using var doc = JsonDocument.Parse(respStr);
             if (doc.RootElement.TryGetProperty("config", out var config) &&
                 config.TryGetProperty("peers", out var peers) &&
@@ -458,10 +825,10 @@ public sealed class IdentityProvisioner
                 if (!string.IsNullOrEmpty(v4Str)) assignedEndpoint = v4Str;
             }
         }
-        else
+        catch (Exception ex)
         {
-            var errBody = await resp.Content.ReadAsStringAsync(ct);
-            _logger.LogWarning("[Identity] MASQUE key enrollment returned non-success ({Status}): {Body}", resp.StatusCode, errBody);
+            _logger.LogWarning(ex,
+                "[Identity] MASQUE key enrollment failed on every route; keeping the assigned endpoint");
         }
 
         return (certPem, keyPem, assignedEndpoint);

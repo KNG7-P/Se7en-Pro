@@ -14,7 +14,7 @@
     <sys:String x:Key="Loc_aboutTechStack">Базовые технологии движка</sys:String>
     <sys:String x:Key="Loc_aboutTelegramSubtitle">Официальный канал обновлений, настроек и обсуждения</sys:String>
     <sys:String x:Key="Loc_aboutTitle">Se7en Pro</sys:String>
-    <sys:String x:Key="Loc_aboutVersion">v1.0.5</sys:String>
+    <sys:String x:Key="Loc_aboutVersion">v1.0.6</sys:String>
     <sys:String x:Key="Loc_Achainhop0isreestablishing">Прыжок цепочки ({0}) восстанавливается...</sys:String>
     <sys:String x:Key="Loc_activeBadge">Активен</sys:String>
     <sys:String x:Key="Loc_Activeonlythe0listedrulesgothrough">Активно — через VPN идут только указанные правила ({0}).</sys:String>
@@ -885,7 +885,7 @@
     <sys:String x:Key="Loc_UserIDUUIDPasswordisrequired">Необходим ID пользователя / UUID / пароль.</sys:String>
     <sys:String x:Key="Loc_Username">Имя пользователя</sys:String>
     <sys:String x:Key="Loc_UUIDorpasswordkey">UUID или ключ-пароль</sys:String>
-    <sys:String x:Key="Loc_v103WindowsClient">v1.0.5 • Клиент для Windows</sys:String>
+    <sys:String x:Key="Loc_v103WindowsClient">v1.0.6 • Клиент для Windows</sys:String>
     <sys:String x:Key="Loc_v2rayAddConfig">Добавить узел</sys:String>
     <sys:String x:Key="Loc_v2rayAddConfigDesc">Введите параметры сервера или данные узла</sys:String>
     <sys:String x:Key="Loc_v2rayBridgeTitle">Интерфейс моста Psiphon к прокси</sys:String>
@@ -978,4 +978,76 @@
     <sys:String x:Key="Loc_WoWWARPonWARP">WoW (WARP на WARP)</sys:String>
     <sys:String x:Key="Loc_WoWWARPonWARPslowestforthemostfilt">• WoW: WARP поверх WARP — самый медленный, для сильно фильтруемых сетей</sys:String>
     <sys:String x:Key="Loc_XrayCore">Ядро Xray</sys:String>
+
+    <!-- Custom DNS (Network tab) -->
+    <sys:String x:Key="Loc_dnsCardTitle">Пользовательский DNS</sys:String>
+    <sys:String x:Key="Loc_dnsCardSubtitle">Резолверы, из которых туннель получает ответы DNS. Пусто — автоматически: используются встроенные публичные резолверы. Изменения сохраняются сами.</sys:String>
+    <sys:String x:Key="Loc_dnsUdpLabel">Обычный DNS (UDP)</sys:String>
+    <sys:String x:Key="Loc_dnsUdpHint">Голые адреса или хосты, порт 53.</sys:String>
+    <sys:String x:Key="Loc_dnsDotLabel">DNS через TLS (DoT)</sys:String>
+    <sys:String x:Key="Loc_dnsDotHint">Каждая запись требует префикс tls://, порт по умолчанию 853.</sys:String>
+    <sys:String x:Key="Loc_dnsDohLabel">DNS через HTTPS (DoH)</sys:String>
+    <sys:String x:Key="Loc_dnsDohHint">Полные URL https:// или хост с префиксом doh:. Запрос идёт обычным HTTPS-запросом, поэтому его сложнее всего заблокировать.</sys:String>
+    <sys:String x:Key="Loc_dnsStrictLabel">Только мои резолверы</sys:String>
+    <sys:String x:Key="Loc_dnsStrictHint">Никогда не переключаться на встроенные. Оставьте выключенным, чтобы упавший резолвер не утащил за собой весь DNS.</sys:String>
+    <sys:String x:Key="Loc_dnsAutomatic">Автоматически</sys:String>
+    <sys:String x:Key="Loc_dnsTesting">Проверка...</sys:String>
+    <sys:String x:Key="Loc_dnsEnterOneFirst">Сначала введите хотя бы один адрес</sys:String>
+    <sys:String x:Key="Loc_dnsNoneAnswered">Ни один резолвер не ответил. Тот, кто не отвечает здесь, не ответит и через туннель.</sys:String>
+    <sys:String x:Key="Loc_dnsTest">Проверить</sys:String>
+    <sys:String x:Key="Loc_dnsSave">Сохранить</sys:String>
+    <sys:String x:Key="Loc_dnsClear">Очистить список</sys:String>
+    <sys:String x:Key="Loc_dnsTunnelWarning">Строгий режим без обычного UDP-резолвера: в режиме TUN локальный форвардер умеет только обычный DNS, поэтому программы, резолвящие через туннельный адаптер, не получат ответа. Добавьте обычный UDP-резолвер или отключите строгий режим.</sys:String>
+
+    <sys:String x:Key="Loc_dnsStrictLabelOn">Только мои</sys:String>
+
+    <sys:String x:Key="Loc_dnsAutoSaved">Сохранено</sys:String>
+
+    <sys:String x:Key="Loc_dnsReset">Очистить список</sys:String>
+
+    <sys:String x:Key="Loc_dnsUdpPlaceholder">9.9.9.9, 149.112.112.112</sys:String>
+
+    <sys:String x:Key="Loc_dnsDotPlaceholder">tls://dns.google, tls://dns.quad9.net</sys:String>
+
+    <sys:String x:Key="Loc_dnsDohPlaceholder">https://cloudflare-dns.com/dns-query, doh:dns.quad9.net</sys:String>
+
+    <!-- Aether 2.3.0 -->
+    <sys:String x:Key="Loc_aetherGoolMode">режим gool</sys:String>
+    <sys:String x:Key="Loc_aetherGoolMasque">WARP внутри MASQUE (внешний выход)</sys:String>
+    <sys:String x:Key="Loc_aetherGoolClassic">Классический WARP-в-WARP</sys:String>
+    <sys:String x:Key="Loc_aetherGoolHintMasque">WARP переносится внутри MASQUE и регистрируется через этот туннель, поэтому выходной адрес внешний. Ручные хопы ниже не используются.</sys:String>
+    <sys:String x:Key="Loc_aetherGoolHintClassic">WARP внутри WARP. Внешний и внутренний хопы настраиваются ниже.</sys:String>
+    <sys:String x:Key="Loc_aetherGoolFragment">Дробление ClientHello на gool</sys:String>
+    <sys:String x:Key="Loc_aetherGoolFragmentDesc">Хопы gool идут по MASQUE, поэтому дробление ClientHello помогает там, где отбрасывается имя сервера.</sys:String>
+    <sys:String x:Key="Loc_aetherExtraCaps">Дополнительные возможности</sys:String>
+    <sys:String x:Key="Loc_aetherExtraCapsDesc">Применяются, только если их поддерживает вложенная сборка Aether; что реально отправлено, пишется в лог подключения.</sys:String>
+    <sys:String x:Key="Loc_aetherEch">Encrypted ClientHello (ECH)</sys:String>
+    <sys:String x:Key="Loc_aetherEchDesc">Скрывает имя сервера от фильтрации, которая его проверяет. При включённом ECH сам Aether регистрирует identity WARP через зашифрованный хендшейк, а SHARD используется, только если это не сработало.</sys:String>
+    <sys:String x:Key="Loc_aetherTlsVerify">Проверять TLS-сертификаты</sys:String>
+    <sys:String x:Key="Loc_aetherTlsVerifyDesc">В Aether по умолчанию выключено. Включение может помешать подключению там, где сертификат не проходит проверку.</sys:String>
+    <sys:String x:Key="Loc_aetherTor">Тянуть Tor внутри туннеля</sys:String>
+    <sys:String x:Key="Loc_aetherTorDesc">Тогда мосты загружаются через туннель — именно это делает Tor работоспособным там, где он заблокирован полностью.</sys:String>
+    <sys:String x:Key="Loc_aetherTorRelays">Использовать рабочие ретрансляторы Tor как мосты</sys:String>
+    <sys:String x:Key="Loc_aetherTorRelaysDesc">Для сети, где заблокирован и Tor, и bridgedb. Пробуются только порты, которые обычно остаются открытыми.</sys:String>
+    <sys:String x:Key="Loc_aetherExitLocSecs">Перепроверять страну выхода каждые (секунд)</sys:String>
+    <sys:String x:Key="Loc_aetherExitLocSecsDesc">Туннель, переехавший в отклонённую страну, отбрасывается и заменяется. Пусто — интервал Aether.</sys:String>
+
+    <!-- TLS fingerprint -->
+    <sys:String x:Key="Loc_aetherTlsCiphers">Набор шифров TLS 1.2</sys:String>
+    <sys:String x:Key="Loc_aetherTlsCiphersDesc">Через двоеточие, например ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256. Пусто — список Chrome. Шифры TLS 1.3 не меняются.</sys:String>
+    <sys:String x:Key="Loc_aetherTlsGroups">Группы TLS, по порядку</sys:String>
+    <sys:String x:Key="Loc_aetherTlsGroupsDesc">Побеждает первая группа с пригодным key share. Пусто — P-256:X25519:P-384 как у Chrome.</sys:String>
+    <sys:String x:Key="Loc_aetherDisableGrease">Не отправлять GREASE-значения</sys:String>
+    <sys:String x:Key="Loc_aetherDisableGreaseDesc">Обычно делает отпечаток хуже, потому что Chrome их действительно шлёт. Только для оборудования, которое неверно обрабатывает неиспользуемые значения.</sys:String>
+    <sys:String x:Key="Loc_aetherFingerprintHint">Используется только на HTTP/2. Оставьте пустым, пока соединение не отбрасывают за неправильный вид.</sys:String>
+    <sys:String x:Key="Loc_aetherEchDomain">Домен ключа ECH</sys:String>
+    <sys:String x:Key="Loc_aetherEchDomainDesc">Домен, с которого берётся зашифрованный ключ. Пусто — cloudflare-ech.com. Заблокированный домен ключа обесценивает всю идею.</sys:String>
+    <sys:String x:Key="Loc_aetherEchDns">Резолвер для ключа ECH</sys:String>
+    <sys:String x:Key="Loc_aetherEchDnsDesc">Пусто — берётся из вашего списка Custom DNS, с предпочтением зашифрованного. Запрос ключа происходит до появления туннеля, это единственный запрос, которому туннель помочь не может.</sys:String>
+    <sys:String x:Key="Loc_aetherEchDnsEffective">Сейчас: </sys:String>
+    <sys:String x:Key="Loc_aetherEchDnsDefault">собственный дефолт Aether (1.1.1.1)</sys:String>
+
+    <sys:String x:Key="Loc_aetherNoTlsSurface">Этот протокол не несёт TLS, поэтому хендшейка, который можно менять, просто нет.</sys:String>
+    <sys:String x:Key="Loc_aetherQuicNoTls12">Это соединение использует QUIC, где согласуется только TLS 1.3. Aether не принимает здесь список шифров TLS 1.2.</sys:String>
+
 </ResourceDictionary>

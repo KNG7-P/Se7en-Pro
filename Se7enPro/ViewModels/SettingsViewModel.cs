@@ -62,6 +62,15 @@ public sealed record CloseActionOption : LocalizedItem
 public sealed partial class SettingsViewModel : PageViewModelBase
 {
     private readonly ISettingsService _settingsService;
+
+    /// <summary>
+    /// Custom DNS resolvers, shown on the Network tab.
+    ///
+    /// A separate object rather than more properties here: the parsing, the per-transport
+    /// validation and the probe loop are a self-contained concern, and keeping them out of
+    /// this already 3.4k-line view model is what stops it growing past comprehension.
+    /// </summary>
+    public DnsSettingsViewModel Dns { get; }
     private readonly IThemeService _themeService;
     private readonly ITunnelCoreManager _tunnel;
     private readonly IStartupRegistration _startup;
@@ -159,6 +168,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         }
         _minimizeToTray = s.MinimizeToTray;
         _killSwitchEnabled = s.KillSwitchEnabled;
+        Dns = new DnsSettingsViewModel(settingsService);
         _selectedCloseAction = ResolveCloseAction(s.OnCloseAction);
         _allowLanConnections = s.AllowLanConnections;
         _lanProxyUsername = s.LanProxyUsername;
@@ -210,12 +220,21 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         InitCdnProviders(s.FrontedMeekCDNScanBuiltInSets);
 
         _selectedConnectionMethod = ConnectionMethodExtensions.ParseConnectionMethod(s.ConnectionMethod).ToToken();
-        _selectedAetherProtocol = s.AetherProtocol switch
+        var initMethod = ConnectionMethodExtensions.ParseConnectionMethod(s.ConnectionMethod);
+        if (initMethod == ConnectionMethod.WireGuard) _selectedAetherProtocol = "wireguard";
+        else if (initMethod == ConnectionMethod.WarpOnWarp) _selectedAetherProtocol = "warp";
+        else if (initMethod == ConnectionMethod.MasqueInMasque) _selectedAetherProtocol = "mim";
+        else if (initMethod == ConnectionMethod.Masque) _selectedAetherProtocol = "masque";
+        else
         {
-            "wireguard" => "wireguard",
-            "warp" => "warp",
-            _ => "masque",
-        };
+            _selectedAetherProtocol = s.AetherProtocol switch
+            {
+                "wireguard" => "wireguard",
+                "warp" => "warp",
+                "mim" or "masque_in_masque" => "mim",
+                _ => "masque",
+            };
+        }
         _aetherCacheEdges = s.AetherCacheEdges;
         _aetherWiwOuterPeer = s.AetherWiwOuterPeer ?? "";
         _aetherWiwInnerPeer = s.AetherWiwInnerPeer ?? "";
@@ -225,8 +244,19 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _aetherFragmentDelay = s.AetherFragmentDelay ?? "";
         LoadAetherProtocolProfile(_selectedAetherProtocol);
         _aetherFragment = s.AetherFragment;
+        _aetherGoolMode = s.AetherGoolMode ?? "masque";
+        _aetherEch = s.AetherEch;
+        _aetherTlsVerify = s.AetherTlsVerify;
+        _aetherTor = s.AetherTor;
+        _aetherTorRelays = s.AetherTorRelays;
+        _aetherExitLocSecs = s.AetherExitLocSecs > 0 ? s.AetherExitLocSecs.ToString() : "";
+        _aetherFragmentWireguard = s.AetherFragmentWireguard;
+        _aetherTlsCiphers = s.AetherTlsCiphers;
+        _aetherTlsGroups = s.AetherTlsGroups;
+        _aetherDisableGrease = s.AetherDisableGrease;
+        _aetherEchDomain = s.AetherEchDomain;
+        _aetherEchDns = s.AetherEchDns;
         _aetherMasqueTransport = AetherEngine.NormalizeTransport(s.AetherMasqueTransport);
-        
         
         _selectedTorExitCountry = string.IsNullOrWhiteSpace(s.TorExitCountry)
             ? "auto"
@@ -816,6 +846,11 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             _settingsService.Settings.MinimizeToTray = def.MinimizeToTray;
             _settingsService.Settings.OnCloseAction = def.OnCloseAction;
             _settingsService.Settings.KillSwitchEnabled = def.KillSwitchEnabled;
+            _settingsService.Settings.CustomDnsUdp = def.CustomDnsUdp;
+            _settingsService.Settings.CustomDnsDot = def.CustomDnsDot;
+            _settingsService.Settings.CustomDnsDoh = def.CustomDnsDoh;
+            _settingsService.Settings.CustomDnsStrict = def.CustomDnsStrict;
+            Dns.Load();
             _settingsService.Settings.LocalSocksProxyPort = def.LocalSocksProxyPort;
             _settingsService.Settings.UseCustomProxyPorts = def.UseCustomProxyPorts;
             _settingsService.Settings.LanAuthEnabled = def.LanAuthEnabled;
@@ -856,6 +891,18 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             _settingsService.Settings.AetherIpVersion = def.AetherIpVersion;
             _settingsService.Settings.AetherManualPeer = def.AetherManualPeer;
             _settingsService.Settings.AetherFragment = def.AetherFragment;
+            _settingsService.Settings.AetherGoolMode = def.AetherGoolMode;
+            _settingsService.Settings.AetherEch = def.AetherEch;
+            _settingsService.Settings.AetherTlsVerify = def.AetherTlsVerify;
+            _settingsService.Settings.AetherTor = def.AetherTor;
+            _settingsService.Settings.AetherTorRelays = def.AetherTorRelays;
+            _settingsService.Settings.AetherExitLocSecs = def.AetherExitLocSecs;
+            _settingsService.Settings.AetherFragmentWireguard = def.AetherFragmentWireguard;
+            _settingsService.Settings.AetherTlsCiphers = def.AetherTlsCiphers;
+            _settingsService.Settings.AetherTlsGroups = def.AetherTlsGroups;
+            _settingsService.Settings.AetherDisableGrease = def.AetherDisableGrease;
+            _settingsService.Settings.AetherEchDomain = def.AetherEchDomain;
+            _settingsService.Settings.AetherEchDns = def.AetherEchDns;
             _settingsService.Settings.AetherFragmentSize = def.AetherFragmentSize;
             _settingsService.Settings.AetherFragmentDelay = def.AetherFragmentDelay;
             _settingsService.Settings.AetherMasqueTransport = def.AetherMasqueTransport;
@@ -895,8 +942,8 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             finally
             {
                 _suppressAetherSideEffects = false;
+                RaiseAetherProtocolVisibility();
             }
-
             _settingsService.Settings.ShardCustomCfIp = def.ShardCustomCfIp;
             _settingsService.Settings.ShardSmartSplit = def.ShardSmartSplit;
             _settingsService.Settings.ShardRotateIp = def.ShardRotateIp;
@@ -1191,7 +1238,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
         _settingsService.Settings.UpstreamProxyEnabled = value;
         _settingsService.Save();
-        _ = _tunnel.RestartAsync();
+        RestartIfActive(ConnectionMethod.Psiphon);
     }
 
     private bool _suppressUpstreamProxySideEffects;
@@ -1217,10 +1264,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.UpstreamProxyEnabled = false;
         _settingsService.Save();
 
-        
-        
-        
-        if (wasEnabled) _ = _tunnel.RestartAsync();
+        if (wasEnabled) RestartIfActive(ConnectionMethod.Psiphon);
     }
 
     public string UpstreamProxyWarning =>
@@ -1413,11 +1457,20 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _suppressAetherSideEffects = true;
         try
         {
-            var targetProto = s.AetherProtocol switch
+            var currMethod = ConnectionMethodExtensions.ParseConnectionMethod(s.ConnectionMethod);
+            var targetProto = currMethod switch
             {
-                "wireguard" => "wireguard",
-                "warp" => "warp",
-                _ => "masque",
+                ConnectionMethod.WireGuard => "wireguard",
+                ConnectionMethod.WarpOnWarp => "warp",
+                ConnectionMethod.MasqueInMasque => "mim",
+                ConnectionMethod.Masque => "masque",
+                _ => s.AetherProtocol switch
+                {
+                    "wireguard" => "wireguard",
+                    "warp" => "warp",
+                    "mim" or "masque_in_masque" => "mim",
+                    _ => "masque",
+                }
             };
             if (SelectedAetherProtocol != targetProto)
             {
@@ -1434,7 +1487,11 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             AetherFragmentDelay = s.AetherFragmentDelay ?? "";
             AetherMasqueTransport = AetherEngine.NormalizeTransport(s.AetherMasqueTransport);
         }
-        finally { _suppressAetherSideEffects = false; }
+        finally
+        {
+            _suppressAetherSideEffects = false;
+            RaiseAetherProtocolVisibility();
+        }
 
         if (UpstreamProxyEnabled != s.UpstreamProxyEnabled)
         {
@@ -1575,6 +1632,8 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             OnPropertyChanged(nameof(UpstreamProxyWarning));
             OnPropertyChanged(nameof(HasUpstreamProxyWarning));
         }
+
+        RestartIfActive(ConnectionMethod.Psiphon);
     }
 
     public bool IsAutoProtocolMode => SelectedProtocolMode == "auto";
@@ -1673,7 +1732,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         _settingsService.Settings.AutoFindIpAndSni = value;
         _settingsService.Save();
-        _ = _tunnel.RestartAsync();
+        RestartIfActive(ConnectionMethod.Psiphon);
     }
 
     [ObservableProperty] private bool _saveFoundIpsAndSni;
@@ -1878,12 +1937,13 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.ConnectionMethod = token;
         _settingsService.Save();
 
-        if (token is "masque" or "wireguard" or "warp_on_warp")
+        if (token is "masque" or "wireguard" or "warp_on_warp" or "masque_in_masque")
         {
             var targetProto = token switch
             {
                 "wireguard" => "wireguard",
                 "warp_on_warp" => "warp",
+                "masque_in_masque" => "mim",
                 _ => "masque",
             };
             if (SelectedAetherProtocol != targetProto)
@@ -1922,6 +1982,20 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         OnPropertyChanged(nameof(ProxyPortsSubtitle));
         OnPropertyChanged(nameof(DisplaySocksPort));
         OnPropertyChanged(nameof(DisplayHttpPort));
+        RaiseAetherProtocolVisibility();
+    }
+
+    public void RaiseAetherProtocolVisibility()
+    {
+        OnPropertyChanged(nameof(IsAetherMasqueSelected));
+        OnPropertyChanged(nameof(IsAetherWireguardSelected));
+        OnPropertyChanged(nameof(IsAetherWiwSelected));
+        OnPropertyChanged(nameof(IsAetherMimSelected));
+        OnPropertyChanged(nameof(ManualEndpointHint));
+        OnPropertyChanged(nameof(ManualEndpointDescription));
+        OnPropertyChanged(nameof(CanShapeTls));
+        OnPropertyChanged(nameof(CanShapeTls12));
+        OnPropertyChanged(nameof(NoTlsSurfaceHint));
     }
 
     private ConnectionMethod CurrentMethod =>
@@ -1941,8 +2015,32 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
     private void RestartIfActive(ConnectionMethod owner)
     {
-        
-        
+        if (_tunnel.State is not (ConnectionState.Connected or ConnectionState.Connecting))
+            return;
+
+        var activeMethod = ConnectionMethodExtensions.ParseConnectionMethod(_settingsService.Settings.ConnectionMethod);
+        bool isAffected = false;
+        if (owner == ConnectionMethod.Psiphon)
+        {
+            isAffected = activeMethod is ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray;
+        }
+        else if (owner.IsAether())
+        {
+            isAffected = activeMethod == owner || (activeMethod.IsAether() && (owner is ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp or ConnectionMethod.MasqueInMasque));
+        }
+        else if (owner == ConnectionMethod.Tor)
+        {
+            isAffected = activeMethod is ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray;
+        }
+        else
+        {
+            isAffected = activeMethod == owner;
+        }
+
+        if (isAffected)
+        {
+            _ = _tunnel.RestartAsync();
+        }
     }
 
     
@@ -1952,16 +2050,27 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         new("masque", "MASQUE"),
         new("wireguard", "WireGuard"),
         new("warp", "Warp (WARP-on-WARP)"),
+        new("mim", "MASQUE on MASQUE (MiM)"),
     };
 
-    [ObservableProperty] private string _selectedAetherProtocol = "masque";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAetherMasqueSelected))]
+    [NotifyPropertyChangedFor(nameof(IsAetherWireguardSelected))]
+    [NotifyPropertyChangedFor(nameof(IsAetherWiwSelected))]
+    [NotifyPropertyChangedFor(nameof(IsAetherMimSelected))]
+    [NotifyPropertyChangedFor(nameof(ManualEndpointHint))]
+    [NotifyPropertyChangedFor(nameof(ManualEndpointDescription))]
+    private string _selectedAetherProtocol = "masque";
     partial void OnSelectedAetherProtocolChanged(string value)
     {
         var proto = value ?? "masque";
-        if (proto is "masque_in_masque" or "mim") proto = "masque";
+        if (_suppressAetherSideEffects)
+        {
+            RaiseAetherProtocolVisibility();
+            return;
+        }
         _settingsService.Settings.AetherProtocol = proto;
 
-        
         var currentMethod = ConnectionMethodExtensions.ParseConnectionMethod(_settingsService.Settings.ConnectionMethod);
         if (currentMethod.IsAether())
         {
@@ -1969,6 +2078,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             {
                 "wireguard" => ConnectionMethod.WireGuard,
                 "warp" => ConnectionMethod.WarpOnWarp,
+                "mim" or "masque_in_masque" => ConnectionMethod.MasqueInMasque,
                 _ => ConnectionMethod.Masque,
             };
             if (currentMethod != targetMethod)
@@ -1986,22 +2096,20 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         LoadAetherProtocolProfile(proto);
         _settingsService.Save();
 
-        OnPropertyChanged(nameof(IsAetherMasqueSelected));
-        OnPropertyChanged(nameof(IsAetherWiwSelected));
-        OnPropertyChanged(nameof(IsAetherMimSelected));
-        OnPropertyChanged(nameof(ManualEndpointHint));
-        OnPropertyChanged(nameof(ManualEndpointDescription));
+        RaiseAetherProtocolVisibility();
         RestartIfActive(ConnectionMethod.Masque);
     }
 
     public bool IsAetherMasqueSelected => SelectedAetherProtocol is "masque";
+    public bool IsAetherWireguardSelected => SelectedAetherProtocol is "wireguard";
     public bool IsAetherWiwSelected => SelectedAetherProtocol is "warp" or "warp_on_warp";
-    public bool IsAetherMimSelected => false;
+    public bool IsAetherMimSelected => SelectedAetherProtocol is "mim" or "masque_in_masque";
 
     public string ManualEndpointHint => SelectedAetherProtocol switch
     {
         "wireguard" => "162.159.193.1:2408",
         "warp" => "162.159.192.1:2408",
+        "mim" or "masque_in_masque" => "engage.cloudflareclient.com:2408",
         _ => "engage.cloudflareclient.com:2408",
     };
 
@@ -2009,6 +2117,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         "wireguard" => Loc.Of("Custom endpoint for WireGuard protocol"),
         "warp" => Loc.Of("Custom endpoint for Warp protocol"),
+        "mim" or "masque_in_masque" => Loc.Of("Custom endpoint for MASQUE on MASQUE protocol"),
         _ => Loc.Of("Custom endpoint for MASQUE protocol"),
     };
 
@@ -2033,6 +2142,13 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                     AetherIpVersion = NormalizeAetherIp(!string.IsNullOrWhiteSpace(s.AetherIpVersionWarp) ? s.AetherIpVersionWarp : s.AetherIpVersion);
                     AetherManualPeer = s.AetherEndpointWarp ?? "";
                     AetherExitLoc = !string.IsNullOrWhiteSpace(s.AetherExitLocWarp) ? s.AetherExitLocWarp : s.AetherExitLoc;
+                    break;
+                case "mim" or "masque_in_masque":
+                    AetherScanMode = NormalizeAetherScan(!string.IsNullOrWhiteSpace(s.AetherScanModeMim) ? s.AetherScanModeMim : s.AetherScanMode);
+                    AetherNoize = NormalizeAetherNoize(!string.IsNullOrWhiteSpace(s.AetherNoizeMim) ? s.AetherNoizeMim : s.AetherNoize);
+                    AetherIpVersion = NormalizeAetherIp(!string.IsNullOrWhiteSpace(s.AetherIpVersionMim) ? s.AetherIpVersionMim : s.AetherIpVersion);
+                    AetherManualPeer = s.AetherEndpointMim ?? "";
+                    AetherExitLoc = !string.IsNullOrWhiteSpace(s.AetherExitLocMim) ? s.AetherExitLocMim : s.AetherExitLoc;
                     break;
                 default: 
                     AetherScanMode = NormalizeAetherScan(!string.IsNullOrWhiteSpace(s.AetherScanModeMasque) ? s.AetherScanModeMasque : s.AetherScanMode);
@@ -2059,6 +2175,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         {
             case "wireguard": s.AetherEndpointWireguard = peer; break;
             case "warp": s.AetherEndpointWarp = peer; break;
+            case "mim" or "masque_in_masque": s.AetherEndpointMim = peer; break;
             default: s.AetherEndpointMasque = peer; break;
         }
         s.AetherManualPeer = peer;
@@ -2066,7 +2183,6 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
-    
     [ObservableProperty] private string _aetherWiwOuterPeer = "";
     partial void OnAetherWiwOuterPeerChanged(string value)
     {
@@ -2085,7 +2201,6 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
-    
     [ObservableProperty] private string _aetherMimOuterPeer = "";
     partial void OnAetherMimOuterPeerChanged(string value)
     {
@@ -2104,21 +2219,17 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
-    
     [ObservableProperty] private string _aetherExitLoc = "";
     partial void OnAetherExitLocChanged(string value)
     {
         if (_suppressAetherSideEffects) return;
         var loc = value?.Trim() ?? "";
         var s = _settingsService.Settings;
-        
-        
-        
-        
         switch (SelectedAetherProtocol)
         {
             case "wireguard": s.AetherExitLocWireguard = loc; break;
             case "warp": s.AetherExitLocWarp = loc; break;
+            case "mim" or "masque_in_masque": s.AetherExitLocMim = loc; break;
             default: s.AetherExitLocMasque = loc; break;
         }
         _settingsService.Save();
@@ -2144,6 +2255,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         {
             case "wireguard": s.AetherScanModeWireguard = norm; break;
             case "warp": s.AetherScanModeWarp = norm; break;
+            case "mim" or "masque_in_masque": s.AetherScanModeMim = norm; break;
             default: s.AetherScanModeMasque = norm; break;
         }
         s.AetherScanMode = norm;
@@ -2171,6 +2283,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         {
             case "wireguard": s.AetherNoizeWireguard = norm; break;
             case "warp": s.AetherNoizeWarp = norm; break;
+            case "mim" or "masque_in_masque": s.AetherNoizeMim = norm; break;
             default: s.AetherNoizeMasque = norm; break;
         }
         s.AetherNoize = norm;
@@ -2195,6 +2308,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         {
             case "wireguard": s.AetherIpVersionWireguard = norm; break;
             case "warp": s.AetherIpVersionWarp = norm; break;
+            case "mim" or "masque_in_masque": s.AetherIpVersionMim = norm; break;
             default: s.AetherIpVersionMasque = norm; break;
         }
         s.AetherIpVersion = norm;
@@ -2263,6 +2377,254 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
+    // ---- aether 2.3.0 ----
+
+    /// <summary>
+    /// Which gool to run: the new MASQUE-carried one, or the classic WARP-in-WARP.
+    /// </summary>
+    /// <remarks>
+    /// This setting exists because aether 2.3.0 gave "--gool" a NEW meaning without
+    /// renaming the old one to nothing - the old behaviour just moved to "--gool-classic".
+    /// Without an explicit choice here, simply upgrading aether.exe would silently change
+    /// what WiW does for every user.
+    /// </remarks>
+    public ObservableCollection<SettingOptionItem> AetherGoolModes { get; } = new()
+    {
+        new("masque", "WARP inside MASQUE (foreign exit)"),
+        new("classic", "Classic WARP-in-WARP"),
+    };
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsClassicGool))]
+    [NotifyPropertyChangedFor(nameof(GoolHint))]
+    private string _aetherGoolMode = "masque";
+
+    public bool IsClassicGool => string.Equals(AetherGoolMode, "classic", StringComparison.OrdinalIgnoreCase);
+
+    partial void OnAetherGoolModeChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        var normalized = string.Equals(value, "classic", StringComparison.OrdinalIgnoreCase) ? "classic" : "masque";
+        _settingsService.Settings.AetherGoolMode = normalized;
+        _settingsService.Save();
+
+        // The manual WiW peers only mean anything on the classic path, so the toggle for
+        // them follows this choice rather than staying visible and misleading.
+        OnPropertyChanged(nameof(CanEditWiwPeers));
+        RestartIfActive(ConnectionMethod.WarpOnWarp);
+    }
+
+    public string GoolHint => IsClassicGool
+        ? Loc.Of("WARP tunneled inside WARP. The outer and inner hops are configured below.")
+        : Loc.Of("WARP carried inside MASQUE and registered through that tunnel, so the exit address is foreign. The manual hops below are not used.");
+
+    public bool CanEditWiwPeers => IsClassicGool;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OptionalFlagsHint))]
+    private bool _aetherEch;
+
+    partial void OnAetherEchChanged(bool value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherEch = value;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.WarpOnWarp);
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OptionalFlagsHint))]
+    private bool _aetherTlsVerify;
+
+    partial void OnAetherTlsVerifyChanged(bool value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherTlsVerify = value;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.WarpOnWarp);
+    }
+
+    [ObservableProperty] private bool _aetherTor;
+    partial void OnAetherTorChanged(bool value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherTor = value;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.WarpOnWarp);
+    }
+
+    [ObservableProperty] private bool _aetherTorRelays;
+    partial void OnAetherTorRelaysChanged(bool value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherTorRelays = value;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.WarpOnWarp);
+    }
+
+    [ObservableProperty] private string _aetherExitLocSecs = "";
+    partial void OnAetherExitLocSecsChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherExitLocSecs = int.TryParse(value, out var n) ? n : 0;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _aetherFragmentWireguard;
+    partial void OnAetherFragmentWireguardChanged(bool value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherFragmentWireguard = value;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.WarpOnWarp);
+    }
+
+    /// <summary>
+    /// Explains that these switches only take effect if the bundled aether supports them.
+    ///
+    /// Worth saying out loud: the log line records which flags were actually applied, so a
+    /// switch that was withheld is explainable rather than mysterious.
+    /// </summary>
+    public string OptionalFlagsHint => Loc.Of(
+        "Applied only when the bundled Aether build supports them; the connection log records what was sent.");
+
+    /// <summary>The recheck interval only means something with an exit filter set.</summary>
+    public bool HasAetherExitLoc => !string.IsNullOrWhiteSpace(AetherExitLoc);
+
+    public string GoolLabel => Loc.Of("gool mode");
+    public string GoolFragmentLabel => Loc.Of("Split ClientHello on gool");
+    public string GoolFragmentHint => Loc.Of(
+        "The gool hops ride MASQUE, so a fragmented ClientHello can help where the server name is dropped.");
+
+    public string OptionalCapsTitle => Loc.Of("Additional capabilities");
+    public string EchLabel => Loc.Of("Encrypted ClientHello (ECH)");
+    public string EchHint => Loc.Of(
+        "Hides the server name from filtering that inspects it. With ECH on, Aether registers its own WARP identity over the encrypted handshake, and SHARD is used only if that fails.");
+    public string TlsVerifyLabel => Loc.Of("Verify TLS certificates");
+    public string TlsVerifyHint => Loc.Of(
+        "Aether leaves this off by default. Turning it on may prevent connecting where its certificate does not validate.");
+    public string TorLabel => Loc.Of("Carry Tor inside the tunnel");
+    public string TorHint => Loc.Of(
+        "Bridges are then fetched through the tunnel, which is what makes Tor work where it is blocked outright.");
+    public string TorRelaysLabel => Loc.Of("Use running Tor relays as bridges");
+    public string TorRelaysHint => Loc.Of(
+        "For a network that blocks Tor and bridgedb with it. Only ports a restrictive firewall tends to leave open are tried.");
+
+    public string ExitLocSecsLabel => Loc.Of("Recheck exit country every (seconds)");
+    public string ExitLocSecsHint => Loc.Of(
+        "A tunnel that moves to a rejected country is dropped and replaced. Blank keeps Aether's own interval.");
+
+    // ---- TLS fingerprint shaping ----
+
+    /// <summary>Which TLS surface the selected Aether protocol puts on the wire.</summary>
+    public bool CanShapeTls =>
+        AetherExtras.TlsSurfaceFor(_settingsService.Settings, SelectedAetherMethod)
+            != AetherExtras.TlsSurface.None;
+
+    private ConnectionMethod SelectedAetherMethod =>
+        SelectedAetherProtocol switch
+        {
+            "wireguard" => ConnectionMethod.WireGuard,
+            "warp" or "warp_on_warp" => ConnectionMethod.WarpOnWarp,
+            "mim" or "masque_in_masque" => ConnectionMethod.MasqueInMasque,
+            _ => ConnectionMethod.Masque,
+        };
+
+    /// <summary>False on QUIC, which negotiates TLS 1.3 and takes no TLS 1.2 cipher list.</summary>
+    public bool CanShapeTls12 =>
+        AetherExtras.TlsSurfaceFor(_settingsService.Settings, SelectedAetherMethod)
+            == AetherExtras.TlsSurface.Http2;
+
+    public string NoTlsSurfaceHint => CanShapeTls
+        ? Loc.Of("This connection uses QUIC, which negotiates TLS 1.3 only. Aether takes no TLS 1.2 cipher list here.")
+        : Loc.Of("This protocol carries no TLS, so there is no handshake to change.");
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TlsFingerprintHint))]
+    private string _aetherTlsCiphers = "";
+
+    partial void OnAetherTlsCiphersChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherTlsCiphers = value ?? "";
+        _settingsService.Save();
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TlsFingerprintHint))]
+    private string _aetherTlsGroups = "";
+
+    partial void OnAetherTlsGroupsChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherTlsGroups = value ?? "";
+        _settingsService.Save();
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TlsFingerprintHint))]
+    private bool _aetherDisableGrease;
+
+    partial void OnAetherDisableGreaseChanged(bool value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherDisableGrease = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EchDomainHint))]
+    private string _aetherEchDomain = "";
+
+    partial void OnAetherEchDomainChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherEchDomain = value ?? "";
+        _settingsService.Save();
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EchDnsHint))]
+    private string _aetherEchDns = "";
+
+    partial void OnAetherEchDnsChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherEchDns = value ?? "";
+        _settingsService.Save();
+        OnPropertyChanged(nameof(EchDnsEffective));
+    }
+
+    /// <summary>Shows which resolver the ECH key lookup will actually use.</summary>
+    public string EchDnsEffective =>
+        Loc.Of("Currently: ") + (AetherExtras.BuildEchDnsField(_settingsService.Settings) is { Length: > 0 } v
+            ? v
+            : Loc.Of("Aether's own default (1.1.1.1)"));
+
+    public string TlsCiphersLabel => Loc.Of("TLS 1.2 cipher suites");
+    public string TlsCiphersHint => Loc.Of(
+        "Colon separated, e.g. ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256. Blank keeps Chrome's list. TLS 1.3 suites cannot be changed.");
+
+    public string TlsGroupsLabel => Loc.Of("TLS groups, in order");
+    public string TlsGroupsHint => Loc.Of(
+        "The first group with a usable key share wins. Blank keeps Chrome's P-256:X25519:P-384.");
+
+    public string DisableGreaseLabel => Loc.Of("Omit GREASE values");
+    public string DisableGreaseHint => Loc.Of(
+        "Usually makes the fingerprint worse, because Chrome really does send GREASE. Only for equipment that mishandles the unused values.");
+
+    public string TlsFingerprintHint => CanShapeTls
+        ? Loc.Of("Only used on HTTP/2 connections. Leave blank unless a connection is being dropped for looking wrong.")
+        : NoTlsSurfaceHint;
+
+    public string EchDomainLabel => Loc.Of("ECH key domain");
+    public string EchDomainHint => Loc.Of(
+        "The domain the encrypted key is taken from. Blank keeps cloudflare-ech.com. A blocked key domain defeats the point.");
+
+    public string EchDnsLabel => Loc.Of("Resolver for the ECH key");
+    public string EchDnsHint => Loc.Of(
+        "Blank uses your Custom DNS list, preferring an encrypted resolver. The key lookup happens before the tunnel exists, so it is the one query the tunnel cannot help with.");
+
     [ObservableProperty] private string _aetherFragmentSize = "";
     partial void OnAetherFragmentSizeChanged(string value)
     {
@@ -2280,6 +2642,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.Masque);
     }
+
 
     
 
@@ -3225,9 +3588,19 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         host = (host ?? "").Trim();
         port = (port ?? "").Trim();
-        scheme = NormalizeScheme(scheme);
         if (string.IsNullOrEmpty(host)) return "";
 
+        if (host.Contains("://") || (host.Contains(':') && string.IsNullOrEmpty(port)))
+        {
+            ParseUpstreamProxy(host, out var parsedScheme, out var parsedHost, out var parsedPort, out var parsedUser, out var parsedPass);
+            if (!string.IsNullOrEmpty(parsedHost)) host = parsedHost;
+            if (!string.IsNullOrEmpty(parsedPort)) port = parsedPort;
+            if (string.IsNullOrEmpty(user) && !string.IsNullOrEmpty(parsedUser)) user = parsedUser;
+            if (string.IsNullOrEmpty(pass) && !string.IsNullOrEmpty(parsedPass)) pass = parsedPass;
+            if (!string.IsNullOrEmpty(parsedScheme) && string.IsNullOrEmpty(scheme)) scheme = parsedScheme;
+        }
+
+        scheme = NormalizeScheme(scheme);
         var creds = "";
         var trimmedUser = (user ?? "").Trim();
         if (!string.IsNullOrEmpty(trimmedUser))

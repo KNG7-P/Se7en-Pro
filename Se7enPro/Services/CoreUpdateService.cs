@@ -350,9 +350,25 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
             try
             {
+                int updatedCount = 0;
+                var updatedTargets = new List<string>();
                 foreach (var destination in targets)
                 {
-                    SafeReplaceFile(extractedExe, destination);
+                    try
+                    {
+                        SafeReplaceFile(extractedExe, destination);
+                        updatedTargets.Add(destination);
+                        updatedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to update target {Destination}; continuing with other targets", destination);
+                    }
+                }
+
+                if (updatedCount == 0)
+                {
+                    throw new IOException(Loc.Of("Failed to update any core target paths."));
                 }
 
                 
@@ -375,7 +391,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
                 
                 
-                var mismatched = targets.FirstOrDefault(t =>
+                var mismatched = updatedTargets.FirstOrDefault(t =>
                     !string.Equals(NormalizeVersion(QueryExeVersion(t, "--version")),
                                    NormalizeVersion(stagedVersion), StringComparison.OrdinalIgnoreCase));
                 if (mismatched is not null)
@@ -434,26 +450,27 @@ public sealed class CoreUpdateService : ICoreUpdateService
             {
                 try
                 {
-                    string image;
+                    string image = "";
                     try { image = p.MainModule?.FileName ?? ""; }
                     catch
                     {
-                        
-                        
+                        try { p.Kill(entireProcessTree: true); p.WaitForExit(1000); } catch { }
                         continue;
                     }
 
-                    if (string.IsNullOrEmpty(image)) continue;
-                    string full;
-                    try { full = Path.GetFullPath(image); }
-                    catch { continue; }
-
-                    if (!expected.Contains(full))
+                    if (!string.IsNullOrEmpty(image))
                     {
-                        _logger.LogInformation(
-                            "Leaving process {Pid} ({Name}) alone: it is not a Se7en Pro core ({Path})",
-                            p.Id, name, full);
-                        continue;
+                        string full;
+                        try { full = Path.GetFullPath(image); }
+                        catch { full = ""; }
+
+                        if (!string.IsNullOrEmpty(full) && !expected.Contains(full))
+                        {
+                            _logger.LogInformation(
+                                "Leaving process {Pid} ({Name}) alone: it is not a Se7en Pro core ({Path})",
+                                p.Id, name, full);
+                            continue;
+                        }
                     }
 
                     try { p.Kill(entireProcessTree: true); } catch { }
@@ -470,17 +487,47 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
         private static void SafeReplaceFile(string source, string destination)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        var destDir = Path.GetDirectoryName(destination);
+        if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
 
-        
-        
-        if (File.Exists(destination))
+        var tempFile = destination + ".tmp." + Guid.NewGuid().ToString("N");
+        try
         {
-            File.Replace(source, destination, destinationBackupFileName: null, ignoreMetadataErrors: true);
-            return;
-        }
+            File.Copy(source, tempFile, overwrite: true);
 
-        File.Move(source, destination, overwrite: true);
+            if (File.Exists(destination))
+            {
+                try
+                {
+                    File.Replace(tempFile, destination, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                    return;
+                }
+                catch
+                {
+                    var oldFile = destination + ".old." + Guid.NewGuid().ToString("N");
+                    try
+                    {
+                        File.Move(destination, oldFile, overwrite: true);
+                        File.Move(tempFile, destination, overwrite: true);
+                        try { File.Delete(oldFile); } catch { }
+                        return;
+                    }
+                    catch
+                    {
+                        File.Copy(source, destination, overwrite: true);
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                File.Move(tempFile, destination, overwrite: true);
+            }
+        }
+        finally
+        {
+            try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
+        }
     }
 
     private static string FindAetherExecutable()

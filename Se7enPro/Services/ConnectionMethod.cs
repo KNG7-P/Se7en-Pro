@@ -92,6 +92,12 @@ public static class ConnectionMethodExtensions
             IconKind: "Flash",
             ColorHex: "#8B5CF6"),
 
+        new("masque_in_masque", "MASQUE on MASQUE",
+            "Double-hop MASQUE: MASQUE tunnelled inside MASQUE for alternate egress routes.",
+            GroupKey: "AETHER (CLOUDFLARE WARP)",
+            IconKind: "Flash",
+            ColorHex: "#8B5CF6"),
+
         
         new("psiphon", "Psiphon",
             "CDN-fronting capable Psiphon core. Most resilient on heavily filtered networks.",
@@ -142,7 +148,7 @@ public static class ConnectionMethodExtensions
     {
         ConnectionMethod.Psiphon => "psiphon",
         ConnectionMethod.Masque => "masque",
-        ConnectionMethod.MasqueInMasque => "masque",
+        ConnectionMethod.MasqueInMasque => "masque_in_masque",
         ConnectionMethod.WireGuard => "wireguard",
         ConnectionMethod.WarpOnWarp => "warp_on_warp",
         ConnectionMethod.Tor => "tor",
@@ -169,7 +175,7 @@ public static class ConnectionMethodExtensions
         {
             "psiphon" => ConnectionMethod.Psiphon,
             "masque" => ConnectionMethod.Masque,
-            "masque_in_masque" or "masqueinmasque" or "mim" or "double_masque" => ConnectionMethod.Masque,
+            "masque_in_masque" or "masqueinmasque" or "mim" or "double_masque" => ConnectionMethod.MasqueInMasque,
             "wireguard" or "warp" or "wg" => ConnectionMethod.WireGuard,
             "warp_on_warp" or "warponwarp" or "gool" or "wiw" => ConnectionMethod.WarpOnWarp,
             "tor" => ConnectionMethod.Tor,

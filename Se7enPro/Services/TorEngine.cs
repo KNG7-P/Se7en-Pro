@@ -86,6 +86,7 @@ public sealed class TorEngine : LocalSocksEngineBase
         _bootstrapText = "Bootstrapping…";
         CurrentRouteSni = _bootstrapText;
         RaiseRouteChanged();
+        SetConnectProgress(10, Loc.Of("Tor: Starting onion router..."));
 
         Log(exit.Length == 2
             ? $"Launching Tor (exit country {exit.ToUpperInvariant()} — strict). If no exit relay is available in that country the bootstrap will not finish; pick Automatic to use any exit."

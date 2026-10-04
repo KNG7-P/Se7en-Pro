@@ -333,6 +333,7 @@ public partial class App : Application
         
         
         services.AddSingleton<TunnelCoreManager>();
+        services.AddSingleton<IdentityPool>();
         services.AddSingleton<IdentityProvisioner>();
         services.AddSingleton<AetherEngine>();
         services.AddSingleton<TorEngine>();

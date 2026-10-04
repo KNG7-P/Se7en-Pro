@@ -131,7 +131,41 @@ public sealed partial class WintunTunManager
             
             
             
-            var forwarder = new SocksDnsForwarder(socksPort);
+            var dnsPolicy = new DnsResolverPolicy(_logger);
+            var dnsPlan = dnsPolicy.Build(_settings.Settings, hasV6Address: _v6Enabled);
+            var relayTargets = DnsResolverPolicy.RelayTargets(dnsPlan);
+
+            if (dnsPlan.Rejected.Count > 0)
+            {
+                WriteDiag("dns: ignored " + dnsPlan.Rejected.Count
+                          + " unusable resolver entr(ies): " + string.Join("; ", dnsPlan.Rejected));
+            }
+            if (relayTargets.Count == 0)
+            {
+                WriteDiag("dns: WARNING — no plain-UDP resolver is available for TUN DNS. "
+                          + "Strict mode is on and only DoT/DoH entries were configured, "
+                          + "which the local forwarder cannot dial. Apps that resolve via "
+                          + "the TUN adapter will get no answer. Add a plain-UDP entry or "
+                          + "turn off strict mode.");
+            }
+            else if (dnsPlan.HasUserEntries)
+            {
+                WriteDiag(dnsPlan.Strict
+                    ? $"dns: custom resolvers only ({relayTargets.Count} target(s)); "
+                      + "built-in defaults suppressed by strict mode"
+                    : $"dns: custom resolvers first ({relayTargets.Count} target(s)), "
+                      + "built-in defaults as fallback");
+            }
+            else
+            {
+                WriteDiag($"dns: no custom resolvers configured; using built-in defaults "
+                          + $"({relayTargets.Count} target(s))");
+            }
+
+            var forwarder = new SocksDnsForwarder(
+                socksPort,
+                DnsResolverPolicy.DefaultUdpResolvers[0],
+                relayTargets: relayTargets);
             forwarder.Diag = WriteDiag;
             _underlyingDnsServers = DetectUnderlyingDnsServersV4();
             forwarder.UpdateSplitPolicy(BuildSplitPolicy());

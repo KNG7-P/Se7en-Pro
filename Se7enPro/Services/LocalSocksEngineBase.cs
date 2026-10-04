@@ -134,6 +134,30 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
         protected virtual Task BeforeStartAsync(string workDir, CancellationToken ct) => Task.CompletedTask;
 
+    /// <summary>
+    /// Where this engine keeps its configuration and identity files.
+    /// </summary>
+    /// <remarks>
+    /// Exposed rather than recomputed by callers: identity provisioning has to write into the
+    /// SAME directory the core will read from, and a second copy of this path expression is
+    /// how that quietly stops being true after a rename.
+    /// </remarks>
+    internal string WorkDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Se7en",
+        WorkSubdirectory);
+
+    /// <summary>
+    /// Default second chance: nothing, because this engine has no fast path to recover from.
+    /// </summary>
+    /// <remarks>
+    /// Declared here rather than left to the interface's default implementation so subclasses
+    /// have something to override - a default interface member is not overridable, and the
+    /// interface alone would force every engine to restate it.
+    /// </remarks>
+    public virtual Task<bool> RecoverFromMissingPrerequisitesAsync(CancellationToken ct)
+        => Task.FromResult(false);
+
         protected virtual void OnCoreLine(string line) { }
 
     protected string AppDir => AppContext.BaseDirectory;
@@ -185,10 +209,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
         try
         {
-            var workDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Se7en",
-                WorkSubdirectory);
+            var workDir = WorkDirectory;
             Directory.CreateDirectory(workDir);
 
             var s = _settings.Settings;
@@ -771,11 +792,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
                 $"Bundled {EngineDisplayName} resource missing: {Path.GetFileName(sourcePath)}",
                 sourcePath);
         }
-        if (!FileCacheHelper.IsCachedCopyUpToDate(sourcePath, destPath))
-        {
-            try { File.Copy(sourcePath, destPath, overwrite: true); }
-            catch (IOException) when (File.Exists(destPath)) { }
-        }
+        FileCacheHelper.EnsureCachedCopy(sourcePath, destPath, _logger);
         return destPath;
     }
 

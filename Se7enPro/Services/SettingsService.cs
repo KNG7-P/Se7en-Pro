@@ -132,6 +132,7 @@ public sealed class SettingsService : ISettingsService
                        ?? new UserSettings();
             CaptureForeignKeys(json);
             MigrateRemovedAutoMethod();
+            MigrateAetherDefaults();
         }
         catch (Exception ex)
         {
@@ -178,6 +179,41 @@ public sealed class SettingsService : ISettingsService
 
         _logger?.LogInformation("Dropped the removed autoLastSuccessfulMethod setting");
         Save();
+    }
+
+    private void MigrateAetherDefaults()
+    {
+        var settings = Settings;
+        if (settings is null) return;
+        bool changed = false;
+
+        if (string.IsNullOrWhiteSpace(settings.AetherFragmentSize))
+        {
+            settings.AetherFragmentSize = "16-32";
+            changed = true;
+        }
+        if (string.IsNullOrWhiteSpace(settings.AetherFragmentDelay))
+        {
+            settings.AetherFragmentDelay = "2-10";
+            changed = true;
+        }
+        if (string.IsNullOrWhiteSpace(settings.AetherScanModeMim) || settings.AetherScanModeMim.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+        {
+            settings.AetherScanModeMim = "turbo";
+            changed = true;
+        }
+        if (settings.AetherMasqueTransport == "h2" || string.IsNullOrWhiteSpace(settings.AetherMasqueTransport))
+        {
+            settings.AetherMasqueTransport = "h3";
+            settings.AetherMasqueQuic = true;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            _logger?.LogInformation("Migrated Aether settings: transport=h3, mimScan=turbo");
+            Save();
+        }
     }
 
     public void Save()

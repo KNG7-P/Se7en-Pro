@@ -25,6 +25,7 @@ public partial class LogsPage : UserControl
     
     private bool _follow = true;
     private bool _scrollQueued;
+    private bool _isProgrammaticScroll;
 
     public LogsPage()
     {
@@ -33,11 +34,6 @@ public partial class LogsPage : UserControl
         DataContext = vm;
         _follow = vm.AutoScroll;
 
-        
-        
-        
-        
-        
         LogListBox.ApplyTemplate();
         _scrollViewer = LogListBox.Template?.FindName("ScrollViewer", LogListBox) as ScrollViewer
                         ?? FindVisualChild<ScrollViewer>(LogListBox);
@@ -47,8 +43,6 @@ public partial class LogsPage : UserControl
             _scrollViewer.ScrollChanged += OnLogScrollChanged;
         }
 
-        
-        
         vm.RequestScrollToEnd += QueueScrollToTail;
 
         vm.PropertyChanged += OnViewModelPropertyChanged;
@@ -72,52 +66,62 @@ public partial class LogsPage : UserControl
         if (_follow) QueueScrollToTail();
     }
 
-        private void QueueScrollToTail()
+    private void QueueScrollToTail()
     {
         if (_scrollQueued) return;
         _scrollQueued = true;
 
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
             _scrollQueued = false;
             if (!_follow) return;
-            _scrollViewer?.ScrollToBottom();
+            try
+            {
+                _isProgrammaticScroll = true;
+                if (LogListBox.Items.Count > 0)
+                {
+                    var lastItem = LogListBox.Items[^1];
+                    LogListBox.ScrollIntoView(lastItem);
+                }
+                _scrollViewer?.ScrollToBottom();
+            }
+            finally
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+                {
+                    _isProgrammaticScroll = false;
+                });
+            }
         });
     }
 
     private void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        
-        
-        
+        if (_isProgrammaticScroll) return;
+
         if (e.ExtentHeightChange > 0 && _follow)
         {
+            _isProgrammaticScroll = true;
             _scrollViewer?.ScrollToBottom();
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+            {
+                _isProgrammaticScroll = false;
+            });
             return;
         }
 
-        
-        
-        
         if (e.ViewportHeightChange != 0.0 || e.VerticalChange == 0) return;
 
         var sv = _scrollViewer;
         if (sv is null) return;
 
-        var follow = sv.ScrollableHeight <= 0
-                  || sv.ScrollableHeight - sv.VerticalOffset <= 1.0;
-        if (follow == _follow) return;
-        _follow = follow;
+        var isAtBottom = sv.ScrollableHeight <= 0 || (sv.ScrollableHeight - sv.VerticalOffset) <= 25.0;
+        if (isAtBottom == _follow) return;
+        _follow = isAtBottom;
 
-        
-        
-        
-        
-        
-        
-        if (DataContext is LogsViewModel vm && vm.AutoScroll != follow)
+        if (DataContext is LogsViewModel vm && vm.AutoScroll != isAtBottom)
         {
-            vm.AutoScroll = follow;
+            vm.AutoScroll = isAtBottom;
         }
     }
 

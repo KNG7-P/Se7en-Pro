@@ -543,6 +543,16 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
     {
         if (string.IsNullOrWhiteSpace(line)) return;
 
+        if (State == ConnectionState.Connecting)
+        {
+            if (line.Contains("ScanServerEntries", StringComparison.OrdinalIgnoreCase))
+                SetConnectProgress(35, Loc.Of("Scanning candidate server entries..."));
+            else if (line.Contains("inproxy", StringComparison.OrdinalIgnoreCase) || line.Contains("webrtc", StringComparison.OrdinalIgnoreCase))
+                SetConnectProgress(50, Loc.Of("Negotiating WebRTC broker / in-proxy..."));
+            else if (line.Contains("tunnel connected", StringComparison.OrdinalIgnoreCase))
+                SetConnectProgress(95, Loc.Of("Tunnel connected, finalizing proxy..."));
+        }
+
         try
         {
             var notice = JsonSerializer.Deserialize<Notice>(line);
@@ -591,13 +601,20 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                         : 0;
                     if (count > 0)
                     {
-                        
+                        if (!_userWantsConnection) return;
                         _consecutiveFastFailures = 0;
                         SetState(ConnectionState.Connected);
                     }
                     else if (State == ConnectionState.Connected)
                     {
-                        SetState(ConnectionState.Connecting);
+                        if (_userWantsConnection)
+                        {
+                            SetState(ConnectionState.Connecting);
+                        }
+                        else
+                        {
+                            SetState(ConnectionState.Disconnected);
+                        }
                     }
                     break;
                 }
@@ -606,7 +623,14 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 if (notice.Data.TryGetProperty("port", out var sp) && sp.ValueKind == JsonValueKind.Number)
                 {
                     SocksProxyPort = sp.GetInt32();
+                    if (State == ConnectionState.Connecting)
+                        SetConnectProgress(25, Loc.Of("Local proxy ports ready..."));
                 }
+                break;
+
+            case "ConnectingServer":
+                if (State == ConnectionState.Connecting)
+                    SetConnectProgress(65, Loc.Of("Connecting to Psiphon server..."));
                 break;
 
             case "ListeningHttpProxyPort":
@@ -907,8 +931,32 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         }
 
         ApplyAdvancedTunnelConfig(cfg, s);
+        ApplyDnsResolverConfig(cfg, s);
 
         return cfg.ToJsonString();
+    }
+
+    /// <summary>
+    /// Pushes the user's resolver list into the core config.
+    ///
+    /// Only IP literals are written: this core validates the field against its schema
+    /// and rejects a config carrying a <c>tls://</c> or <c>https://</c> entry, which
+    /// would stop the core starting at all. Encrypted entries are handled by the Xray
+    /// and sing-box configs instead, which do understand them.
+    ///
+    /// The host DNS stack is deliberately not touched here — that only happens in TUN
+    /// mode, via the local forwarder.
+    /// </summary>
+    private static void ApplyDnsResolverConfig(JsonObject cfg, Models.UserSettings s)
+    {
+        var policy = new DnsResolverPolicy();
+        var plan = policy.Build(s, hasV6Address: false);
+        if (!plan.HasUserEntries) return;
+
+        var servers = DnsResolverPolicy.ToTunnelCoreDnsServers(plan);
+        if (servers.Length == 0) return;
+
+        cfg["dns_servers"] = servers;
     }
 
     private static void ApplyAdvancedTunnelConfig(JsonObject cfg, Models.UserSettings s)
@@ -1127,20 +1175,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         }
         catch { }
 
-        if (!FileCacheHelper.IsCachedCopyUpToDate(bundled, copyTo))
-        {
-            try
-            {
-                File.Copy(bundled, copyTo, overwrite: true);
-            }
-            catch (IOException)
-            {
-                if (!File.Exists(copyTo))
-                {
-                    throw;
-                }
-            }
-        }
+        FileCacheHelper.EnsureCachedCopy(bundled, copyTo, _logger);
 
         return copyTo;
     }
@@ -1449,7 +1484,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         
         
         
-        if (s == ConnectionState.Connected && !_userWantsConnection) return;
+        if ((s == ConnectionState.Connected || s == ConnectionState.Connecting) && !_userWantsConnection) return;
         if (State == s) return;
         State = s;
 
@@ -1490,27 +1525,28 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         LogLineAppended?.Invoke(this, line);
     }
 
-        public void CancelConnecting()
+    public void CancelConnecting()
     {
+        SetConnectionIntent(wantsConnection: false);
         try { _cts?.Cancel(); } catch { }
         CancelPendingRestart();
 
-        
-        
         var proc = _process;
-        if (proc is null) return;
-        try
+        if (proc is not null)
         {
-            if (!proc.HasExited)
+            try
             {
-                _logger.LogInformation("Cancel requested; stopping the starting core");
-                proc.Kill(entireProcessTree: true);
+                if (!proc.HasExited)
+                {
+                    _logger.LogInformation("Cancel requested; stopping the starting core");
+                    proc.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
             }
         }
-        catch
-        {
-            
-        }
+        SetState(ConnectionState.Disconnected);
     }
 
     public void CancelInFlightConnection() => CancelConnecting();

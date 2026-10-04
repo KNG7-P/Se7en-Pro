@@ -43,15 +43,13 @@ public partial class SettingsPage : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SettingsViewModel.ProxyPassword) && sender is SettingsViewModel vm)
+        if (sender is not SettingsViewModel vm) return;
+        if (e.PropertyName == nameof(SettingsViewModel.ProxyPassword))
         {
             SyncPasswordBoxFromVm(vm);
         }
     }
 
-    
-    
-    
     private void OnSettingsTabChecked(object sender, RoutedEventArgs e)
     {
         if (sender is not RadioButton { CommandParameter: string tab }) return;

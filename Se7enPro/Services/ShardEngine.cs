@@ -48,7 +48,8 @@ public sealed class ShardEngine : LocalSocksEngineBase
     private const int MaxRaceSlices = 3;
     private const int ProbeTimeoutMs = 2500;
 
-    private const string SubscriptionUrl = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt";
+    private const string SubscriptionUrl = "https://raw.githubusercontent.com/mbm110/MSN-GUARD/master/remote/shard-nodes.txt";
+    private const string FallbackSubscriptionUrl = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt";
     private const string PolicyUrl = "https://raw.githubusercontent.com/mbm110/MSN-GUARD/master/remote/policy.json";
 
     private static readonly string[] DefaultEdges = new[]
@@ -242,7 +243,21 @@ public sealed class ShardEngine : LocalSocksEngineBase
             
             try
             {
-                var configsText = await client.GetStringAsync(SubscriptionUrl);
+                string? configsText = null;
+                try
+                {
+                    configsText = await client.GetStringAsync(SubscriptionUrl);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Primary SHARD subscription URL failed; trying fallback URL.");
+                }
+
+                if (string.IsNullOrWhiteSpace(configsText))
+                {
+                    configsText = await client.GetStringAsync(FallbackSubscriptionUrl);
+                }
+
                 if (!string.IsNullOrWhiteSpace(configsText))
                 {
                     var parsed = ParseNodes(configsText);
@@ -518,27 +533,334 @@ public sealed class ShardEngine : LocalSocksEngineBase
         return expanded;
     }
 
-    protected override PreparedLaunch Prepare(string workDir, int socksPort, int httpPort)
+    private ShardNode? _selectedWinner;
+    private bool _lastConnectAttemptFailed;
+
+    private string ResolveXrayBinary()
     {
         var resShard = System.IO.Path.Combine(AppDir, "Resources", "shard");
         var binName = OperatingSystem.IsWindows() ? "xray.exe" : "xray";
         var sourceExe = System.IO.Path.Combine(resShard, binName);
-        if (!File.Exists(sourceExe))
+        if (!File.Exists(sourceExe)) sourceExe = System.IO.Path.Combine(AppDir, "Resources", "xray", binName);
+        if (!File.Exists(sourceExe)) sourceExe = System.IO.Path.Combine(resShard, "xray.exe");
+        if (!File.Exists(sourceExe)) sourceExe = System.IO.Path.Combine(AppDir, "Resources", "xray", "xray.exe");
+        return sourceExe;
+    }
+
+    private static string BuildProbeConfig(IReadOnlyList<ShardNode> candidates, int basePort)
+    {
+        var inbounds = new JsonArray();
+        var outbounds = new JsonArray
         {
-            sourceExe = System.IO.Path.Combine(AppDir, "Resources", "xray", binName);
-        }
-        if (!File.Exists(sourceExe))
+            new JsonObject
+            {
+                ["tag"] = "blackhole",
+                ["protocol"] = "blackhole"
+            }
+        };
+        var rules = new JsonArray();
+
+        for (var i = 0; i < candidates.Count; i++)
         {
-            sourceExe = System.IO.Path.Combine(resShard, "xray.exe");
-        }
-        if (!File.Exists(sourceExe))
-        {
-            sourceExe = System.IO.Path.Combine(AppDir, "Resources", "xray", "xray.exe");
+            var node = candidates[i];
+            var inTag = $"in-{i}";
+            var outTag = $"out-{i}";
+
+            inbounds.Add(new JsonObject
+            {
+                ["tag"] = inTag,
+                ["listen"] = "127.0.0.1",
+                ["port"] = basePort + i,
+                ["protocol"] = "socks",
+                ["settings"] = new JsonObject
+                {
+                    ["auth"] = "noauth",
+                    ["udp"] = false
+                }
+            });
+
+            outbounds.Add(BuildOutbound(node, outTag, mux: false));
+
+            rules.Add(new JsonObject
+            {
+                ["type"] = "field",
+                ["inboundTag"] = new JsonArray { inTag },
+                ["outboundTag"] = outTag
+            });
         }
 
+        var root = new JsonObject
+        {
+            ["log"] = new JsonObject
+            {
+                ["loglevel"] = "none",
+                ["access"] = "none"
+            },
+            ["inbounds"] = inbounds,
+            ["outbounds"] = outbounds,
+            ["routing"] = new JsonObject
+            {
+                ["rules"] = rules
+            }
+        };
+
+        return root.ToJsonString();
+    }
+
+    private static async Task<bool> ProbeCandidateAsync(int socksPort, int timeoutMs, CancellationToken ct)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeoutMs);
+            var token = cts.Token;
+
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, socksPort, token);
+            await using var stream = client.GetStream();
+
+            // SOCKS5 Greeting: noauth
+            await stream.WriteAsync(new byte[] { 0x05, 0x01, 0x00 }, token);
+            var methodResp = new byte[2];
+            await stream.ReadExactlyAsync(methodResp, token);
+            if (methodResp[0] != 0x05 || methodResp[1] != 0x00) return false;
+
+            // SOCKS5 Connect to cp.cloudflare.com:80 (ATYP = 3)
+            const string host = "cp.cloudflare.com";
+            const int port = 80;
+            var hostBytes = Encoding.ASCII.GetBytes(host);
+            var req = new byte[4 + 1 + hostBytes.Length + 2];
+            req[0] = 0x05;
+            req[1] = 0x01; // CONNECT
+            req[2] = 0x00;
+            req[3] = 0x03; // Domain
+            req[4] = (byte)hostBytes.Length;
+            Array.Copy(hostBytes, 0, req, 5, hostBytes.Length);
+            req[5 + hostBytes.Length] = (byte)(port >> 8);
+            req[6 + hostBytes.Length] = (byte)(port & 0xFF);
+            await stream.WriteAsync(req, token);
+
+            // SOCKS5 Reply
+            var reply = new byte[4];
+            await stream.ReadExactlyAsync(reply, token);
+            if (reply[1] != 0x00) return false;
+
+            // Consume bound address
+            var boundLen = reply[3] switch
+            {
+                0x01 => 4,
+                0x04 => 16,
+                0x03 => stream.ReadByte(),
+                _ => 0
+            };
+            if (boundLen > 0)
+            {
+                var bound = new byte[boundLen + 2];
+                await stream.ReadExactlyAsync(bound, token);
+            }
+
+            // Send HTTP GET request
+            var httpRequest = Encoding.ASCII.GetBytes(
+                $"GET /generate_204 HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Mozilla/5.0\r\nAccept: */*\r\nConnection: close\r\n\r\n");
+            await stream.WriteAsync(httpRequest, token);
+
+            // Read HTTP response status line
+            using var reader = new StreamReader(stream, Encoding.ASCII, false, 256, leaveOpen: true);
+            var statusLine = await reader.ReadLineAsync(token);
+            return statusLine != null && (statusLine.Contains(" 204") || statusLine.Contains(" 200"));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> AwaitPortListeningAsync(int port, int timeoutMs, Process proc, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline && !proc.HasExited && !ct.IsCancellationRequested)
+        {
+            try
+            {
+                using var client = new TcpClient();
+                var connectTask = client.ConnectAsync(IPAddress.Loopback, port);
+                var completed = await Task.WhenAny(connectTask, Task.Delay(200, ct));
+                if (completed == connectTask && client.Connected)
+                {
+                    return true;
+                }
+            }
+            catch { }
+            await Task.Delay(100, ct);
+        }
+        return false;
+    }
+
+    private async Task<ShardNode?> RaceCandidatesAsync(
+        IReadOnlyList<ShardNode> candidates, string workDir, CancellationToken ct)
+    {
+        if (candidates.Count == 0) return null;
+
+        var sourceExe = ResolveXrayBinary();
+        if (!File.Exists(sourceExe)) return null;
+
+        var probeConfigPath = System.IO.Path.Combine(workDir, "probe.json");
+
+        for (var slice = 0; slice < MaxRaceSlices; slice++)
+        {
+            if (ct.IsCancellationRequested) return null;
+
+            var sliceCandidates = candidates.Skip(slice * RaceWidth).Take(RaceWidth).ToList();
+            if (sliceCandidates.Count == 0) break;
+
+            _logger.LogInformation("Racing SHARD candidate slice {Slice} ({Count} candidates)...",
+                slice + 1, sliceCandidates.Count);
+
+            var probeJson = BuildProbeConfig(sliceCandidates, ProbeBasePort);
+            await File.WriteAllTextAsync(probeConfigPath, probeJson, new UTF8Encoding(false), ct);
+
+            Process? probeProc = null;
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = sourceExe,
+                    Arguments = $"run -c \"{probeConfigPath}\"",
+                    WorkingDirectory = workDir,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                var xrayAssetDir = System.IO.Path.Combine(AppDir, "Resources", "shard");
+                if (!Directory.Exists(xrayAssetDir)) xrayAssetDir = System.IO.Path.Combine(AppDir, "Resources", "xray");
+                if (Directory.Exists(xrayAssetDir)) psi.Environment["XRAY_LOCATION_ASSET"] = xrayAssetDir;
+
+                probeProc = Process.Start(psi);
+                if (probeProc == null || probeProc.HasExited) continue;
+
+                var listening = await AwaitPortListeningAsync(ProbeBasePort, 3500, probeProc, ct);
+                if (!listening || probeProc.HasExited) continue;
+
+                using var raceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                raceCts.CancelAfter(TimeSpan.FromMilliseconds(ProbeTimeoutMs * 2));
+                var raceToken = raceCts.Token;
+
+                var winnerTcs = new TaskCompletionSource<ShardNode>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                var tasks = sliceCandidates.Select(async (node, index) =>
+                {
+                    var port = ProbeBasePort + index;
+                    var sw = Stopwatch.StartNew();
+                    var ok = await ProbeCandidateAsync(port, ProbeTimeoutMs, raceToken);
+                    if (ok)
+                    {
+                        sw.Stop();
+                        _logger.LogInformation(
+                            "Candidate {Index} ({Proto} to {Address}:{Port} via {Host}) verified live in {Elapsed}ms",
+                            index, node.Protocol, node.Address, node.Port, node.Host, sw.ElapsedMilliseconds);
+                        winnerTcs.TrySetResult(node);
+                    }
+                }).ToList();
+
+                var winnerTask = winnerTcs.Task;
+                var allProbesTask = Task.WhenAll(tasks);
+
+                var completed = await Task.WhenAny(winnerTask, allProbesTask, Task.Delay(ProbeTimeoutMs * 2, raceToken));
+                if (completed == winnerTask && winnerTask.IsCompletedSuccessfully)
+                {
+                    var winner = await winnerTask;
+                    return winner;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during SHARD probe race slice {Slice}", slice + 1);
+            }
+            finally
+            {
+                if (probeProc != null)
+                {
+                    try
+                    {
+                        if (!probeProc.HasExited)
+                        {
+                            probeProc.Kill(entireProcessTree: true);
+                            await probeProc.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+                        }
+                    }
+                    catch { }
+                    probeProc.Dispose();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    protected override async Task BeforeStartAsync(string workDir, CancellationToken ct)
+    {
+        _selectedWinner = null;
+
+        var rawNodes = LoadNodesFromCacheOrSeed();
+        if (rawNodes.Count == 0)
+        {
+            await RefreshSubscriptionAsync(force: true);
+            rawNodes = LoadNodesFromCacheOrSeed();
+        }
+
+        if (rawNodes.Count == 0) return;
+
+        // If a previous connection attempt failed to establish a working tunnel, advance the rotation cursor
+        if (_lastConnectAttemptFailed)
+        {
+            AdvanceRotationCursor(RaceWidth);
+            _lastConnectAttemptFailed = false;
+        }
+
+        var customIp = NormalizeCustomCdnIp();
+        if (customIp is not null)
+        {
+            var offset = _rotationOffset % rawNodes.Count;
+            _selectedWinner = rawNodes[offset] with { Address = customIp };
+            return;
+        }
+
+        var candidates = ExpandNodes(rawNodes);
+        var diversified = Diversify(candidates);
+        if (diversified.Count == 0) return;
+
+        var offsetIdx = _rotationOffset % diversified.Count;
+        var rotated = diversified.Skip(offsetIdx).Concat(diversified.Take(offsetIdx)).ToList();
+
+        Log($"[SHARD] Loaded {rotated.Count} candidate edge routes; discovering fastest route...");
+        SetConnectProgress(15, Loc.Of("Selecting SHARD edge route..."));
+
+        try
+        {
+            var winner = await RaceCandidatesAsync(rotated, workDir, ct);
+            if (winner != null)
+            {
+                _selectedWinner = winner;
+                Log($"[SHARD] Confirmed working edge endpoint: {winner.Address}:{winner.Port} ({winner.Protocol.ToUpperInvariant()}) via {winner.Host}");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SHARD probe race encountered an error, falling back to candidate selection");
+        }
+
+        Log("[SHARD] Candidate probe race found no responsive node within budget; falling back to candidate route.");
+        _selectedWinner = SelectBestCandidate(candidates);
+    }
+
+    protected override PreparedLaunch Prepare(string workDir, int socksPort, int httpPort)
+    {
+        var sourceExe = ResolveXrayBinary();
         var exePath = StageFile(sourceExe, System.IO.Path.Combine(workDir, EngineProcessNames.Shard));
 
-        
         var rawNodes = LoadNodesFromCacheOrSeed();
         if (rawNodes.Count == 0)
         {
@@ -546,12 +868,10 @@ public sealed class ShardEngine : LocalSocksEngineBase
         }
 
         var candidates = ExpandNodes(rawNodes);
+        var winner = _selectedWinner ?? SelectBestCandidate(candidates);
+        _selectedWinner = null;
+        _lastConnectAttemptFailed = true;
 
-        Log($"[SHARD] Loaded {candidates.Count} candidate edge routes; discovering fastest route...");
-        SetConnectProgress(15, Loc.Of("Selecting SHARD edge route..."));
-
-        
-        var winner = SelectBestCandidate(candidates);
         _logger.LogInformation("Selected SHARD node: {Proto} to {Address}:{Port} (Host: {Host})",
             winner.Protocol, winner.Address, winner.Port, winner.Host);
         Log($"[SHARD] Selected edge endpoint: {winner.Address}:{winner.Port} ({winner.Protocol.ToUpperInvariant()}) via {winner.Host}");
@@ -560,7 +880,6 @@ public sealed class ShardEngine : LocalSocksEngineBase
         CurrentRouteIp = winner.Address;
         CurrentRouteSni = !string.IsNullOrEmpty(winner.ServerName) ? winner.ServerName : winner.Host;
 
-        
         var configJson = BuildLiveConfig(winner, socksPort, httpPort);
         var configPath = System.IO.Path.Combine(workDir, "config.json");
         File.WriteAllText(configPath, configJson, new UTF8Encoding(false));
@@ -580,30 +899,51 @@ public sealed class ShardEngine : LocalSocksEngineBase
         );
     }
 
+    protected override void OnTunnelConnected(int socksPort, int httpPort, CancellationToken ct)
+    {
+        _lastConnectAttemptFailed = false;
+        base.OnTunnelConnected(socksPort, httpPort, ct);
+    }
+
+    protected override void OnCoreLine(string line)
+    {
+        base.OnCoreLine(line);
+        if (line.Contains("started", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("app/dispatcher/default: start", StringComparison.OrdinalIgnoreCase))
+        {
+            SetConnectProgress(70, Loc.Of("SHARD edge gateway listening..."));
+        }
+    }
+
     private static List<ShardNode> Diversify(List<ShardNode> nodes)
     {
-        var byEdge = new Dictionary<string, List<ShardNode>>(StringComparer.OrdinalIgnoreCase);
+        // Group by endpoint identity (protocol, credential, host, path, port) to avoid edge IP clustering
+        var groups = new Dictionary<string, List<ShardNode>>(StringComparer.OrdinalIgnoreCase);
         foreach (var node in nodes)
         {
-            if (!byEdge.TryGetValue(node.Address, out var list))
+            var identity = $"{node.Protocol}|{node.Credential}|{node.Host}|{node.Path}|{node.Port}";
+            if (!groups.TryGetValue(identity, out var list))
             {
                 list = new List<ShardNode>();
-                byEdge[node.Address] = list;
+                groups[identity] = list;
             }
             list.Add(node);
         }
 
         var outList = new List<ShardNode>(nodes.Count);
-        var maxPerEdge = byEdge.Values.Count > 0 ? byEdge.Values.Max(v => v.Count) : 0;
-        for (var i = 0; i < maxPerEdge; i++)
+        var maxPerEndpoint = groups.Values.Count > 0 ? groups.Values.Max(v => v.Count) : 0;
+        for (var round = 0; round < maxPerEndpoint; round++)
         {
-            foreach (var list in byEdge.Values)
+            var addedThisRound = false;
+            foreach (var variants in groups.Values)
             {
-                if (i < list.Count)
+                if (round < variants.Count)
                 {
-                    outList.Add(list[i]);
+                    outList.Add(variants[round]);
+                    addedThisRound = true;
                 }
             }
+            if (!addedThisRound) break;
         }
         return outList;
     }
@@ -631,7 +971,6 @@ public sealed class ShardEngine : LocalSocksEngineBase
             rotated = diffIp.Concat(sameIp).ToList();
         }
 
-        
         var testSlice = rotated.Take(4).ToList();
         if (testSlice.Count == 1) return testSlice[0];
 
@@ -669,19 +1008,20 @@ public sealed class ShardEngine : LocalSocksEngineBase
 
     private string BuildLiveConfig(ShardNode node, int socksPort, int httpPort)
     {
+        var bindAddr = _settings.Settings.AllowLanConnections ? "0.0.0.0" : "127.0.0.1";
         var inbounds = new JsonArray
         {
             new JsonObject
             {
                 ["tag"] = "in-socks",
-                ["listen"] = "127.0.0.1",
+                ["listen"] = bindAddr,
                 ["port"] = socksPort,
                 ["protocol"] = "socks",
                 ["settings"] = new JsonObject
                 {
                     ["auth"] = "noauth",
                     ["udp"] = true,
-                    ["ip"] = "127.0.0.1"
+                    ["ip"] = bindAddr
                 },
                 ["sniffing"] = new JsonObject
                 {
@@ -697,7 +1037,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
             inbounds.Add(new JsonObject
             {
                 ["tag"] = "in-http",
-                ["listen"] = "127.0.0.1",
+                ["listen"] = bindAddr,
                 ["port"] = httpPort,
                 ["protocol"] = "http",
                 ["sniffing"] = new JsonObject
@@ -712,17 +1052,40 @@ public sealed class ShardEngine : LocalSocksEngineBase
         var isSmartSplit = _settings.Settings.ShardSmartSplit;
         var outbounds = new JsonArray
         {
-            BuildOutbound(node, "proxy", mux: false),
-            new JsonObject
-            {
-                ["tag"] = "blackhole",
-                ["protocol"] = "blackhole"
-            }
+            BuildOutbound(node, "proxy", mux: false)
         };
+
+        if (!isSmartSplit)
+        {
+            // Plain SHARD DoH resolver chained through proxy outbound (Xray 26.9+ dialerProxy)
+            outbounds.Add(new JsonObject
+            {
+                ["tag"] = "doh-resolver",
+                ["protocol"] = "dns",
+                ["settings"] = new JsonObject
+                {
+                    ["address"] = "https://cloudflare-dns.com/dns-query",
+                    ["port"] = 443,
+                    ["userLevel"] = 1
+                },
+                ["streamSettings"] = new JsonObject
+                {
+                    ["sockopt"] = new JsonObject
+                    {
+                        ["dialerProxy"] = "proxy"
+                    }
+                }
+            });
+        }
+
+        outbounds.Add(new JsonObject
+        {
+            ["tag"] = "blackhole",
+            ["protocol"] = "blackhole"
+        });
 
         if (isSmartSplit)
         {
-            
             outbounds.Add(new JsonObject
             {
                 ["tag"] = "direct-frag",
@@ -771,14 +1134,12 @@ public sealed class ShardEngine : LocalSocksEngineBase
                 }
             });
 
-            
             outbounds.Add(new JsonObject
             {
                 ["tag"] = "direct-plain",
                 ["protocol"] = "freedom"
             });
 
-            
             outbounds.Add(new JsonObject
             {
                 ["tag"] = "dns-out",
@@ -802,7 +1163,38 @@ public sealed class ShardEngine : LocalSocksEngineBase
             ["outbounds"] = outbounds
         };
 
-        if (isSmartSplit)
+        if (!isSmartSplit)
+        {
+            root["dns"] = new JsonObject
+            {
+                ["queryStrategy"] = "UseIP",
+                ["useSystemHosts"] = true,
+                ["serveStale"] = true,
+                ["servers"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["tag"] = "doh-resolver",
+                        ["address"] = "https://cloudflare-dns.com/dns-query",
+                        ["timeoutMs"] = 12000
+                    }
+                }
+            };
+
+            root["routing"] = new JsonObject
+            {
+                ["rules"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["type"] = "field",
+                        ["port"] = "53",
+                        ["outboundTag"] = "doh-resolver"
+                    }
+                }
+            };
+        }
+        else
         {
             root["dns"] = new JsonObject
             {
@@ -818,7 +1210,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
                     new JsonObject
                     {
                         ["tag"] = "shard-dns",
-                        ["address"] = "tcp://8.8.8.8",
+                        ["address"] = "https://1.1.1.1/dns-query",
                         ["domains"] = new JsonArray
                         {
                             "geosite:youtube",
@@ -884,7 +1276,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
                     new JsonObject
                     {
                         ["tag"] = "doh",
-                        ["address"] = "tcp://1.1.1.1",
+                        ["address"] = "https://cloudflare-dns.com/dns-query",
                         ["timeoutMs"] = 12000
                     }
                 }

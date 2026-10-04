@@ -13,6 +13,12 @@ internal sealed partial class SocksDnsForwarder : IDisposable
 {
     private readonly int _socksPort;
     private readonly string _upstreamDnsIp;
+
+    /// <summary>
+    /// Upstream resolvers consulted sequentially until an answer is received.
+    /// </summary>
+    private volatile List<DnsServerEntry> _relayTargets;
+
     private readonly TimeSpan _connectTimeout;
     private readonly TimeSpan _queryTimeout;
 
@@ -27,15 +33,50 @@ internal sealed partial class SocksDnsForwarder : IDisposable
         int socksPort,
         string upstreamDnsIp = "1.1.1.1",
         TimeSpan? connectTimeout = null,
-        TimeSpan? queryTimeout = null)
+        TimeSpan? queryTimeout = null,
+        IReadOnlyList<DnsServerEntry>? relayTargets = null)
     {
         _socksPort = socksPort;
         _upstreamDnsIp = upstreamDnsIp;
         _connectTimeout = connectTimeout ?? TimeSpan.FromSeconds(3);
         _queryTimeout = queryTimeout ?? TimeSpan.FromSeconds(5);
+        _relayTargets = relayTargets is null
+            ? new List<DnsServerEntry>()
+            : relayTargets.ToList();
     }
 
         public int HandledQueries => _handled;
+
+    /// <summary>
+    /// Indicates whether no relay targets are configured.
+    /// </summary>
+    internal bool RelayTargetsAreEmpty => _relayTargets.Count == 0;
+
+    /// <summary>
+    /// Relays a single DNS query through the configured upstream resolvers.
+    /// </summary>
+    internal async Task<byte[]?> SendOneAsync(byte[] query, TimeSpan timeout)
+    {
+        using var cts = new CancellationTokenSource(timeout);
+        return await QueryUpstreamAsync(query, cts.Token);
+    }
+
+    /// <summary>
+    /// Updates the list of upstream relay targets.
+    /// </summary>
+    public void UpdateRelayTargets(IReadOnlyList<DnsServerEntry> targets)
+    {
+        if (targets is null || targets.Count == 0)
+        {
+            Diag?.Invoke("dns: relay target update ignored — an empty list would resolve nothing");
+            return;
+        }
+
+        _relayTargets = targets.ToList();
+    }
+
+    /// <summary>Snapshot of the current relay list, for diagnostics and tests.</summary>
+    internal IReadOnlyList<DnsServerEntry> RelayTargetsSnapshot => _relayTargets;
 
         public Action<string>? Diag;
 

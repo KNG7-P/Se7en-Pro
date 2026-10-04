@@ -228,7 +228,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                       + " traffic still passes. Pick a TLS or Reality node (security=tls in the V2Ray"
                       + " page), or run Tor on its own with bridges.");
                 }
-                SetProgress(10, "Starting V2Ray/Xray/Sing-box outer transport...");
+                SetProgress(10, $"{OuterLegName} [1/2]: Starting {nodeName}...");
 
                 V2RayEngine.SetSocksPortOverride(ChainOuterV2RaySocksPort);
                 
@@ -288,7 +288,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                     await VerifyOuterEgressAsync(socksPort, nodeName, hopTransport, ct);
 
                 Log($"V2Ray inbound ready on 127.0.0.1:{socksPort}. Starting {v2rayInnerName} through V2Ray tunnel...");
-                SetProgress(50, $"Tunnelling {v2rayInnerName} through V2Ray node...");
+                SetProgress(50, $"{OuterLegName} connected (1/2) -> Connecting to {v2rayInnerName} (2/2)...");
 
                 lock (_outerOverridesLock)
                 {
@@ -365,7 +365,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             var innerName = isTor ? "Tor" : "Psiphon";
 
             Log($"Starting multi-hop chained session ({label})...");
-            SetProgress(10, "Connecting to Cloudflare WARP (outer leg)...");
+            SetProgress(10, $"{OuterLegName} [1/2]: Connecting...");
 
             
             var outerTransport = isTor
@@ -381,6 +381,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             {
                 "wireguard" or "wg" => ConnectionMethod.WireGuard,
                 "warp_on_warp" or "wow" or "warp" => ConnectionMethod.WarpOnWarp,
+                "mim" or "masque_in_masque" => ConnectionMethod.MasqueInMasque,
                 _ => ConnectionMethod.Masque,
             };
 
@@ -388,6 +389,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             {
                 "wireguard" or "wg" => ConnectionMethod.WireGuard,
                 "warp_on_warp" or "wow" or "warp" => ConnectionMethod.WarpOnWarp,
+                "mim" or "masque_in_masque" => ConnectionMethod.MasqueInMasque,
                 _ => ConnectionMethod.Masque,
             };
 
@@ -470,7 +472,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
                     ? ConnectionMethod.Masque
                     : ConnectionMethod.WireGuard;
                 Log($"Outer {targetMethod.ToDisplayName()} transport did not connect; attempting fallback to {fallbackMethod.ToDisplayName()}...");
-                SetProgress(25, $"WARP fallback -> Connecting via {fallbackMethod.ToDisplayName()} (outer leg)...");
+                SetProgress(25, $"{OuterLegName} [1/2]: Fallback to {fallbackMethod.ToDisplayName()}...");
                 try { await _outer.StopAsync(); } catch { }
 
                 lock (_outerOverridesLock) _outerMethodOverride = fallbackMethod;
@@ -520,7 +522,7 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             }
 
             Log("Outer WARP tunnel established. Starting inner leg through WARP...");
-            SetProgress(55, $"Tunnelling {innerName} through WARP (inner leg)...");
+            SetProgress(50, $"{OuterLegName} connected (1/2) -> Connecting to {innerName} (2/2)...");
 
             
             lock (_outerOverridesLock)
@@ -766,15 +768,19 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             engine.RouteChanged += (_, _) => RouteChanged?.Invoke(this, EventArgs.Empty);
             engine.ConnectProgressChanged += (_, _) =>
             {
-                
-                
-                
-                
+                // Only forward progress from the currently active outer engine.
+                // If a fallback engine is spinning up, ignore notifications from
+                // the dead engine it replaced.
                 if (!ReferenceEquals(engine, OuterEngine)) return;
                 if (State == ConnectionState.Connecting && engine.State != ConnectionState.Connected)
                 {
                     var pct = Math.Clamp(engine.ConnectProgressPercent / 2, 5, 50);
-                    SetProgress(pct, $"{OuterLegName} outer: {engine.ConnectProgressText}");
+                    var text = engine.ConnectProgressText;
+                    if (string.IsNullOrWhiteSpace(text)) text = "Connecting...";
+                    if (text.StartsWith(OuterLegName, StringComparison.OrdinalIgnoreCase))
+                        SetProgress(pct, $"[1/2] {text}");
+                    else
+                        SetProgress(pct, $"{OuterLegName} [1/2]: {text}");
                 }
             };
         }
@@ -787,8 +793,18 @@ public sealed class ChainedEngine : IConnectionEngine, IDisposable
             {
                 if (State == ConnectionState.Connecting && OuterEngine.State == ConnectionState.Connected)
                 {
+                    var innerTag = _method switch
+                    {
+                        ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray => "Tor",
+                        _ => "Psiphon"
+                    };
                     var pct = 50 + Math.Clamp(InnerEngine.ConnectProgressPercent / 2, 0, 50);
-                    SetProgress(pct, InnerEngine.ConnectProgressText);
+                    var text = InnerEngine.ConnectProgressText;
+                    if (string.IsNullOrWhiteSpace(text)) text = "Connecting...";
+                    if (text.StartsWith(innerTag, StringComparison.OrdinalIgnoreCase))
+                        SetProgress(pct, $"[2/2] {text}");
+                    else
+                        SetProgress(pct, $"{innerTag} [2/2]: {text}");
                 }
             };
         }

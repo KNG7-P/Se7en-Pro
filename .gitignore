@@ -102,3 +102,7 @@ Resources_linux/
 __pycache__/
 *.pyc
 *.pyo
+
+# ---- WPF build temp ----
+# Generated per-build by the XAML markup compiler; never committed.
+*_wpftmp.csproj

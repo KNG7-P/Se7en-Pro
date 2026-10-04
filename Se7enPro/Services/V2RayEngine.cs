@@ -177,9 +177,17 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             _runCts = new CancellationTokenSource();
 
             var config = ResolveActiveConfig();
-            if (config == null)
+            var configProblem = ValidateOutboundNode(config);
+            if (configProblem is not null)
             {
-                Log("No active V2Ray configuration found. Starting on default SOCKS inbound port.");
+                // Never fall through to a `freedom`/direct outbound here. The core would
+                // happily open its SOCKS inbound, the readiness probe would succeed against
+                // that local port, and the app would report a live, encrypted tunnel while
+                // every byte went out directly with the user's real IP.
+                Log($"Cannot start V2Ray/Sing-box: {configProblem}");
+                _logger.LogError("V2Ray start refused: {Problem}", configProblem);
+                SetState(ConnectionState.Error);
+                return;
             }
 
             var (exePath, isXray) = ResolveCoreExecutable();
@@ -358,6 +366,34 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         return found ?? list.FirstOrDefault(c => c.IsActive) ?? list.FirstOrDefault();
     }
 
+    /// <summary>
+    /// Returns null when the node can actually carry traffic, otherwise a short
+    /// human-readable reason. Used to refuse a start instead of silently degrading
+    /// to a direct (unencrypted) outbound.
+    /// </summary>
+    internal static string? ValidateOutboundNode(V2RayConfigEntry? config)
+    {
+        if (config is null)
+        {
+            return "no V2Ray/Xray/Sing-box node is configured. Add a node or pick an "
+                 + "active one in Settings -> V2Ray / Xray before connecting.";
+        }
+
+        if (string.IsNullOrWhiteSpace(config.Address))
+        {
+            var label = string.IsNullOrWhiteSpace(config.Name) ? "the active node" : $"\"{config.Name}\"";
+            return $"{label} has no server address, so it cannot carry any traffic.";
+        }
+
+        if (config.Port is < 1 or > 65535)
+        {
+            var label = string.IsNullOrWhiteSpace(config.Name) ? "the active node" : $"\"{config.Name}\"";
+            return $"{label} has an invalid port ({config.Port}); it must be between 1 and 65535.";
+        }
+
+        return null;
+    }
+
     private (string ExePath, bool IsXray) ResolveCoreExecutable()
     {
         var coreSetting = (_settings.Settings.V2RayCore ?? "xray").ToLowerInvariant();
@@ -396,8 +432,60 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         return ("", true);
     }
 
+    /// <summary>
+    /// Builds the resolver plan for the current session.
+    ///
+    /// <paramref name="hasV6Address"/> mirrors whether a v6 address exists on the tunnel
+    /// adapter. A v6 resolver is only advertised when one does, because handing a core a
+    /// v6-only resolver on a v4-only tunnel makes every lookup fail on connect.
+    /// </summary>
+    private DnsResolverPolicy.Plan BuildDnsPlan(UserSettings s) =>
+        new DnsResolverPolicy(_logger).Build(s, hasV6Address: HasV6TunnelAddress());
+
+    private bool HasV6TunnelAddress()
+    {
+        try
+        {
+            return System.Net.NetworkInformation.NetworkInterface
+                .GetAllNetworkInterfaces()
+                .Any(ni =>
+                {
+                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                        return false;
+                    if (!ni.Description.Contains("Wintun", StringComparison.OrdinalIgnoreCase))
+                        return false;
+
+                    try
+                    {
+                        return ni.GetIPProperties().UnicastAddresses.Any(
+                            a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6);
+                    }
+                    catch { return false; }
+                });
+        }
+        catch
+        {
+            // Detection is an optimisation for the default v6 resolver only, so a failure
+            // must not prevent the v4 resolvers from being configured.
+            return false;
+        }
+    }
+
+    private static bool HasCustomResolvers(UserSettings s) =>
+        !string.IsNullOrWhiteSpace(s.CustomDnsUdp)
+        || !string.IsNullOrWhiteSpace(s.CustomDnsDot)
+        || !string.IsNullOrWhiteSpace(s.CustomDnsDoh);
+
     private string GenerateConfigFile(V2RayConfigEntry? config, bool isXray)
     {
+        // Defence in depth: StartAsync validates first, but this method must never be
+        // able to emit a direct (freedom) config no matter who calls it.
+        var problem = ValidateOutboundNode(config);
+        if (problem is not null)
+        {
+            throw new InvalidOperationException(problem);
+        }
+
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var dir = Path.Combine(localAppData, "Se7en");
         Directory.CreateDirectory(dir);
@@ -420,9 +508,20 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
             var muxEnabled = s.V2RayEnableMux;
             var routeDns = s.V2RayRouteDnsThroughV2Ray;
+
+            // When DNS is routed through the tunnel, the user's resolver list leads and
+            // the built-in public resolvers follow as the fallback. That order is the
+            // whole point of the setting: a custom resolver appended AFTER 1.1.1.1 is
+            // never asked, which is the defect this feature exists to fix.
             var dnsServers = routeDns
-                ? new object[] { "https://1.1.1.1/dns-query", "1.1.1.1", "8.8.8.8", "localhost" }
-                : new object[] { "localhost" };
+                ? DnsResolverPolicy.ToXrayDnsServers(BuildDnsPlan(s))
+                : new List<object> { "localhost" };
+
+            if (routeDns && HasCustomResolvers(s))
+            {
+                Log($"[V2Ray] custom DNS: {dnsServers.Count - 1} resolver(s) configured, "
+                    + "used in order with the built-in defaults as fallback");
+            }
 
             var shouldFragment = (config?.EnableFragment ?? s.V2RayEnableFragment);
             if (shouldFragment)
@@ -530,17 +629,18 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
             var muxEnabled2 = s.V2RayEnableMux;
             var routeDns2 = s.V2RayRouteDnsThroughV2Ray;
+
+            // sing-box wants a structured object per resolver rather than a scheme
+            // string, so each configured entry is expanded into its own transport shape.
             var singboxDnsServers = routeDns2
-                ? new object[]
-                {
-                    new { type = "https", tag = "remote", server = "1.1.1.1", path = "/dns-query" },
-                    new { type = "udp", tag = "remote2", server = "1.1.1.1" },
-                    new { type = "local", tag = "local" }
-                }
-                : new object[]
-                {
-                    new { type = "local", tag = "local" }
-                };
+                ? DnsResolverPolicy.ToSingBoxDnsServers(BuildDnsPlan(s))
+                : new List<object> { new { type = "local", tag = "local" } };
+
+            if (routeDns2 && HasCustomResolvers(s))
+            {
+                Log($"[V2Ray] custom DNS: {singboxDnsServers.Count - 1} resolver(s) configured, "
+                    + "used in order with the built-in defaults as fallback");
+            }
             var singboxObj = new Dictionary<string, object>
             {
                 ["log"] = new { level = "warn" },
@@ -612,10 +712,12 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
     {
         if (c == null || string.IsNullOrWhiteSpace(c.Address))
         {
-            return new object[]
-            {
-                new { tag = "direct", protocol = "freedom", settings = new { } }
-            };
+            // Refuse to synthesise a `freedom`/direct outbound. That produced a
+            // "connected" but completely unprotected session whenever a node had
+            // no address. Callers must validate first (see ValidateOutboundNode).
+            throw new InvalidOperationException(
+                ValidateOutboundNode(c)
+                ?? "The selected node cannot carry traffic; refusing to build a direct (unprotected) config.");
         }
 
         var proto = (c.Protocol ?? "vless").ToLowerInvariant();
@@ -961,10 +1063,11 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
     {
         if (c == null || string.IsNullOrWhiteSpace(c.Address))
         {
-            return new object[]
-            {
-                new { type = "direct", tag = "direct" }
-            };
+            // Same fail-closed rule as BuildXrayOutbounds: never fall back to a direct
+            // outbound, which yields a "connected" but unprotected session.
+            throw new InvalidOperationException(
+                ValidateOutboundNode(c)
+                ?? "The selected node cannot carry traffic; refusing to build a direct (unprotected) config.");
         }
 
         var proto = (c.Protocol ?? "vless").ToLowerInvariant();
@@ -1204,6 +1307,15 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
     private async Task<int> RunIsolatedTestAsync(V2RayConfigEntry config, CancellationToken ct)
     {
+        var nodeProblem = ValidateOutboundNode(config);
+        if (nodeProblem is not null)
+        {
+            // Building a test config would throw out of BuildXrayOutbounds; refuse up
+            // front so the "live test" button reports the real reason instead of -3.
+            Log($"Cannot test this node: {nodeProblem}");
+            return -1;
+        }
+
         var (exePath, isXray) = ResolveCoreExecutable();
         if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
         {

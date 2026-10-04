@@ -18,10 +18,12 @@ public sealed partial class WintunTunManager
         SplitRules.ClassifySplitEntries(_settings.Settings, out var domains, out _, out var procNames, out var procPaths);
         var matchSet = WidenDomainMatchSet(domains);
 
+        // Work out which dynamically pinned routes no longer match the split rules.
+        // This only touches the dynamic map: _appliedRoutes keeps the full current set
+        // until the new set has actually been applied (see below).
         var doomed = new List<WintunRouteApi.RouteEntry>();
         lock (_routeLock)
         {
-            var survivors = new HashSet<WintunRouteApi.RouteEntry>();
             foreach (var kv in _dynamicRoutes.ToList())
             {
                 if (kv.Value.Domain.StartsWith("app:", StringComparison.OrdinalIgnoreCase))
@@ -30,30 +32,16 @@ public sealed partial class WintunTunManager
                     if (procNames.Contains(appName, StringComparer.OrdinalIgnoreCase) ||
                         procPaths.Any(p => string.Equals(System.IO.Path.GetFileName(p), appName, StringComparison.OrdinalIgnoreCase)))
                     {
-                        survivors.Add(kv.Value.Entry);
                         continue;
                     }
                 }
                 else if (SocksDnsForwarder.MatchDomain(kv.Value.Domain, matchSet) is not null)
                 {
-                    survivors.Add(kv.Value.Entry);
                     continue;
                 }
-                _appliedRoutes.Remove(kv.Value.Entry);
                 doomed.Add(kv.Value.Entry);
                 _dynamicRoutes.Remove(kv.Key);
             }
-
-            foreach (var e in _appliedRoutes)
-            {
-                if (!survivors.Contains(e)) doomed.Add(e);
-            }
-            _appliedRoutes.RemoveAll(e => !survivors.Contains(e));
-        }
-
-        foreach (var r in doomed.Distinct())
-        {
-            try { WintunRouteApi.DeleteRoute(r); } catch { }
         }
 
         var nic = WintunRouteApi.FindAdapter(TunInterfaceName);
@@ -62,10 +50,76 @@ public sealed partial class WintunTunManager
             WriteDiag("re-apply aborted: adapter gone");
             return;
         }
+
+        // Apply FIRST, then delete. ApplyRoutesAsync re-asserts the static set —
+        // including the 0.0.0.0/1 + 128.0.0.0/1 catch-all pair that captures all
+        // traffic. Deleting first (the previous order) left the machine with no route
+        // into the TUN for the whole duration of the await inside ApplyRoutesAsync
+        // (DNS lookups up to 3s each, a full TCP-table sweep, blocking Dns calls), so
+        // every packet left via the real NIC: an unbounded full-tunnel traffic leak.
         await ApplyRoutesAsync(WintunRouteApi.GetAdapterIndex(nic), CancellationToken.None);
-        _dnsForwarder?.UpdateSplitPolicy(BuildSplitPolicy());
+
+        // Anything still needed was re-tracked by ApplyRoutesAsync above; only the
+        // genuinely stale entries are still absent from the applied set.
+        List<WintunRouteApi.RouteEntry> stale;
+        lock (_routeLock)
+        {
+            stale = doomed
+                .Distinct()
+                .Where(e => !_appliedRoutes.Contains(e))
+                .ToList();
+            foreach (var e in stale) _appliedRoutes.Remove(e);
+        }
+
+        foreach (var r in stale)
+        {
+            try { WintunRouteApi.DeleteRoute(r); } catch { }
+        }
+
+        if (stale.Count > 0)
+        {
+            WriteDiag($"re-apply: removed {stale.Count} stale split route(s); "
+                      + $"{_appliedRoutes.Count} still applied");
+        }
+
+        ApplyDnsPolicyToForwarder();
         SweepProcessConnectionsNow();
         WintunRouteApi.FlushDnsCache();
+    }
+
+    /// <summary>
+    /// Applies updated split tunneling policy and DNS resolver targets to the forwarder.
+    /// </summary>
+    private void ApplyDnsPolicyToForwarder()
+    {
+        var forwarder = _dnsForwarder;
+        if (forwarder is null) return;
+
+        forwarder.UpdateSplitPolicy(BuildSplitPolicy());
+
+        var plan = new DnsResolverPolicy(_logger).Build(_settings.Settings, _v6Enabled);
+        var targets = DnsResolverPolicy.RelayTargets(plan);
+
+        if (targets.Count == 0)
+        {
+            WriteDiag("dns: WARNING — the new resolver list has no plain-UDP entry this "
+                      + "forwarder can dial (strict mode with only DoT/DoH configured). "
+                      + "The previous resolvers stay in use for this session.");
+        }
+        else
+        {
+            forwarder.UpdateRelayTargets(targets);
+        }
+
+        if (plan.Rejected.Count > 0)
+        {
+            WriteDiag("dns: ignored " + plan.Rejected.Count
+                      + " unusable resolver entr(ies): " + string.Join("; ", plan.Rejected));
+        }
+        WriteDiag(plan.HasUserEntries
+            ? $"dns: relay targets updated ({targets.Count}); "
+              + (plan.Strict ? "strict mode, defaults suppressed" : "defaults kept as fallback")
+            : $"dns: relay targets reset to built-in defaults ({targets.Count})");
     }
 
     private string ComputeSplitHash(int socksPort)
@@ -81,7 +135,11 @@ public sealed partial class WintunTunManager
             string.Join(",", domains),
             string.Join(",", ips),
             string.Join(",", procNames),
-            string.Join(",", procPaths));
+            string.Join(",", procPaths),
+            string.Join(",", s.CustomDnsUdp ?? ""),
+            string.Join(",", s.CustomDnsDot ?? ""),
+            string.Join(",", s.CustomDnsDoh ?? ""),
+            s.CustomDnsStrict ? "1" : "0");
         return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(raw)));
     }
 

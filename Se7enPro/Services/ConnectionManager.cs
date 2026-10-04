@@ -24,6 +24,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private readonly TorEngine _tor;
     private readonly V2RayEngine _v2ray;
     private readonly ShardEngine _shard;
+    private readonly IdentityProvisioner _identity;
     private ChainedEngine? _psiphonOverWarp;
     private ChainedEngine? _torOverWarp;
     private ChainedEngine? _psiphonOverV2Ray;
@@ -44,7 +45,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
         AetherEngine aether,
         TorEngine tor,
         V2RayEngine v2ray,
-        ShardEngine shard)
+        ShardEngine shard,
+        IdentityProvisioner identityProvisioner)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
@@ -55,6 +57,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
         _tor = tor;
         _v2ray = v2ray;
         _shard = shard;
+        _identity = identityProvisioner;
 
         _active = SelectEngineForCurrentSettings();
         Attach(_active);
@@ -316,7 +319,12 @@ public sealed class ConnectionManager : ITunnelCoreManager
             {
                 
                 
-                if (!IsUserStillWantsConnection()) return;
+                if (!IsUserStillWantsConnection())
+                {
+                    _stateOverride = null;
+                    StateChanged?.Invoke(this, ConnectionState.Disconnected);
+                    return;
+                }
 
                 try
                 {
@@ -340,7 +348,12 @@ public sealed class ConnectionManager : ITunnelCoreManager
                     _logger.LogWarning(ex, "[Health] Reconnect attempt {Attempt} failed", attempt);
                 }
 
-                if (!IsUserStillWantsConnection()) return;
+                if (!IsUserStillWantsConnection())
+                {
+                    _stateOverride = null;
+                    StateChanged?.Invoke(this, ConnectionState.Disconnected);
+                    return;
+                }
                 await Task.Delay(2000);
             }
 
@@ -361,6 +374,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }
         finally
         {
+            _stateOverride = null;
             Interlocked.Exchange(ref _isHandlingDrop, 0);
             _lifecycleGate.Release();
         }
@@ -464,6 +478,30 @@ public sealed class ConnectionManager : ITunnelCoreManager
                 StateChanged?.Invoke(this, ConnectionState.Disconnected);
                 return;
             }
+
+            if (await _active.RecoverFromMissingPrerequisitesAsync(inFlightCts.Token))
+            {
+                try
+                {
+                    await SafeStopAsync(_active);
+                    await _active.StartAsync();
+                    AetherExtras.ResetEchFallback();
+                    return;
+                }
+                catch (OperationCanceledException) when (inFlightCts.IsCancellationRequested)
+                {
+                    ClearSystemProxyIfApplied();
+                    StateChanged?.Invoke(this, ConnectionState.Disconnected);
+                    return;
+                }
+                catch (Exception retryEx)
+                {
+                    _logger.LogError(retryEx,
+                        "Retry after the identity fallback failed for {Method}", _active.Method);
+                    ex = retryEx;
+                }
+            }
+
             _logger.LogError(ex, "Failed to start active engine {Method}", _active.Method);
             OnEngineLogLineAppended(_active, $"[Core] Startup error: {ex.Message}");
             ClearSystemProxyIfApplied();
@@ -478,9 +516,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
     public async Task StopAsync()
     {
         _stateOverride = null;
-        
-        
-        
+        StopStatsMonitor();
         RaiseConnectionIntent(wantsConnection: false);
         CancelInFlightConnection();
 
@@ -492,8 +528,10 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }
         finally
         {
+            _stateOverride = null;
             _lifecycleGate.Release();
         }
+        StateChanged?.Invoke(this, ConnectionState.Disconnected);
     }
 
     private void RaiseConnectionIntent(bool wantsConnection)
@@ -656,7 +694,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
         return method switch
         {
             ConnectionMethod.Tor => _tor,
-            ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp => _aether,
+            var m when m.IsAether() => _aether,
             ConnectionMethod.PsiphonOverWarp => _psiphonOverWarp ??= new ChainedEngine(
                 _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, ConnectionMethod.PsiphonOverWarp),
             ConnectionMethod.TorOverWarp => _torOverWarp ??= new ChainedEngine(
@@ -725,9 +763,15 @@ public sealed class ConnectionManager : ITunnelCoreManager
     {
         if (!ReferenceEquals(sender, _active)) return;
         _stateOverride = null;
+        if (!_userWantsConnection && (state == ConnectionState.Connecting || state == ConnectionState.Connected))
+        {
+            _logger.LogInformation("Ignoring engine state {State} because user has disconnected", state);
+            return;
+        }
         if (state == ConnectionState.Connected)
         {
             StartStatsMonitor();
+            TopUpIdentityPoolInBackground();
         }
         else
         {
@@ -735,6 +779,27 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }
         ApplySystemProxy(state);
         StateChanged?.Invoke(this, state);
+    }
+
+    /// <summary>
+    /// Replenishes the Cloudflare identity pool in the background when connected.
+    /// </summary>
+    private void TopUpIdentityPoolInBackground()
+    {
+        var method = ConnectionMethodExtensions.ParseConnectionMethod(_settings.Settings.ConnectionMethod);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                await _identity.RefillPoolAsync(method, ct: cts.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Identity pool top-up skipped");
+            }
+        });
     }
 
     private void OnEngineNoticeReceived(object? sender, Notice notice)

@@ -7,7 +7,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
 
-    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <NoWarn>$(NoWarn);WFAC010;NU1900</NoWarn>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <RootNamespace>Se7enPro</RootNamespace>
@@ -20,9 +20,9 @@
     <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
     <UseAppHost>true</UseAppHost>
     <RollForward>LatestMajor</RollForward>
-    <Version>1.0.5</Version>
-    <AssemblyVersion>1.0.5.0</AssemblyVersion>
-    <FileVersion>1.0.5.0</FileVersion>
+    <Version>1.0.6</Version>
+    <AssemblyVersion>1.0.6.0</AssemblyVersion>
+    <FileVersion>1.0.6.0</FileVersion>
     <Product>Se7en Pro</Product>
     <Company>Se7en Pro</Company>
     <Authors>Se7en Pro</Authors>

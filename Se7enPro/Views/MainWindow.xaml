@@ -123,7 +123,7 @@
 
                         
                         <Border DockPanel.Dock="Bottom" Padding="14,10" Opacity="0.6">
-                            <TextBlock Text="{DynamicResource Loc_v103WindowsClient}" FontSize="10.5" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBlock Text="{Binding ClientVersionText}" FontSize="10.5" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
                         </Border>
 
                         

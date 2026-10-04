@@ -57,7 +57,11 @@
                     <ControlTemplate TargetType="Button">
                         <Grid Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
                             
-                            <Ellipse x:Name="OrbitRing" Margin="6" Stroke="{Binding State, Converter={StaticResource StateToConnectBrush}}" StrokeThickness="1.5" StrokeDashArray="6 4" Opacity="0.45" />
+                            <Ellipse x:Name="OrbitRing" Margin="6" Stroke="{Binding State, Converter={StaticResource StateToConnectBrush}}" StrokeThickness="1.5" StrokeDashArray="6 4" Opacity="0.45" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform Angle="0" />
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
 
                             
                             <ProgressBar x:Name="SpinnerRing" Margin="14" IsIndeterminate="{Binding IsConnecting}" Visibility="{Binding IsConnecting, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="{StaticResource Brand.AccentBrush}" Style="{StaticResource MaterialDesignCircularProgressBar}" />
@@ -69,7 +73,6 @@
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <materialDesign:PackIcon x:Name="ActionIcon" Kind="{Binding State, Converter={StaticResource StateToOrbIconKind}}" Width="42" Height="42" HorizontalAlignment="Center" Foreground="{Binding State, Converter={StaticResource StateToConnectBrush}}" Margin="0,0,0,4" />
                                         <TextBlock x:Name="ActionLabel" Text="{Binding State, Converter={StaticResource StateToOrbActionText}}" FontSize="13.5" FontWeight="Bold" Foreground="{DynamicResource TextOnConnectBrush}" HorizontalAlignment="Center" TextElement.FontFamily="{StaticResource UI.FontFamily}" />
-                                        <TextBlock x:Name="SubLabel" Text="{Binding StatusHeadline}" FontSize="9.5" FontWeight="SemiBold" Foreground="{Binding State, Converter={StaticResource StateToConnectBrush}}" HorizontalAlignment="Center" Margin="0,2,0,0" Opacity="0.85" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -88,6 +91,21 @@
                                 </Setter>
                                  <Setter TargetName="CoreDisc" Property="Background" Value="{DynamicResource Surface.ConnectCorePressedBg}" />
                             </Trigger>
+                            <DataTrigger Binding="{Binding IsConnecting}" Value="True">
+                                <Setter TargetName="OrbitRing" Property="Opacity" Value="0.85" />
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard x:Name="SpinOrbitRingStoryboard">
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetName="OrbitRing"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                             From="0" To="360" Duration="0:0:3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <StopStoryboard BeginStoryboardName="SpinOrbitRingStoryboard" />
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>

@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>Se7enPro.Services</RootNamespace>
+
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <NoWarn>$(NoWarn);WFAC010;CS0618</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The units under test. StartupReaper is included so its kill predicate can be
+         exercised against the real running process table. -->
+    <Compile Include="..\..\Se7enPro\Services\StartupReaper.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\IStartupReaper.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\ConnectionMethod.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\LocalizedItem.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Loc.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\DnsSettings.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\DnsResolverPolicy.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\DnsProber.cs" LinkBase="Units" />
+
+    <!-- The DNS forwarder, compiled in so the live relay-ordering test can drive the real
+         relay path. Its other partials are needed for it to link. -->
+    <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Query.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Policy.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Local.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Split.cs" LinkBase="Units" />
+
+    <Compile Include="..\..\Se7enPro\Models\UserSettings.cs" LinkBase="Contracts" />
+
+    <!-- The DNS view model and its row model. Compiled in so the auto-save behaviour can
+         be driven headlessly: debounce, no-op suppression and load-suppression are all
+         easy to get wrong and impossible to see in a screenshot. -->
+    <Compile Include="..\..\Se7enPro\Services\ISettingsService.cs" LinkBase="Units" />
+
+    <!-- The identity pool and its two dependencies. Compiled in with no engine references
+         at all, which is the point: rotation, validity and failure attribution can then be
+         driven offline, against a temp file, with no network. -->
+    <Compile Include="..\..\Se7enPro\Services\IdentityPool.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\IdentityFileGuard.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\ProtectedSecret.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\IdentityRelay.cs" LinkBase="Units" />
+
+    <!-- The aether capability probe and the optional-flag gating. Compiled in so the
+         decisions can be tested against the REAL bundled aether.exe rather than a fixture:
+         the whole point is that the shipped Windows build has no tls-verify flag. -->
+    <Compile Include="..\..\Se7enPro\Services\AetherCapabilities.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\AetherExtras.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\ViewModels\DnsFieldRow.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\ViewModels\DnsLabels.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\ViewModels\DnsSettingsViewModel.cs" LinkBase="Units" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+</Project>

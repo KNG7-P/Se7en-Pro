@@ -14,42 +14,8 @@ public sealed class StartupReaper : IStartupReaper
 
     public void ReapStaleProcesses()
     {
-
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var roots = new[]
-        {
-            
-            
-            
-            
-            
-            Path.Combine(AppContext.BaseDirectory, "Resources"),
-            Path.Combine(localAppData, "Se7en", "tunnel-core"),
-            Path.Combine(localAppData, "Se7en", "tun2socks"),
-            Path.Combine(localAppData, "Se7en", "tor"),
-            Path.Combine(localAppData, "Se7en", "aether"),
-            Path.Combine(localAppData, "Se7en", "shard"),
-            Path.Combine(localAppData, "Psiphon", "tunnel-core"),
-            Path.Combine(localAppData, "Psiphon", "tun2socks"),
-            Path.Combine(localAppData, "Psiphon", "singbox-tun"),
-            Path.Combine(localAppData, "Psiphon", "xray-tun"),
-            Path.Combine(Path.GetTempPath(), "Se7en"),
-            Path.Combine(Path.GetTempPath(), "Psiphon"),
-        };
-
-        
-        
-        
-        
-        
-        var normalisedRoots = new string[roots.Length];
-        var liveRoots = 0;
-        for (int i = 0; i < roots.Length; i++)
-        {
-            var normalised = NormalisePath(roots[i]);
-            if (string.IsNullOrEmpty(normalised)) continue;
-            normalisedRoots[liveRoots++] = normalised;
-        }
+        var normalisedRoots = BuildReapRoots(out var liveRoots);
 
         Process[] processes;
         try
@@ -72,10 +38,10 @@ public sealed class StartupReaper : IStartupReaper
             {
                 if (p.Id == ownPid) continue;
 
-                string? imagePath = null;
+                // Match on executable image path only
+                string? imagePath;
                 try
                 {
-
                     imagePath = p.MainModule?.FileName;
                 }
                 catch
@@ -84,7 +50,6 @@ public sealed class StartupReaper : IStartupReaper
                 }
 
                 if (string.IsNullOrEmpty(imagePath)) continue;
-
                 if (!IsUnderAny(imagePath, normalisedRoots, liveRoots)) continue;
 
                 _logger.LogInformation(
@@ -113,7 +78,7 @@ public sealed class StartupReaper : IStartupReaper
             }
             finally
             {
-                try { p.Dispose(); } catch {  }
+                try { p.Dispose(); } catch { }
             }
         }
 
@@ -126,7 +91,52 @@ public sealed class StartupReaper : IStartupReaper
         }
     }
 
-    private static bool IsUnderAny(string path, string[] normalisedRoots, int count)
+    /// <summary>
+    /// Builds the normalised set of directories whose executables belong to Se7en Pro.
+    /// </summary>
+    internal static string[] BuildReapRoots(out int liveRoots)
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var roots = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "Resources"),
+            Path.Combine(AppContext.BaseDirectory),
+            Path.Combine(localAppData, "Se7en"),
+            Path.Combine(localAppData, "Se7en", "tunnel-core"),
+            Path.Combine(localAppData, "Se7en", "tun2socks"),
+            Path.Combine(localAppData, "Se7en", "tor"),
+            Path.Combine(localAppData, "Se7en", "aether"),
+            Path.Combine(localAppData, "Se7en", "shard"),
+            Path.Combine(localAppData, "Se7en", "xray"),
+            Path.Combine(localAppData, "Se7en", "sing-box"),
+            Path.Combine(localAppData, "Psiphon", "tunnel-core"),
+            Path.Combine(localAppData, "Psiphon", "tun2socks"),
+            Path.Combine(localAppData, "Psiphon", "singbox-tun"),
+            Path.Combine(localAppData, "Psiphon", "xray-tun"),
+            Path.Combine(Path.GetTempPath(), "Se7en"),
+            Path.Combine(Path.GetTempPath(), "Psiphon"),
+        };
+
+        var normalisedRoots = new string[roots.Length];
+        liveRoots = 0;
+        for (int i = 0; i < roots.Length; i++)
+        {
+            var normalised = NormalisePath(roots[i]);
+            if (string.IsNullOrEmpty(normalised)) continue;
+            normalisedRoots[liveRoots++] = normalised;
+        }
+
+        return normalisedRoots;
+    }
+
+    /// <summary>Decides whether a process belongs to Se7en Pro based on image path.</summary>
+    internal static bool ShouldReap(string? imagePath, string[] normalisedRoots, int liveRoots)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath)) return false;
+        return IsUnderAny(imagePath, normalisedRoots, liveRoots);
+    }
+
+    internal static bool IsUnderAny(string path, string[] normalisedRoots, int count)
     {
 
         var normalised = NormalisePath(path);

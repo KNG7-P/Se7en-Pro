@@ -2,7 +2,7 @@
 
 #define MyAppName "Se7en Pro"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.5"
+  #define MyAppVersion "1.0.6"
 #endif
 #define MyAppPublisher "Se7en Pro"
 #define MyAppURL "https://github.com/KNG7-P/Se7en-Pro"
@@ -62,3 +62,13 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM Se7enPro.exe /IM Se7enPro.Tunnel.exe /IM Se7enPro.Aether.exe /IM Se7enPro.Tor.exe /IM Se7enPro.Shard.exe /IM aether.exe /IM tor.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+  Result := '';
+end;

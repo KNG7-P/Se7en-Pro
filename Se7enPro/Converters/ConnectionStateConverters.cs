@@ -346,8 +346,8 @@ public sealed class StateToOrbActionTextConverter : IValueConverter
         value is ConnectionState s
             ? s switch
             {
-                ConnectionState.Connected => Loc.Of("CONNECTED"),
-                ConnectionState.Connecting => Loc.Of("CONNECTING"),
+                ConnectionState.Connected => Loc.Of("DISCONNECT"),
+                ConnectionState.Connecting => Loc.Of("CANCEL"),
                 ConnectionState.Disconnecting => Loc.Of("STOPPING"),
                 ConnectionState.Error => Loc.Of("RETRY"),
                 _ => Loc.Of("CONNECT"),
@@ -364,8 +364,9 @@ public sealed class StateToOrbIconKindConverter : IValueConverter
         value is ConnectionState s
             ? s switch
             {
-                ConnectionState.Connected => PackIconKind.ShieldCheck,
-                ConnectionState.Connecting or ConnectionState.Disconnecting => PackIconKind.Refresh,
+                ConnectionState.Connected => PackIconKind.Power,
+                ConnectionState.Connecting => PackIconKind.Close,
+                ConnectionState.Disconnecting => PackIconKind.Refresh,
                 ConnectionState.Error => PackIconKind.AlertOutline,
                 _ => PackIconKind.Power,
             }
