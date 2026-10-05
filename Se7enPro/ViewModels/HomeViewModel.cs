@@ -97,6 +97,10 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(ServerRegionName));
                 OnPropertyChanged(nameof(HasRegion));
                 OnPropertyChanged(nameof(HasServerRegion));
+                OnPropertyChanged(nameof(ShowRegionBox));
+                OnPropertyChanged(nameof(EndpointDisplay));
+                OnPropertyChanged(nameof(CipherDisplay));
+                OnPropertyChanged(nameof(DetectedLocationTooltip));
                 CopyCurrentIpCommand.NotifyCanExecuteChanged();
                 CopyCurrentSniCommand.NotifyCanExecuteChanged();
             });
@@ -113,6 +117,9 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(ServerRegionName));
                 OnPropertyChanged(nameof(HasRegion));
                 OnPropertyChanged(nameof(HasServerRegion));
+                OnPropertyChanged(nameof(ShowRegionBox));
+                OnPropertyChanged(nameof(EndpointDisplay));
+                OnPropertyChanged(nameof(DetectedLocationTooltip));
             });
         };
 
@@ -267,7 +274,23 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
     public string EndpointDisplay => !string.IsNullOrEmpty(_tunnel.CurrentRouteIp) && _tunnel.CurrentRouteIp != "—"
         ? _tunnel.CurrentRouteIp
-        : (IsConnected ? Loc.Of("POP Mesh") : Loc.Of("Mesh Standby"));
+        : (IsConnected ? Loc.Of("Detecting…") : "—");
+
+    public bool ShowRegionBox => ShowRegionPicker;
+
+    public string DetectedLocationTooltip
+    {
+        get
+        {
+            if (HasRegion && HasRouteIp)
+            {
+                return $"{ServerRegionName} ({ServerRegionCode}) • {CurrentRouteIp}";
+            }
+            if (HasRegion) return ServerRegionName;
+            if (HasRouteIp) return CurrentRouteIp;
+            return Loc.T("Loc_finalEndpointLocation", "Final Endpoint & Location");
+        }
+    }
 
     public string CipherDisplay => !string.IsNullOrEmpty(_tunnel.CurrentRouteSni) && _tunnel.CurrentRouteSni != "—"
         ? _tunnel.CurrentRouteSni
@@ -435,8 +458,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
         public bool ShowTrafficStats => true;
 
-    public bool HasRouteIp =>
-        CurrentMethod is not (ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray) && !string.IsNullOrEmpty(_tunnel.CurrentRouteIp);
+    public bool HasRouteIp => !string.IsNullOrEmpty(_tunnel.CurrentRouteIp) && _tunnel.CurrentRouteIp != "—";
 
     public bool HasRouteSni => !string.IsNullOrEmpty(_tunnel.CurrentRouteSni);
 
@@ -480,6 +502,8 @@ public sealed partial class HomeViewModel : PageViewModelBase
     {
         OnPropertyChanged(nameof(CurrentMethod));
         OnPropertyChanged(nameof(ShowRegionPicker));
+        OnPropertyChanged(nameof(ShowRegionBox));
+        OnPropertyChanged(nameof(DetectedLocationTooltip));
         OnPropertyChanged(nameof(RegionPickerTitle));
         OnPropertyChanged(nameof(RegionPickerHint));
         OnPropertyChanged(nameof(ShowTrafficStats));

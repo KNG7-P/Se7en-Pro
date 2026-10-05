@@ -640,95 +640,27 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         {
             try
             {
-                using var handler = new SocketsHttpHandler
+                var result = await EndpointProbeHelper.ProbeAsync(socksPort, ct);
+                if (result != null)
                 {
-                    Proxy = new WebProxy($"socks5://127.0.0.1:{socksPort}"),
-                    ConnectTimeout = TimeSpan.FromSeconds(6)
-                };
-                using var client = new HttpClient(handler)
-                {
-                    Timeout = TimeSpan.FromSeconds(8)
-                };
-
-                string? ip = null;
-                string? country = null;
-
-                
-                try
-                {
-                    var lines = (await client.GetStringAsync("http://ip-api.com/line/?fields=status,countryCode,query", ct))
-                        .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (lines.Length >= 3 && lines[0].Trim().Equals("success", StringComparison.OrdinalIgnoreCase))
+                    if (!string.IsNullOrEmpty(result.CountryCode))
                     {
-                        var c = lines[1].Trim().ToUpperInvariant();
-                        if (c.Length == 2 && c != "T1" && c != "XX")
-                        {
-                            country = c;
-                            ip = lines[2].Trim();
-                        }
+                        ConnectedServerRegion = result.CountryCode;
                     }
-                }
-                catch { }
-
-                
-                if (string.IsNullOrEmpty(country))
-                {
-                    try
+                    if (!string.IsNullOrEmpty(result.Ip))
                     {
-                        var json = await client.GetStringAsync("https://api.country.is", ct);
-                        using var doc = System.Text.Json.JsonDocument.Parse(json);
-                        if (doc.RootElement.TryGetProperty("country", out var cProp))
-                        {
-                            var c = cProp.GetString()?.Trim().ToUpperInvariant();
-                            if (!string.IsNullOrEmpty(c) && c.Length == 2 && c != "T1" && c != "XX")
-                            {
-                                country = c;
-                            }
-                        }
-                        if (doc.RootElement.TryGetProperty("ip", out var ipProp))
-                        {
-                            ip = ipProp.GetString()?.Trim();
-                        }
+                        CurrentRouteIp = result.Ip;
                     }
-                    catch { }
+                    var locationDetail = !string.IsNullOrEmpty(result.CityOrColo)
+                        ? $"{CountryHelper.FullName(result.CountryCode)} ({result.CityOrColo})"
+                        : CountryHelper.FullName(result.CountryCode);
+                    Log($"[Location] Exit route confirmed: {result.Ip} — {locationDetail}");
+                    RaiseRouteChanged();
                 }
-
-                
-                
-                if (string.IsNullOrEmpty(country))
-                {
-                    try
-                    {
-                        var text = await client.GetStringAsync("https://www.cloudflare.com/cdn-cgi/trace", ct);
-                        foreach (var line in text.Split('\n'))
-                        {
-                            var trimmed = line.Trim();
-                            if (trimmed.StartsWith("ip=", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(ip))
-                                ip = trimmed.Substring(3).Trim();
-                            else if (trimmed.StartsWith("loc=", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var c = trimmed.Substring(4).Trim().ToUpperInvariant();
-                                if (c.Length == 2 && c != "T1" && c != "XX")
-                                    country = c;
-                            }
-                        }
-                    }
-                    catch { }
-                }
-
-                if (!string.IsNullOrEmpty(country) && country.Length == 2)
-                {
-                    ConnectedServerRegion = country;
-                }
-                if (!string.IsNullOrEmpty(ip))
-                {
-                    CurrentRouteIp = ip;
-                }
-                RaiseRouteChanged();
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Could not resolve exit location via probe");
+                _logger.LogDebug(ex, "Could not resolve exit location via probe for {Engine}", EngineDisplayName);
             }
         }, ct);
     }

@@ -590,15 +590,18 @@
                             </Border>
 
                             
-                            <Border x:Name="EndpointTile" Grid.Row="2" Grid.Column="0" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="9" Padding="10,8" VerticalAlignment="Stretch">
+                            <Border x:Name="EndpointTile" Grid.Row="2" Grid.Column="0" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="9" Padding="10,8" VerticalAlignment="Stretch" ToolTip="{Binding DetectedLocationTooltip}">
                                 <Grid VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Background="#1410B981" CornerRadius="5" Padding="4" VerticalAlignment="Center">
-                                        <materialDesign:PackIcon Kind="Earth" Width="13" Height="13" Foreground="{StaticResource Brand.SuccessBrush}" />
+                                    <Border Grid.Column="0" Background="#1410B981" CornerRadius="5" Width="22" Height="22" VerticalAlignment="Center">
+                                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <controls:CountryFlag CountryCode="{Binding ServerRegionCode}" FlagWidth="15" FlagHeight="11" FlagCornerRadius="2" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding HasRegion, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <materialDesign:PackIcon Kind="Earth" Width="13" Height="13" Foreground="{StaticResource Brand.SuccessBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding HasRegion, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                        </Grid>
                                     </Border>
                                     <StackPanel Grid.Column="1" Margin="7,0,2,0" VerticalAlignment="Center">
                                         <TextBlock Text="{DynamicResource Loc_ENDPOINT}" FontSize="8.5" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />

@@ -96,7 +96,7 @@ public sealed class AppUpdateService : IAppUpdateService
         return "";
     }
 
-        private static (string Name, string Url, long Size, bool Portable)? PickAsset(JsonElement release)
+    private static (string Name, string Url, long Size, bool Portable)? PickAsset(JsonElement release)
     {
         if (!release.TryGetProperty("assets", out var assets) ||
             assets.ValueKind != JsonValueKind.Array)
@@ -104,8 +104,11 @@ public sealed class AppUpdateService : IAppUpdateService
             return null;
         }
 
-        var wantedArchive = RootIsWritable();
-        var fallback = new System.Collections.Generic.List<(string Name, string Url, long Size, bool Portable)>();
+        var isInstalled = IsInstalledInstallation();
+        var isSelfContained = IsSelfContainedRuntime();
+        var is64Bit = Environment.Is64BitProcess;
+
+        var candidates = new System.Collections.Generic.List<(string Name, string Url, long Size, bool Portable, int Score)>();
 
         foreach (var a in assets.EnumerateArray())
         {
@@ -117,30 +120,50 @@ public sealed class AppUpdateService : IAppUpdateService
             if (!lower.EndsWith(".exe") && !lower.EndsWith(".zip")) continue;
 
             var size = a.TryGetProperty("size", out var s) && s.TryGetInt64(out var n) ? n : 0;
-            var portable = lower.EndsWith(".zip");
-            fallback.Add((name, url, size, portable));
+            var isPortable = lower.EndsWith(".zip");
 
-            var forX86 = lower.Contains("x86") && !lower.Contains("x64");
-            if (forX86 == Environment.Is64BitProcess) continue;
+            var hasX86 = lower.Contains("x86") && !lower.Contains("x64");
+            var hasX64 = lower.Contains("x64");
+            int archPenalty;
+            if (is64Bit)
+            {
+                if (hasX64) archPenalty = 0;
+                else if (hasX86) archPenalty = 100;
+                else archPenalty = 10;
+            }
+            else
+            {
+                if (hasX86) archPenalty = 0;
+                else if (hasX64) archPenalty = 100;
+                else archPenalty = 10;
+            }
 
-            var kindMatches = portable == wantedArchive;
-            
-            
-            var prefersNoRuntime = lower.Contains("with_dotnet") && !lower.Contains("without_dotnet");
+            var formatPenalty = (isInstalled == !isPortable) ? 0 : 20;
 
-            if (kindMatches && prefersNoRuntime) return (name, url, size, portable);
+            var assetWithoutDotnet = lower.Contains("without_dotnet");
+            var runtimePenalty = (isSelfContained != assetWithoutDotnet) ? 0 : 10;
+
+            var totalScore = archPenalty + formatPenalty + runtimePenalty;
+            candidates.Add((name, url, size, isPortable, totalScore));
         }
 
-        if (fallback.Count == 0) return null;
+        if (candidates.Count == 0) return null;
 
-        
-        
-        var relaxed = fallback
-            .OrderBy(x => RootIsWritable() == x.Portable ? 0 : 1)
-            .ThenBy(x => x.Name.ToLowerInvariant().Contains("with_dotnet") ? 0 : 1)
-            .ThenBy(x => x.Name.ToLowerInvariant().Contains("x86") ? 1 : 0)
-            .First();
-        return (relaxed.Name, relaxed.Url, relaxed.Size, relaxed.Portable);
+        var best = candidates.OrderBy(c => c.Score).First();
+        return (best.Name, best.Url, best.Size, best.Portable);
+    }
+
+    private static bool IsInstalledInstallation()
+    {
+        return File.Exists(Path.Combine(AppContext.BaseDirectory, "unins000.exe")) ||
+               File.Exists(Path.Combine(AppContext.BaseDirectory, "unins001.exe")) ||
+               !RootIsWritable();
+    }
+
+    private static bool IsSelfContainedRuntime()
+    {
+        return File.Exists(Path.Combine(AppContext.BaseDirectory, "coreclr.dll")) ||
+               File.Exists(Path.Combine(AppContext.BaseDirectory, "clrjit.dll"));
     }
 
     private static string ReadString(JsonElement el, string property) =>
@@ -190,14 +213,24 @@ public sealed class AppUpdateService : IAppUpdateService
             throw new AppUpdateException(ex.Message);
         }
 
-        var dir = Path.Combine(Path.GetTempPath(), "Se7enPro", "update");
-        
-        
-        
-        UpdateIntegrity.HardenStagingDirectory(dir);
-        foreach (var stale in Directory.EnumerateFiles(dir))
+        var baseDir = Path.Combine(Path.GetTempPath(), "Se7enPro", "update");
+        string dir;
+        try
         {
-            try { File.Delete(stale); } catch { }
+            UpdateIntegrity.HardenStagingDirectory(baseDir);
+            dir = baseDir;
+            if (Directory.Exists(dir))
+            {
+                foreach (var stale in Directory.EnumerateFiles(dir))
+                {
+                    try { File.Delete(stale); } catch { }
+                }
+            }
+        }
+        catch
+        {
+            dir = Path.Combine(Path.GetTempPath(), "Se7enPro", "updates", Guid.NewGuid().ToString("N"));
+            try { UpdateIntegrity.HardenStagingDirectory(dir); } catch { Directory.CreateDirectory(dir); }
         }
 
         

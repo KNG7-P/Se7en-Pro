@@ -1050,4 +1050,7 @@
     <sys:String x:Key="Loc_aetherNoTlsSurface">Этот протокол не несёт TLS, поэтому хендшейка, который можно менять, просто нет.</sys:String>
     <sys:String x:Key="Loc_aetherQuicNoTls12">Это соединение использует QUIC, где согласуется только TLS 1.3. Aether не принимает здесь список шифров TLS 1.2.</sys:String>
 
+    <sys:String x:Key="Loc_finalEndpointLocation">Конечный адрес и локация</sys:String>
+    <sys:String x:Key="Loc_detectingExitLocation">Определение локации выхода…</sys:String>
+
 </ResourceDictionary>

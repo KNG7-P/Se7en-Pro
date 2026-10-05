@@ -111,11 +111,22 @@ internal static class UpdateIntegrity
         {
             var sd = new DirectorySecurity();
             sd.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-            foreach (var sid in new[]
-                     {
-                         new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
-                         new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
-                     })
+            var sids = new System.Collections.Generic.List<SecurityIdentifier>
+            {
+                new(WellKnownSidType.LocalSystemSid, null),
+                new(WellKnownSidType.BuiltinAdministratorsSid, null),
+            };
+
+            try
+            {
+                if (WindowsIdentity.GetCurrent().User is { } currentUser)
+                {
+                    sids.Add(currentUser);
+                }
+            }
+            catch { }
+
+            foreach (var sid in sids)
             {
                 sd.AddAccessRule(new FileSystemAccessRule(
                     sid,

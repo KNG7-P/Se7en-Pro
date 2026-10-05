@@ -20,9 +20,9 @@
     <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
     <UseAppHost>true</UseAppHost>
     <RollForward>LatestMajor</RollForward>
-    <Version>1.0.6</Version>
-    <AssemblyVersion>1.0.6.0</AssemblyVersion>
-    <FileVersion>1.0.6.0</FileVersion>
+    <Version>1.0.7</Version>
+    <AssemblyVersion>1.0.7.0</AssemblyVersion>
+    <FileVersion>1.0.7.0</FileVersion>
     <Product>Se7en Pro</Product>
     <Company>Se7en Pro</Company>
     <Authors>Se7en Pro</Authors>

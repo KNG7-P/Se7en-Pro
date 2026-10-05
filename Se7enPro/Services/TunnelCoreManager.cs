@@ -1491,7 +1491,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         if (s == ConnectionState.Connected)
         {
             SetConnectProgress(100, "Connected");
-
+            StartLocationProbe(SocksProxyPort, _cts?.Token ?? CancellationToken.None);
         }
         else
         {
@@ -1501,7 +1501,10 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
                 SetConnectProgress(0, "");
                 BytesSent = 0;
                 BytesReceived = 0;
+                CurrentRouteIp = "";
+                ConnectedServerRegion = "";
                 BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
+                RouteChanged?.Invoke(this, EventArgs.Empty);
             }
             else if (s == ConnectionState.Connecting && ConnectProgressPercent == 0)
             {
@@ -1510,6 +1513,37 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         }
 
         StateChanged?.Invoke(this, s);
+    }
+
+    private void StartLocationProbe(int socksPort, CancellationToken ct)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await EndpointProbeHelper.ProbeAsync(socksPort, ct);
+                if (result != null)
+                {
+                    if (!string.IsNullOrEmpty(result.CountryCode))
+                    {
+                        ConnectedServerRegion = result.CountryCode;
+                    }
+                    if (!string.IsNullOrEmpty(result.Ip))
+                    {
+                        CurrentRouteIp = result.Ip;
+                    }
+                    var locationDetail = !string.IsNullOrEmpty(result.CityOrColo)
+                        ? $"{CountryHelper.FullName(result.CountryCode)} ({result.CityOrColo})"
+                        : CountryHelper.FullName(result.CountryCode);
+                    AppendLog($"[Location] Psiphon exit route confirmed: {result.Ip} — {locationDetail}");
+                    RouteChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Psiphon exit probe failed");
+            }
+        }, ct);
     }
 
     private void AppendLog(string line)

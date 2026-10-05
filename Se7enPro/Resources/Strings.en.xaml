@@ -1050,4 +1050,7 @@
     <sys:String x:Key="Loc_aetherNoTlsSurface">This protocol carries no TLS, so there is no handshake to change.</sys:String>
     <sys:String x:Key="Loc_aetherQuicNoTls12">This connection uses QUIC, which negotiates TLS 1.3 only. Aether takes no TLS 1.2 cipher list here.</sys:String>
 
+    <sys:String x:Key="Loc_finalEndpointLocation">Final Endpoint &amp; Location</sys:String>
+    <sys:String x:Key="Loc_detectingExitLocation">Detecting exit location…</sys:String>
+
 </ResourceDictionary>

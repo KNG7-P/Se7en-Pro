@@ -140,7 +140,7 @@ public sealed partial class MainViewModel : ObservableObject
     private static void CloseWindow() => Ui.RequestCloseMainWindow();
 
     public string ClientVersionText =>
-        $"{Loc.T("clientVersion", "v1.0.6")} \u2022 {Loc.T("Loc_windowsEdition", "Windows Client")}";
+        $"{Loc.T("clientVersion", "v1.0.7")} \u2022 {Loc.T("Loc_windowsEdition", "Windows Client")}";
 
     [RelayCommand]
     private static void OpenTelegramChannel()

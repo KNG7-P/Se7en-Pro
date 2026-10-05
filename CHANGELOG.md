@@ -10,82 +10,78 @@
 
 ## 🇬🇧 English
 
-## [1.0.6]
+## [1.0.7]
 
-Comprehensive upgrade to Aether 2.3.0, custom DNS resolvers, pre-provisioned identity pooling, ECH & TLS fingerprint shaping, and critical security hardening.
+Automatic egress endpoint and geo-location resolution, live country flag indicator in dashboard, Tor pluggable transport path space fixes, and DNS resolver diagnostics UI repair.
 
 ### 🚀 Highlights & Features
-- **Aether 2.3.0 Core & MASQUE in MASQUE (MIM)**: Integrated latest Aether core with native support for dual-nested MASQUE in MASQUE tunneling and turbo scanning mode.
-- **ECH & TLS Fingerprint Shaping**: Added Encrypted Client Hello (ECH) support with automated fallback, plus customizable TLS fingerprint profiles (Chrome, Safari, iOS, Random, Off).
-- **Identity Pool & Bootstrap Relays**: Background pre-provisioned Cloudflare identity pool with decentralized bootstrap relay fallbacks, guaranteeing zero-bootstrapping connectivity even on restricted networks without an active secondary VPN.
-- **Custom DNS Subsystem**: Added fine-grained resolver management supporting Plain DNS (UDP), DNS over TLS (DoT), and DNS over HTTPS (DoH), with strict-resolver enforcement and live diagnostics probe.
-- **Chained Multi-Hop Progress & Isolation**: Clear multi-step status feedback (`[1/2] Outer -> [2/2] Inner`), instant cancellation during tunnel establishment, and isolated transport settings per protocol.
+- **Dynamic Egress Location & IP Resolver**: Multi-provider egress probe (`EndpointProbeHelper`) automatically querying via the active local SOCKS port (Cloudflare trace, Country.is, Ipwho.is, Ip-api.com) upon connection.
+- **Live Country Flag Indicator**: Connected exit node's country flag and localized country name are now displayed directly inside the dashboard endpoint tile and telemetry badge.
+- **Protocol-Adaptive Region Selector**: The region selection box in the dashboard now dynamically appears only for protocols supporting exit region customization (e.g. Psiphon, Tor).
 
 ### 🔧 Fixes & Improvements
-- **Route Table Zero-Leak Protection**: Restructured route reapplication logic to preserve catch-all default routes during dynamic route updates, eliminating full-tunnel leak windows.
-- **WFP Kill Switch Synchronization**: Hardened persistent WFP firewall filter state handling, preventing DNS or route leakage across reconnects and tunnel interruptions.
-- **Identity ACL Hardening**: Enforced strict Windows ACL security permissions restricting stored identity files exclusively to SYSTEM, Administrators, and the active user.
-- **Offline Reliability & Test Harness**: Added comprehensive offline test harness (371 checks) validating contract integrity, route invariants, DNS resolution policies, and identity failover.
+- **Tor Pluggable Transport Path Fix**: Resolved issues with pluggable transport executable paths containing spaces on Windows by normalizing to 8.3 short paths without illegal manual quotes in `torrc`.
+- **Custom DNS Diagnostics Button**: Fixed the `Test Resolvers` button in DNS settings which was previously disabled due to an incorrect inverse boolean converter binding.
+- **Multi-Protocol Exit Synchronization**: Seamless exit endpoint probing wired into V2Ray, Tor, Psiphon, and Local SOCKS engine workflows.
+- **In-App Updater ACL & Staging Fallback**: Hardened update staging directory permissions to include active user SID alongside Administrators and SYSTEM, adding reliable fallback staging directories for non-elevated downloads.
+- **Accurate Update Flavor Selection**: In-app updater now accurately detects and downloads the exact runtime flavor matching the currently running instance (Setup vs Portable, x64 vs x86, with vs without bundled .NET runtime).
 
 ---
 
 ## 🇮🇷 فارسی
 
-## [نسخه 1.0.6]
+## [نسخه 1.0.7]
 
-ارتقای جامع هسته به Aether 2.3.0، دی‌ان‌اس اختصاصی (Custom DNS)، استخر پیش‌ساخته هویت وارپ، ECH و فرم‌دهی TLS، و ایمن‌سازی عمیق ارتباطات و تانلینگ.
+تشخیص خودکار موقعیت و آی‌پی خروجی تانل، نمایش پرچم کشور در داشبورد، اصلاح مسیر اجرایی ترنسپورت‌های Tor و رفع مشکل دکمه تست دی‌ان‌اس.
 
 ### 🚀 قابلیت‌ها و تغییرات کلیدی
-- **ارتقا به هسته Aether 2.3.0 و Masque in Masque (MIM)**: پشتیبانی از پروتکل جدید تانل تو در توی مسک، اسکن بسیار سریع Turbo و گزینه‌های بهینه‌سازی پیشرفته.
-- **پشتیبانی از ECH و جعل اثرانگشت TLS**: ثبت‌نام امن از طریق Encrypted Client Hello با مکانیزم بازگشت خودکار، و پروفایل‌های شبیه‌سازی اثرانگشت TLS (کروم، سافاری، iOS و تصادفی).
-- **استخر هویت و رله‌های پشتیبان (Identity Pool & Relays)**: ساخت خودکار مخزن هویت‌های وارپ در پس‌زمینه و رله‌های مستقل جهت عبور از فیلترینگ بدون نیاز به فیلترشکن اولیه برای دریافت کلید.
-- **مدیریت پیشرفته DNS اختصاصی**: پشتیبانی کامل از UDP معمولی، DNS over TLS (DoT) و DNS over HTTPS (DoH) با امکان تست زنده اتصال و حالت ایزوله سخت‌گیرانه (Strict).
-- **نمایش گام‌به‌گام اتصال Chained و لغو سریع**: ارائه جزئیات اتصال در هر مرحله (`[1/2] لایه بیرونی -> [2/2] لایه درونی`) و امکان لغو فوری در حال اتصال.
+- **تشخیص داینامیک IP و لوکیشن واقعی خروجی**: کاوشگر هوشمند چندلایه (`EndpointProbeHelper`) از طریق ساکس داخلی جهت شناسایی آی‌پی و کشور خروجی اتصال (Cloudflare trace، Country.is، Ipwho.is و Ip-api.com).
+- **نمایش مستقیم پرچم کشور در کاشی اتصال**: آیکون کاشی اتصال و نشانگر وضعیت اکنون پرچم رسمی کشور خروجی و نام کشور را به طور زنده پس از اتصال نمایش می‌دهند.
+- **سازگاری هوشمند باکس انتخاب کشور**: باکس انتخاب سرور/کشور تنها در پروتکل‌هایی که قابلیت انتخاب سرور دارند (مانند Psiphon و Tor) در داشبورد نمایش داده می‌شود.
 
 ### 🔧 بهینه‌سازی‌ها و رفع اشکالات
-- **حذف نشت ترافیک در روتینگ**: بازنویسی الگوی اعمال روت‌های ویندوز بدون حذف روت پیش‌فرض در حین به‌روزرسانی (Zero-Leak).
-- **پایداری کیل‌سوییچ WFP**: هماهنگ‌سازی ایزولاسیون فایروال در قطع و وصل مکرر و جلوگیری قطعی از هرگونه نشت DNS یا ترافیک.
-- **امن‌سازی دسترسی فایل‌های هویت**: اعمال سطوح دسترسی امنیتی ACL ویندوز به منظور دسترسی انحصاری کلاینت و جلوگیری از خوانده شدن هویت‌ها توسط سایر پروسس‌ها.
-- **آزمون‌های جامع اعتبارسنجی**: افزودن ۳۷۱ تست آفلاین مستقل برای راستی‌آزمایی دقیق الگوریتم‌های تانل، روت، دی‌ان‌اس و مدیریت سوییچینگ.
+- **اصلاح مسیر ترنسپورت‌های Tor**: حل مشکل فاصله (Space) در مسیر فایل‌های اجرایی پلاگین‌های Tor با تبدیل به مسیر کوتاه 8.3 ویندوز در `torrc`.
+- **فعال‌سازی دکمه تست DNS**: اصلاح بایندینگ دکمه `بررسی رزولورها` در تنظیمات DNS سفارشی که به دلیل اینورتر اشتباه غیرفعال مانده بود.
+- **هماهنگ‌سازی سراسری لوکیشن خروجی**: اتصال ماژول کاوشگر خروجی به تمامی موتورها از جمله V2Ray، ساکس محلی، Tor و سایفون.
+- **اصلاح دسترسی و دانلود آپدیت برنامه**: تنظیم سطح دسترسی کاربر جاری در دایرکتوری موقت دانلود آپدیت و تعبیه مسیر جایگزین امن (Fallback) جهت رفع کامل خطای دانلود آپدیت.
+- **تطبیق هوشمند نسخه نصبی و پرتابل در آپدیتر**: سیستم به‌روزرسانی خودکار اکنون نسخه در حال اجرا (Setup در برابر Portable، معماری x64/x86 و وجود یا عدم وجود ران‌تایم دات‌نت) را به دقت شناسایی کرده و فایل متناسب را دریافت می‌کند.
 
 ---
 
 ## 🇷🇺 Русский
 
-## [1.0.6]
+## [1.0.7]
 
-Масштабное обновление: ядро Aether 2.3.0, поддержка пользовательских DNS, пул идентификаторов Cloudflare, ECH и маскировка TLS, а также устранение утечек трафика.
+Автоматическое определение выходного IP и геолокации, отображение флага страны на панели управления, исправление путей плагинов Tor и кнопки проверки DNS.
 
 ### 🚀 Ключевые изменения
-- **Обновление ядра Aether 2.3.0 и MASQUE in MASQUE (MIM)**: Поддержка вложенного туннелирования MIM, турбо-сканирование и обновленный стек обхода блокировок.
-- **Поддержка ECH и профилирование отпечатков TLS**: Шифрование приветствия клиента (ECH) с автопереключением и шаблоны маскировки TLS (Chrome, Safari, iOS, Random, Off).
-- **Пул идентификаторов и резервные реле**: Фоновый пул готовых ключей WARP и независимые реле для первого запуска без стороннего VPN.
-- **Пользовательские DNS-серверы**: Поддержка Plain UDP, DoT и DoH с проверкой доступности в реальном времени и строгой изоляцией.
-- **Индикация многоэтапного подключения**: Пошаговый статус цепочек (`[1/2] Внешний -> [2/2] Внутренний`) и возможность мгновенной отмены подключения.
+- **Динамическое определение точки выхода**: Многоуровневый опрос (`EndpointProbeHelper`) через локальный SOCKS для определения внешнего IP и страны.
+- **Индикация флага страны выхода**: Прямое отображение флага и названия страны узла выхода в карточке подключения и телеметрии.
+- **Адаптивный селектор регионов**: Выбор региона теперь отображается только для протоколов, поддерживающих выбор выходного узла (Psiphon, Tor).
 
 ### 🔧 Исправления и улучшения
-- **Устранение утечек маршрутизации (Zero-Leak)**: Безопасное обновление таблицы маршрутизации без временного сброса шлюза по умолчанию.
-- **Надежность Kill Switch**: Синхронизация правил WFP при разрывах связи и предотвращение утечек DNS.
-- **Защита файлов учетных данных**: Ограничение прав доступа Windows ACL только для пользователя и системы.
-- **Тестовый комплекс**: 371 автоматический тест валидации логики туннелирования, маршрутизации и отказоустойчивости.
+- **Исправление путей Pluggable Transports в Tor**: Корректное преобразование путей с пробелами в короткие пути формата 8.3 в `torrc`.
+- **Кнопка проверки DNS-серверов**: Исправлено ошибочное отключение кнопки проверки в настройках пользовательских DNS.
+- **Интеграция со всеми протоколами**: Синхронный опрос точки выхода для V2Ray, Tor, Psiphon и локальных SOCKS туنнелей.
+- **Исправление прав промежуточного каталога обновлений**: Корректное добавление прав текущего пользователя (SID) и резервный каталог для надежной загрузки обновлений.
+- **Точный выбор версии в автообновлении**: Автоматический выбор точного типа сборки (Installer vs Portable, x64 vs x86, с .NET или без него) в соответствии с текущей запущенной копией.
 
 ---
 
 ## 🇨🇳 中文
 
-## [1.0.6]
+## [1.0.7]
 
-全面升级至 Aether 2.3.0 核心、自定义 DNS 解析器子系统、WARP 身份池与引导中继、ECH 与 TLS 指纹伪装，以及多项底层安全防护加固。
+出口节点 IP 与地理位置自动探测、仪表盘国旗图标实时展示、Tor 插件路径空格修复及 DNS 连通性测试按钮修复。
 
 ### 🚀 核心更新与亮点
-- **升级至 Aether 2.3.0 及 MASQUE in MASQUE (MIM)**：原生集成双层嵌套 MIM 协议，引入 Turbo 高速并发探测模式。
-- **ECH 与 TLS 指纹模拟**：支持 Encrypted Client Hello (ECH) 安全注册与多级回退机制，提供多种主流浏览器 TLS 指纹模拟策略。
-- **预热身份池与自建引导中继**：后台自动储备 Cloudflare WARP 节点身份凭据，配合去中心化中继，首次启动无需前置网络工具辅助。
-- **自定义 DNS 子系统**：全面支持标准 UDP、DoT 及 DoH 协议，内置在线延迟与连通性测试及严格隔离模式。
-- **链式多跳状态优化与即时取消**：清晰展示双层节点就绪进度（`[1/2] 外层 -> [2/2] 内层`），支持在任意连接握手阶段即时取消。
+- **动态出口位置与 IP 探测**：内置多数据源探针（`EndpointProbeHelper`），连接就绪后自动经由本地 SOCKS 端口解析真实出口 IP 及国家。
+- **仪表盘出口国旗实时显示**：主界面连接卡片直接呈现出口节点所属国旗图标及本地化国家名称，遥测栏同步更新。
+- **协议自适应地区选择器**：地区切换面板现在仅在当前协议支持指定出口（如 Psiphon、Tor）时动态呈现。
 
 ### 🔧 修复与优化
-- **路由无泄漏保护 (Zero-Leak)**：重构路由表增量更新机制，杜绝动态路由切换过程中的瞬时流量旁路泄露。
-- **WFP 阻断机制强化**：完善重连与异常中断场景下的防火墙规则隔离，彻底杜绝 DNS 污染及真实 IP 暴露。
-- **凭据文件访问控制强化**：为本地身份凭据文件严格应用 Windows ACL 权限，仅允许当前系统和用户访问。
-- **完备的离线测试验证**：新增 371 项自动化离线决策测试，确保路由状态、DNS 转发和故障转移逻辑高度可靠。
+- **Tor 可插拔传输路径修复**：解决 Windows 下包含空格的插件路径解析异常问题，自动转为 8.3 短路径并在 `torrc` 中避免冲突引号。
+- **自定义 DNS 诊断按钮修复**：修复 DNS 设置界面中“测试解析器”按钮因布尔转换器绑定错误导致常态置灰的问题。
+- **全协议出口同步**：全面接入 V2Ray、Tor、Psiphon 及本地 SOCKS 核心的出口探测链路。
+- **应用内更新暂存区权限修复**：在暂存目录 ACL 中显式加入当前用户权限，并增加隔离备用目录，彻底解决更新下载失败问题。
+- **更新包版本精确匹配**：自动更新模块现在能够精准识别当前运行实例的具体构型（安装版 vs 便携版、x64 vs x86、内置运行时 vs 独立版），并下载对应资产。

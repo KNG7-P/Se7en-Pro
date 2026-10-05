@@ -10,7 +10,7 @@
 [![Framework](https://img.shields.io/badge/Framework-WPF%20%7C%20.NET%208.0-purple.svg?style=flat-square)](https://dotnet.microsoft.com/)
 [![UI](https://img.shields.io/badge/UI-Material%20Design%203-informational.svg?style=flat-square)](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit)
 [![Release](https://img.shields.io/badge/Release-Passing-brightgreen.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/Version-v1.0.5-orange.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/releases)
+[![Version](https://img.shields.io/badge/Version-v1.0.7-orange.svg?style=flat-square)](https://github.com/KNG7-P/Se7en-Pro/releases)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
 [🇬🇧 English](#-english) | [🇮🇷 فارسی](#-فارسی) | [🇷🇺 Русский](#-русский) | [🇨🇳 中文](#-中文)

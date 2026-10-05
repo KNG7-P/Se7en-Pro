@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Models;
@@ -193,10 +194,10 @@ public sealed class TorEngine : LocalSocksEngineBase
                 
                 
                 sb.AppendLine(
-                    $"ClientTransportPlugin obfs4,meek_lite,webtunnel,snowflake exec \"{P(lyrebird)}\"");
+                    $"ClientTransportPlugin obfs4,meek_lite,webtunnel,snowflake exec {P(lyrebird)}");
                 if (!string.IsNullOrEmpty(conjure))
                 {
-                    sb.AppendLine($"ClientTransportPlugin conjure exec \"{P(conjure)}\"");
+                    sb.AppendLine($"ClientTransportPlugin conjure exec {P(conjure)}");
                 }
                 foreach (var bridge in bridges)
                 {
@@ -296,12 +297,29 @@ public sealed class TorEngine : LocalSocksEngineBase
         host = token[..colon];
         return host.Length > 0;
     }
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern uint GetShortPathName(
+        string lpszLongPath,
+        [Out] StringBuilder lpszShortPath,
+        uint cchBuffer);
 
-    
-    
-    
-    
-    
-    
-    private static string P(string path) => path.Replace('\\', '/');
+    private static string P(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var full = Path.GetFullPath(path);
+            if (full.Contains(' '))
+            {
+                var sb = new StringBuilder(260);
+                var length = GetShortPathName(full, sb, (uint)sb.Capacity);
+                if (length > 0 && length < sb.Capacity)
+                {
+                    return sb.ToString();
+                }
+            }
+            return full;
+        }
+
+        return path.Replace('\\', '/');
+    }
 }

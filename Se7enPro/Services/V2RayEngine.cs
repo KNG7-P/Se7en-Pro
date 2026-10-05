@@ -107,12 +107,17 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         : (_settings.Settings.UseCustomProxyPorts && _settings.Settings.LocalHttpProxyPort > 0
             ? _settings.Settings.LocalHttpProxyPort
             : (SocksProxyPort + 1));
+    private string? _detectedCountry;
+    private string? _detectedIp;
+    private string? _detectedCity;
+
     public string ClientRegion => "";
-    public string ConnectedServerRegion => "";
+    public string ConnectedServerRegion => _detectedCountry ?? "";
     public string CurrentRouteIp
     {
         get
         {
+            if (!string.IsNullOrEmpty(_detectedIp)) return _detectedIp;
             var active = ResolveActiveConfig();
             return active?.Address?.Trim() ?? "";
         }
@@ -172,6 +177,10 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
             SetState(ConnectionState.Connecting);
             SetProgress(15, "Configuring V2Ray/Xray/Sing-box node...");
+
+            _detectedCountry = null;
+            _detectedIp = null;
+            _detectedCity = null;
 
             _runCts?.Cancel();
             _runCts = new CancellationTokenSource();
@@ -286,6 +295,7 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
             SetProgress(100, "V2Ray core ready");
             SetState(ConnectionState.Connected);
             Log($"V2Ray inbound active on 127.0.0.1:{SocksProxyPort} (SOCKS) & 127.0.0.1:{HttpProxyPort} (HTTP)");
+            StartLocationProbe(SocksProxyPort, _runCts?.Token ?? CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -304,6 +314,32 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         }
     }
 
+    private void StartLocationProbe(int socksPort, CancellationToken ct)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await EndpointProbeHelper.ProbeAsync(socksPort, ct);
+                if (result != null)
+                {
+                    _detectedCountry = result.CountryCode;
+                    _detectedIp = result.Ip;
+                    _detectedCity = result.CityOrColo;
+                    var locationDetail = !string.IsNullOrEmpty(result.CityOrColo)
+                        ? $"{CountryHelper.FullName(result.CountryCode)} ({result.CityOrColo})"
+                        : CountryHelper.FullName(result.CountryCode);
+                    Log($"[Location] V2Ray exit route confirmed: {result.Ip} — {locationDetail}");
+                    try { RouteChanged?.Invoke(this, EventArgs.Empty); } catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "V2Ray exit probe failed");
+            }
+        }, ct);
+    }
+
     public void CancelConnecting()
     {
         try { _runCts?.Cancel(); } catch { }
@@ -314,8 +350,10 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
         await _gate.WaitAsync();
         try
         {
-            
-            
+            _detectedCountry = null;
+            _detectedIp = null;
+            _detectedCity = null;
+
             _processGeneration++;
             _runCts?.Cancel();
             var proc = _process;

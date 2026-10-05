@@ -2,7 +2,7 @@
 
 #define MyAppName "Se7en Pro"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.6"
+  #define MyAppVersion "1.0.7"
 #endif
 #define MyAppPublisher "Se7en Pro"
 #define MyAppURL "https://github.com/KNG7-P/Se7en-Pro"
