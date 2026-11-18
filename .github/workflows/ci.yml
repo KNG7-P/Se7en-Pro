@@ -70,6 +70,30 @@ jobs:
       - name: Build win-x86
         run: dotnet build Se7enPro/Se7enPro.csproj -c Release -r win-x86 --self-contained false -warnaserror
 
+  self-tests:
+    name: Offline self-checks
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # These link the real source files and assert on the behaviour; none of them
+      # opens a tunnel or touches the runner's network stack.
+      - name: Run VerifyCriticalFixes
+        run: dotnet run --project tools/VerifyCriticalFixes/VerifyCriticalFixes.csproj -c Release
+
+      - name: Run relay allow-list self-test
+        run: dotnet run --project tools/IdentityRelayServer/IdentityRelayServer.csproj -c Release -- --self-test
+
   secrets-injection:
     name: Secret injection dry run
     runs-on: windows-2025

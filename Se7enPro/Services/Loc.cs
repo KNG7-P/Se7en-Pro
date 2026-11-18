@@ -56,7 +56,7 @@ public static class Loc
         private static Dictionary<string, string> BuildSourceMap(
         Dictionary<string, string> english, Dictionary<string, string> active)
     {
-        var map = new Dictionary<string, string>(english.Count, StringComparer.Ordinal);
+        var map = new Dictionary<string, string>(english.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var entry in english)
         {
             if (entry.Value.Length == 0) continue;
@@ -174,13 +174,16 @@ public static class Loc
         Thread.CurrentThread.CurrentCulture = culture;
         Thread.CurrentThread.CurrentUICulture = culture;
 
-        
-        
-        
+        var xmlLang = XmlLanguage.GetLanguage(culture.IetfLanguageTag);
+        if (Application.Current?.MainWindow is { } mainWindow)
+        {
+            mainWindow.Language = xmlLang;
+        }
+
         if (_culturePinned) return;
         _culturePinned = true;
         FrameworkElement.LanguageProperty.OverrideMetadata(
             typeof(FrameworkElement),
-            new FrameworkPropertyMetadata(XmlLanguage.GetLanguage(culture.IetfLanguageTag)));
+            new FrameworkPropertyMetadata(xmlLang));
     }
 }

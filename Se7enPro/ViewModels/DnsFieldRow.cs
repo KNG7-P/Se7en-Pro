@@ -7,44 +7,48 @@ using Se7enPro.Services;
 
 namespace Se7enPro.ViewModels;
 
-/// <summary>Health of one resolver list, used to colour its row.</summary>
 public enum DnsFieldState
 {
-    /// <summary>Nothing entered: the built-in defaults answer.</summary>
     Empty,
 
-    /// <summary>Everything entered parses and is usable.</summary>
     Ok,
 
-    /// <summary>Something is entered that will be ignored.</summary>
     Problem,
 }
 
-/// <summary>
-/// Represents a bindable DNS resolver configuration row.
-/// </summary>
 public sealed partial class DnsFieldRow : ObservableObject
 {
     private readonly Action<DnsFieldRow> _changed;
+    private readonly Func<string> _label;
+    private readonly Func<string> _hint;
+    private readonly Func<string> _placeholder;
 
     public DnsFieldRow(
         DnsTransport transport,
-        string label,
-        string hint,
-        string placeholder,
+        Func<string> label,
+        Func<string> hint,
+        Func<string> placeholder,
         Action<DnsFieldRow> changed)
     {
         Transport = transport;
-        Label = label;
-        Hint = hint;
-        Placeholder = placeholder;
+        _label = label;
+        _hint = hint;
+        _placeholder = placeholder;
         _changed = changed;
     }
 
     public DnsTransport Transport { get; }
-    public string Label { get; }
-    public string Hint { get; }
-    public string Placeholder { get; }
+    public string Label => _label();
+    public string Hint => _hint();
+    public string Placeholder => _placeholder();
+
+    public void RefreshLocalization()
+    {
+        OnPropertyChanged(nameof(Label));
+        OnPropertyChanged(nameof(Hint));
+        OnPropertyChanged(nameof(Placeholder));
+        Revalidate();
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(State))]
@@ -54,19 +58,16 @@ public sealed partial class DnsFieldRow : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasEntries))]
     private string _text = "";
 
-    /// <summary>Parsed resolver entries.</summary>
     public List<DnsServerEntry> Entries { get; private set; } = new();
 
     public DnsFieldState State { get; private set; } = DnsFieldState.Empty;
 
-    /// <summary>Validation error message, if any.</summary>
     public string Problem { get; private set; } = "";
 
     public bool HasProblem => State == DnsFieldState.Problem;
     public bool IsEmpty => State == DnsFieldState.Empty;
     public bool HasEntries => Entries.Count > 0;
 
-    /// <summary>Entry count for display badge.</summary>
     public string CountText =>
         Entries.Count == 0 ? "" : Entries.Count.ToString(CultureInfo.InvariantCulture);
 
@@ -76,9 +77,6 @@ public sealed partial class DnsFieldRow : ObservableObject
         _changed(this);
     }
 
-    /// <summary>
-    /// Validates and parses the resolver entry list.
-    /// </summary>
     public void Revalidate()
     {
         var entries = DnsSettings.ParseList(Transport, Text, out var problems);

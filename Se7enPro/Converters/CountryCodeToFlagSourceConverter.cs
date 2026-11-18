@@ -15,13 +15,18 @@ public sealed class CountryCodeToFlagSourceConverter : IValueConverter
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is not string code || string.IsNullOrWhiteSpace(code) || code.Length != 2)
+        if (value is not string codeRaw || string.IsNullOrWhiteSpace(codeRaw))
+            return null;
+        var code = codeRaw.Trim();
+        var dash = code.IndexOf('-');
+        var isoCode = dash > 0 ? code[..dash] : code;
+        if (isoCode.Length != 2)
             return null;
 
-        if (!CountryHelper.HasFlag(code))
+        if (!CountryHelper.HasFlag(isoCode))
             return null;
 
-        return _cache.GetOrAdd(code, c =>
+        return _cache.GetOrAdd(isoCode, c =>
         {
 
             var uri = new Uri(

@@ -1,0 +1,388 @@
+<UserControl x:Class="Se7enPro.Views.Settings.ShardSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:conv="clr-namespace:Se7enPro.Converters"
+             xmlns:svc="clr-namespace:Se7enPro.Services"
+             xmlns:vm="clr-namespace:Se7enPro.ViewModels"
+             xmlns:controls="clr-namespace:Se7enPro.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+            <StackPanel>
+                    <StackPanel Visibility="{Binding IsShardTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Margin="0,0,0,12">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                        <materialDesign:PackIcon Kind="CloudSyncOutline" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_DynamicNodePool}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Command="{Binding RefreshShardPoolCommand}" IsEnabled="{Binding IsRefreshingShardPool, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.GhostButton}" Padding="12,0" Cursor="Hand" AutomationProperties.Name="{Binding ShardUpdateButtonText}">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Grid Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" Visibility="{Binding IsRefreshingShardPool, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                                <ProgressBar Width="14" Height="14" IsIndeterminate="True" Style="{StaticResource MaterialDesignCircularProgressBar}" Visibility="{Binding IsRefreshingShardPool, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="{StaticResource Brand.AccentBrush}" />
+                                            </Grid>
+                                            <TextBlock Text="{Binding ShardUpdateButtonText}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
+                                
+                                <Grid Margin="0,4,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    
+                                    <Border Grid.Column="0" Padding="12" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                <materialDesign:PackIcon Kind="LayersOutline" Width="14" Height="14" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <TextBlock Text="{DynamicResource Loc_shardActiveNodes}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding ShardActiveNodesText}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,2" />
+                                            <TextBlock Text="{DynamicResource Loc_VLESSSeedNodes}" FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    
+                                    <Border Grid.Column="2" Padding="12" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                <materialDesign:PackIcon Kind="TransitConnectionVariant" Width="14" Height="14" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <TextBlock Text="{DynamicResource Loc_shardEdgeMultiplier}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding ShardEdgeMultiplierText}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,2" />
+                                            <TextBlock Text="{Binding ShardEdgeMultiplierSub}" FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    
+                                    <Border Grid.Column="4" Padding="12" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                <materialDesign:PackIcon Kind="Speedometer" Width="14" Height="14" Foreground="#FBBF24" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <TextBlock Text="{DynamicResource Loc_shardTotalPaths}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding ShardTotalPathsText}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,2" />
+                                            <TextBlock Text="{Binding ShardSyncSubtitle}" FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Margin="0,0,0,12">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                        <materialDesign:PackIcon Kind="TransitConnectionVariant" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_TrafficRouting}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_Choosehowtrafficisroutedthroughthe}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    
+                                    <Border Grid.Column="2" Padding="10,4" CornerRadius="8" Background="#2410B981" BorderBrush="{DynamicResource Status.SuccessBorder}" BorderThickness="1" Visibility="{Binding IsShardSmartSplitSelected, Converter={StaticResource BooleanToVisibilityConverter}}" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon Kind="CallSplit" Width="13" Height="13" Margin="0,0,5,0" VerticalAlignment="Center" Foreground="{DynamicResource SuccessBrush}" />
+                                            <TextBlock Text="{DynamicResource Loc_shardSmartSplitTitle}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" />
+                                        </StackPanel>
+                                    </Border>
+                                    
+                                    <Border Grid.Column="2" Padding="10,4" CornerRadius="8" Background="#2400E5FF" BorderBrush="#4000E5FF" BorderThickness="1" Visibility="{Binding IsShardFullTunnelSelected, Converter={StaticResource BooleanToVisibilityConverter}}" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon Kind="Earth" Width="13" Height="13" Margin="0,0,5,0" VerticalAlignment="Center" Foreground="{StaticResource Brand.AccentBrush}" />
+                                            <TextBlock Text="{DynamicResource Loc_shardFullTunnelTitle}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Brand.AccentBrush}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    
+                                    <RadioButton Grid.Column="0" Style="{StaticResource UI.CardSelector}" IsChecked="{Binding IsShardFullTunnelSelected, Mode=OneWay}" Command="{Binding SelectShardSmartSplitCommand}" CommandParameter="tunnel" AutomationProperties.Name="{DynamicResource Loc_shardFullTunnelTitle}">
+                                    <Border CornerRadius="12" Padding="13">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
+                                                <Setter Property="BorderThickness" Value="1" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsShardFullTunnelSelected}" Value="True">
+                                                        <Setter Property="Background" Value="#1800E5FF" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Brand.AccentBrush}" />
+                                                        <Setter Property="BorderThickness" Value="1.5" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <materialDesign:PackIcon Grid.Column="0" Kind="Earth" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <materialDesign:PackIcon.Style>
+                                                        <Style TargetType="materialDesign:PackIcon">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsShardFullTunnelSelected}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </materialDesign:PackIcon.Style>
+                                                </materialDesign:PackIcon>
+                                                <TextBlock Grid.Column="1" Text="{DynamicResource Loc_shardFullTunnelTitle}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                                <materialDesign:PackIcon Grid.Column="2" Kind="CheckCircle" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" Visibility="{Binding IsShardFullTunnelSelected, Converter={StaticResource BooleanToVisibilityConverter}}" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <TextBlock Text="{DynamicResource Loc_AllTrafficRouted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsShardFullTunnelSelected}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{DynamicResource Loc_Route100ofnetworktrafficthroughSha}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                            <Border HorizontalAlignment="Left" Padding="8,3" CornerRadius="4" Background="#1F00E5FF">
+                                                <TextBlock Text="{DynamicResource Loc_MaximumPrivacy}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Brand.AccentBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                    </RadioButton>
+
+                                    
+                                    <RadioButton Grid.Column="2" Style="{StaticResource UI.CardSelector}" IsChecked="{Binding IsShardSmartSplitSelected, Mode=OneWay}" Command="{Binding SelectShardSmartSplitCommand}" CommandParameter="split" AutomationProperties.Name="{DynamicResource Loc_shardSmartSplitTitle}">
+                                    <Border CornerRadius="12" Padding="13">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
+                                                <Setter Property="BorderThickness" Value="1" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsShardSmartSplitSelected}" Value="True">
+                                                        <Setter Property="Background" Value="#1810B981" />
+                                                        <Setter Property="BorderBrush" Value="#10B981" />
+                                                        <Setter Property="BorderThickness" Value="1.5" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <materialDesign:PackIcon Grid.Column="0" Kind="CallSplit" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <materialDesign:PackIcon.Style>
+                                                        <Style TargetType="materialDesign:PackIcon">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsShardSmartSplitSelected}" Value="True">
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </materialDesign:PackIcon.Style>
+                                                </materialDesign:PackIcon>
+                                                <TextBlock Grid.Column="1" Text="{DynamicResource Loc_shardSmartSplitTitle}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                                <materialDesign:PackIcon Grid.Column="2" Kind="CheckCircle" Width="16" Height="16" Foreground="{DynamicResource SuccessBrush}" Visibility="{Binding IsShardSmartSplitSelected, Converter={StaticResource BooleanToVisibilityConverter}}" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <TextBlock Text="{DynamicResource Loc_shardSmartSplitSubtitle}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsShardSmartSplitSelected}" Value="True">
+                                                                <Setter Property="Foreground" Value="#10B981" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{DynamicResource Loc_shardSmartSplitDesc}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                            <Border HorizontalAlignment="Left" Padding="8,3" CornerRadius="4" Background="{DynamicResource Status.SuccessSoft}">
+                                                <TextBlock Text="{DynamicResource Loc_shardSmartSplitBadge}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                    </RadioButton>
+                                </Grid>
+
+                                <Separator Background="{DynamicResource Surface.SubtleBorder}" Margin="0,0,0,10" />
+
+                                
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <materialDesign:PackIcon Kind="Autorenew" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{DynamicResource Loc_shardRotateIpTitle}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                        <TextBlock Text="{DynamicResource Loc_shardRotateIpDesc}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="2" IsChecked="{Binding ShardRotateIp}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_shardRotateIpTitle}" />
+                                </Grid>
+
+                                
+                                <Border Padding="12" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="CloudCheck" Width="18" Height="18" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" Margin="0,0,10,0" Visibility="{Binding IsShardConnected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="CloudOutline" Width="18" Height="18" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" Visibility="{Binding IsShardConnected, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding ShardConnectedNodeDisplay}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="{Binding ShardConnectedNodeDesc}" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Style="{StaticResource UI.Btn.Warning}" Command="{Binding RotateShardNodeCommand}" IsEnabled="{Binding IsRotatingShardNode, Converter={StaticResource InverseBool}}" Padding="14,0" Cursor="Hand" AutomationProperties.Name="{Binding ShardRotateButtonText}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Grid Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon Kind="ShuffleVariant" Width="14" Height="14" Visibility="{Binding IsRotatingShardNode, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                                    <ProgressBar Width="14" Height="14" IsIndeterminate="True" Style="{StaticResource MaterialDesignCircularProgressBar}" Visibility="{Binding IsRotatingShardNode, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="#000000" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding ShardRotateButtonText}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Margin="0,0,0,12">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                        <materialDesign:PackIcon Kind="CloudOutline" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_CleanCloudflareIPCustomEdgeEndpoin}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_shardCleanIpDesc}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding ShardCustomCfIp, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Height="36" Background="{DynamicResource BgInput}" BorderBrush="{DynamicResource BorderBrushDefault}" BorderThickness="1" Padding="10,8" FontFamily="{StaticResource UI.MonoFontFamily}" materialDesign:HintAssist.Hint="{DynamicResource Loc_shardCleanIpHint}" AutomationProperties.Name="{DynamicResource Loc_shardCleanIpHint}" />
+                                    <Button Grid.Column="1" Command="{Binding ClearShardCustomCfIpCommand}" Visibility="{Binding HasShardCustomIp, Converter={StaticResource BooleanToVisibilityConverter}}" Style="{StaticResource UI.Btn.Danger}" Margin="8,0,0,0" Padding="10,0" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_shardClear}">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon Kind="CloseCircleOutline" Width="15" Height="15" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                            <TextBlock Text="{DynamicResource Loc_shardClear}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
+                                
+                                <WrapPanel Margin="0,4,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{DynamicResource Loc_shardPresetsLabel}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                    <Button Content="104.16.0.1" Command="{Binding SetShardPresetIpCommand}" CommandParameter="104.16.0.1" Style="{StaticResource UI.GhostButton}" Height="28" Padding="10,0" Margin="0,0,6,6" FontSize="11" />
+                                    <Button Content="172.67.0.1" Command="{Binding SetShardPresetIpCommand}" CommandParameter="172.67.0.1" Style="{StaticResource UI.GhostButton}" Height="28" Padding="10,0" Margin="0,0,6,6" FontSize="11" />
+                                    <Button Content="104.17.0.1" Command="{Binding SetShardPresetIpCommand}" CommandParameter="104.17.0.1" Style="{StaticResource UI.GhostButton}" Height="28" Padding="10,0" Margin="0,0,6,6" FontSize="11" />
+                                    <Button Content="104.18.0.1" Command="{Binding SetShardPresetIpCommand}" CommandParameter="104.18.0.1" Style="{StaticResource UI.GhostButton}" Height="28" Padding="10,0" Margin="0,0,6,6" FontSize="11" />
+                                    <Button Content="162.159.192.1" Command="{Binding SetShardPresetIpCommand}" CommandParameter="162.159.192.1" Style="{StaticResource UI.GhostButton}" Height="28" Padding="10,0" Margin="0,0,6,6" FontSize="11" />
+                                </WrapPanel>
+
+                                <Border Height="1" Margin="0,8,0,10" Background="{DynamicResource BorderBrushDefault}" Opacity="0.6" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_mtu}" />
+                                        <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_shardMtuDescShort}" />
+                                    </StackPanel>
+                                    <Grid Grid.Column="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Width="96" Height="36" Style="{StaticResource UI.CustomTextBox}" Text="{Binding ShardMtu, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="1280" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_mtu}" />
+                                        <Button Grid.Column="1" Margin="8,0,0,0" Command="{Binding ScanShardMtuCommand}" IsEnabled="{Binding IsScanningShardMtu, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.GhostButton}" Padding="12,0" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_mtuFind}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Magnify" Width="14" Height="14" Margin="0,0,5,0" Visibility="{Binding IsScanningShardMtu, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                                <ProgressBar Width="14" Height="14" IsIndeterminate="True" Style="{StaticResource MaterialDesignCircularProgressBar}" Margin="0,0,5,0" Foreground="{StaticResource Brand.AccentBrush}" Visibility="{Binding IsScanningShardMtu, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                <TextBlock Text="{DynamicResource Loc_mtuFind}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                                <TextBlock Text="{Binding ShardMtuStatus}" Visibility="{Binding HasShardMtuStatus, Converter={StaticResource BooleanToVisibilityConverter}}" FontSize="11" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+
+                                <Border Height="1" Margin="0,10,0,10" Background="{DynamicResource BorderBrushDefault}" Opacity="0.35" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_shardAutoScanMtuTitle}" />
+                                        <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_shardAutoScanMtuDesc}" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" IsChecked="{Binding ShardAutoScanMtu}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_shardAutoScanMtuTitle}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+            </StackPanel>
+</UserControl>

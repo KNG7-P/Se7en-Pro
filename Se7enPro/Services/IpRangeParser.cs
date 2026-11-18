@@ -184,9 +184,10 @@ public static class IpRangeParser
             warnings.Add($"'{startStr}-{endStr}': end < start");
             return;
         }
-        if (endAddr - startAddr + 1 > CidrMaxHosts)
+        var rangeSize = (ulong)endAddr - startAddr + 1UL;
+        if (rangeSize > CidrMaxHosts)
         {
-            warnings.Add($"'{startStr}-{endStr}': {endAddr - startAddr + 1:N0} hosts, exceeds per-range cap of {CidrMaxHosts:N0}");
+            warnings.Add($"'{startStr}-{endStr}': {rangeSize:N0} hosts, exceeds per-range cap of {CidrMaxHosts:N0}");
             return;
         }
 
@@ -320,8 +321,11 @@ public static class IpRangeParser
                 running += segments[s].Count;
                 prefix[s] = running;
             }
-            while ((ulong)ips.Count < actual)
+            ulong maxAttempts = Math.Max(actual * 10, 1000UL);
+            ulong attempts = 0;
+            while ((ulong)ips.Count < actual && attempts < maxAttempts)
             {
+                attempts++;
                 ct.ThrowIfCancellationRequested();
                 var pick = NextUlong(rng, total);
                 var idx = UpperBound(prefix, pick);

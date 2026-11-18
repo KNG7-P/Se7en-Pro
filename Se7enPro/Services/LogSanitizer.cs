@@ -171,7 +171,7 @@ public static class LogSanitizer
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex UserInfoCredentialRegex = new(
-        @"\b(?<scheme>vless|vmess|trojan|ss|ssr|hysteria2|hy2)://(?<creds>[^\s/@]{2,200})@",
+        @"\b(?<scheme>https?|socks[45][ah]?|vless|vmess|trojan|ss|ssr|hysteria2|hy2)://(?<creds>[^\s/@]{2,200})@",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex UuidRegex = new(

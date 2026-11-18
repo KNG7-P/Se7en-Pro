@@ -129,14 +129,4 @@ public sealed class StartupRegistration : IStartupRegistration
         
         return $"\"{path}\" {AutostartArg}";
     }
-
-    private static string NormalizePath(string value)
-    {
-        var v = value.Trim();
-        if (v.Length >= 2 && v[0] == '"' && v[^1] == '"')
-        {
-            v = v.Substring(1, v.Length - 2);
-        }
-        return v;
-    }
 }

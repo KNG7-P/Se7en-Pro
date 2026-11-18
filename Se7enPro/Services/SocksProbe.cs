@@ -14,7 +14,7 @@ public static class SocksProbe
 {
         private static readonly (string Host, int Port)[] HttpTargets =
     {
-        ("cloudflare.com", 80),
+        ("cp.cloudflare.com", 80),
         ("www.google.com", 80),
     };
 
@@ -25,7 +25,8 @@ public static class SocksProbe
     };
 
         public static async Task<string?> WaitForTunnelAsync(
-        int socksPort, DateTime deadline, CancellationToken ct, TimeSpan? retryGap = null)
+        int socksPort, DateTime deadline, CancellationToken ct, TimeSpan? retryGap = null,
+        string? username = null, string? password = null)
     {
         var gap = retryGap ?? TimeSpan.FromMilliseconds(1500);
 
@@ -49,7 +50,7 @@ public static class SocksProbe
                 if (hard.IsCancellationRequested) return null;
                 try
                 {
-                    if (await ProbeConnectAsync(socksPort, host, port, hard)) return $"{host}:{port}";
+                    if (await ProbeConnectAsync(socksPort, host, port, hard, null, username, password)) return $"{host}:{port}";
                 }
                 catch { }
             }
@@ -59,7 +60,7 @@ public static class SocksProbe
                 if (hard.IsCancellationRequested) return null;
                 try
                 {
-                    if (await ProbeHttpsAsync(socksPort, url, hard)) return new Uri(url).Host;
+                    if (await ProbeHttpsAsync(socksPort, url, hard, username, password)) return new Uri(url).Host;
                 }
                 catch { }
             }
@@ -71,26 +72,34 @@ public static class SocksProbe
         return null;
     }
 
-        private static async Task<bool> ProbeHttpsAsync(int socksPort, string url, CancellationToken outerCt)
+        public static async Task<bool> ProbeHttpsAsync(
+        int socksPort, string url, CancellationToken outerCt,
+        string? username = null, string? password = null)
     {
         using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(outerCt);
         attemptCts.CancelAfter(TimeSpan.FromSeconds(6));
 
+        var proxy = new WebProxy($"socks5://127.0.0.1:{socksPort}");
+        if (!string.IsNullOrEmpty(username))
+        {
+            proxy.Credentials = new NetworkCredential(username, password ?? "");
+        }
+
         using var handler = new SocketsHttpHandler
         {
-            Proxy = new WebProxy($"socks5://127.0.0.1:{socksPort}"),
+            Proxy = proxy,
             UseProxy = true,
             ConnectTimeout = TimeSpan.FromSeconds(5),
             PooledConnectionLifetime = TimeSpan.FromSeconds(1),
         };
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
         using var res = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token);
-        return true;
+        return (int)res.StatusCode is >= 200 and < 500;
     }
 
         public static async Task<bool> ProbeConnectAsync(
         int socksPort, string host, int port, CancellationToken outerCt,
-        TimeSpan? attemptTimeout = null)
+        TimeSpan? attemptTimeout = null, string? username = null, string? password = null)
     {
         using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(outerCt);
         attemptCts.CancelAfter(attemptTimeout ?? TimeSpan.FromSeconds(7));
@@ -100,11 +109,10 @@ public static class SocksProbe
         await client.ConnectAsync(IPAddress.Loopback, socksPort, ct);
         await using var stream = client.GetStream();
 
-        
-        await stream.WriteAsync(new byte[] { 0x05, 0x01, 0x00 }, ct);
-        var methodResp = new byte[2];
-        await ReadExactAsync(stream, methodResp, ct);
-        if (methodResp[0] != 0x05 || methodResp[1] != 0x00) return false;
+        if (!await NegotiateSocks5AuthAsync(stream, username, password, ct))
+        {
+            return false;
+        }
 
         
         
@@ -139,10 +147,89 @@ public static class SocksProbe
         
         
         var head = Encoding.ASCII.GetBytes(
-            $"HEAD / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n");
+            $"GET /generate_204 HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n");
         await stream.WriteAsync(head, ct);
-        var probe = new byte[1];
-        return await stream.ReadAsync(probe, ct) > 0;
+        var statusLine = await ReadStatusLineAsync(stream, ct);
+        return statusLine.StartsWith("HTTP/1.1 204", StringComparison.OrdinalIgnoreCase)
+               || statusLine.StartsWith("HTTP/1.0 204", StringComparison.OrdinalIgnoreCase)
+               || statusLine.StartsWith("HTTP/1.1 200", StringComparison.OrdinalIgnoreCase)
+               || statusLine.StartsWith("HTTP/1.0 200", StringComparison.OrdinalIgnoreCase)
+               || statusLine.StartsWith("HTTP/1.1 301", StringComparison.OrdinalIgnoreCase)
+               || statusLine.StartsWith("HTTP/1.1 302", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static async Task<bool> IsSocksPortListeningAsync(
+        int socksPort, CancellationToken ct, string? username = null, string? password = null)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(2));
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, socksPort, cts.Token).ConfigureAwait(false);
+            await using var stream = client.GetStream();
+            return await NegotiateSocks5AuthAsync(stream, username, password, cts.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> NegotiateSocks5AuthAsync(
+        NetworkStream stream, string? username, string? password, CancellationToken ct)
+    {
+        var hasAuth = !string.IsNullOrEmpty(username);
+        if (hasAuth)
+        {
+            await stream.WriteAsync(new byte[] { 0x05, 0x02, 0x00, 0x02 }, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            await stream.WriteAsync(new byte[] { 0x05, 0x01, 0x00 }, ct).ConfigureAwait(false);
+        }
+
+        var methodResp = new byte[2];
+        await ReadExactAsync(stream, methodResp, ct).ConfigureAwait(false);
+        if (methodResp[0] != 0x05) return false;
+
+        if (methodResp[1] == 0x02 && hasAuth)
+        {
+            var uBytes = Encoding.UTF8.GetBytes(username!);
+            var pBytes = Encoding.UTF8.GetBytes(password ?? "");
+            if (uBytes.Length > 255 || pBytes.Length > 255) return false;
+
+            var authReq = new byte[3 + uBytes.Length + pBytes.Length];
+            authReq[0] = 0x01;
+            authReq[1] = (byte)uBytes.Length;
+            Buffer.BlockCopy(uBytes, 0, authReq, 2, uBytes.Length);
+            authReq[2 + uBytes.Length] = (byte)pBytes.Length;
+            Buffer.BlockCopy(pBytes, 0, authReq, 3 + uBytes.Length, pBytes.Length);
+
+            await stream.WriteAsync(authReq, ct).ConfigureAwait(false);
+            var authResp = new byte[2];
+            await ReadExactAsync(stream, authResp, ct).ConfigureAwait(false);
+            return authResp[0] == 0x01 && authResp[1] == 0x00;
+        }
+
+        return methodResp[1] == 0x00;
+    }
+
+    private static async Task<string> ReadStatusLineAsync(NetworkStream stream, CancellationToken ct)
+    {
+        var buffer = new byte[128];
+        var length = 0;
+        while (length < buffer.Length)
+        {
+            var n = await stream.ReadAsync(buffer.AsMemory(length), ct);
+            if (n <= 0) break;
+            length += n;
+            if (length >= 2 && buffer[length - 2] == (byte)'\r' && buffer[length - 1] == (byte)'\n')
+            {
+                break;
+            }
+        }
+        return Encoding.ASCII.GetString(buffer, 0, length);
     }
 
         private static async Task DrainBoundAddressAsync(NetworkStream stream, byte atyp, CancellationToken ct)

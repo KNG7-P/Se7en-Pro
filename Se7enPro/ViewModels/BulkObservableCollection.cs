@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -28,16 +29,34 @@ public sealed class BulkObservableCollection<T> : ObservableCollection<T>
     public void AddRange(IEnumerable<T> items)
     {
         CheckReentrancy();
-        var added = 0;
+        var index = Items.Count;
+        var added = false;
         foreach (var item in items)
         {
             Items.Add(item);
-            added++;
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(
+                NotifyCollectionChangedAction.Add, item, index++));
+            added = true;
         }
-        if (added == 0) return;
+        if (!added) return;
         OnPropertyChanged(CountChanged);
         OnPropertyChanged(IndexerChanged);
-        OnCollectionChanged(CollectionReset);
+    }
+
+    public void RemoveFirst(int count)
+    {
+        CheckReentrancy();
+        count = Math.Min(count, Items.Count);
+        if (count <= 0) return;
+        for (var i = 0; i < count; i++)
+        {
+            var item = Items[0];
+            Items.RemoveAt(0);
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(
+                NotifyCollectionChangedAction.Remove, item, 0));
+        }
+        OnPropertyChanged(CountChanged);
+        OnPropertyChanged(IndexerChanged);
     }
 
     public void RemoveRange(IEnumerable<T> itemsToRemove)

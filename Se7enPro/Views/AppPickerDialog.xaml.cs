@@ -22,6 +22,7 @@ public partial class AppPickerDialog : Window
     public AppPickerDialog()
     {
         InitializeComponent();
+        ModalWindowHelper.AttachCentered(this);
         AppList.ItemsSource = _items;
 
         _view = CollectionViewSource.GetDefaultView(_items);
@@ -69,7 +70,7 @@ public partial class AppPickerDialog : Window
         BusyIcon.Visibility = Visibility.Collapsed;
         SubtitleText.Text = _items.Count == 0
             ? Loc.Of("No applications found — use Browse… to pick an .exe.")
-            : $"{_items.Count} applications found. Tick the ones you want, then press Add.";
+            : string.Format(Loc.Of("{0} applications found. Tick the ones you want, then press Add."), _items.Count);
 
         SearchBox.Focus();
     }
@@ -110,7 +111,7 @@ public partial class AppPickerDialog : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = Loc.Of("Choose an application"),
-            Filter = "Applications (*.exe)|*.exe",
+            Filter = Loc.Of("Applications (*.exe)|*.exe"),
             CheckFileExists = true,
             Multiselect = true,
         };
@@ -182,6 +183,14 @@ public partial class AppPickerDialog : Window
 
         try { return Path.GetFileName(exePath); }
         catch { return exePath; }
+    }
+
+    private void OnDialogBorderMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed)
+        {
+            try { DragMove(); } catch { }
+        }
     }
 }
 

@@ -42,11 +42,11 @@ public sealed partial class WintunTunManager
             { AutoFlush = true };
             Interlocked.Exchange(ref _logBytesWritten, carried);
             Interlocked.Exchange(ref _logCapNoticeWritten, 0);
-            _logWriter.WriteLine($"# tun2socks TUN session {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            _logWriter.WriteLine($"# {_activeTunMethod} TUN session {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Couldn't open tun2socks log at {Path}", _logPath);
+            _logger.LogWarning(ex, "Couldn't open TUN log at {Path}", _logPath);
             _logWriter = null;
         }
     }
@@ -54,7 +54,7 @@ public sealed partial class WintunTunManager
     private void OnTunOutput(object sender, DataReceivedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(e.Data)) return;
-        _logger.LogInformation("[tun2socks] {Line}", e.Data);
+        _logger.LogInformation("[{Method}] {Line}", _activeTunMethod, e.Data);
         RememberOutputLine(e.Data);
     }
 
@@ -77,18 +77,21 @@ public sealed partial class WintunTunManager
     {
         try
         {
-            var writer = _logWriter;
-            if (writer is null) return;
-            if (_logBytesWritten > LogByteCap)
+            lock (_logGate)
             {
-                if (Interlocked.Exchange(ref _logCapNoticeWritten, 1) == 0)
+                var writer = _logWriter;
+                if (writer is null) return;
+                if (_logBytesWritten > LogByteCap)
                 {
-                    writer.WriteLine($"[diag] log reached its {LogByteCap / (1024 * 1024)} MB cap; further lines dropped");
+                    if (Interlocked.Exchange(ref _logCapNoticeWritten, 1) == 0)
+                    {
+                        writer.WriteLine($"[diag] log reached its {LogByteCap / (1024 * 1024)} MB cap; further lines dropped");
+                    }
+                    return;
                 }
-                return;
+                Interlocked.Add(ref _logBytesWritten, line.Length + 2);
+                writer.WriteLine(line);
             }
-            Interlocked.Add(ref _logBytesWritten, line.Length + 2);
-            writer.WriteLine(line);
         }
         catch { }
     }
@@ -122,7 +125,8 @@ public sealed partial class WintunTunManager
             
             
             
-            var ids = OwnWintunDeviceIds(output);
+            var staleAdapterId = WintunRouteApi.FindAdapter(TunInterfaceName)?.Id;
+            var ids = OwnWintunDeviceIds(output, staleAdapterId);
             if (ids.Count == 0)
             {
                 WriteDiag("pnputil pre-cleanup: no stale se7en_tun devices");
@@ -173,15 +177,20 @@ public sealed partial class WintunTunManager
         }
     }
 
-        private static List<string> OwnWintunDeviceIds(string pnputilOutput)
+        private static List<string> OwnWintunDeviceIds(string pnputilOutput, string? staleAdapterGuid = null)
     {
         var result = new List<string>();
         var currentId = (string?)null;
+        var cleanGuid = staleAdapterGuid?.Trim();
 
         foreach (var rawLine in pnputilOutput.Split('\n'))
         {
             var line = rawLine.Trim();
-            if (line.Length == 0) continue;
+            if (line.Length == 0)
+            {
+                currentId = null;
+                continue;
+            }
 
             var colon = line.IndexOf(':');
             if (colon <= 0) continue;
@@ -189,26 +198,34 @@ public sealed partial class WintunTunManager
             var label = line[..colon].Trim();
             var value = line[(colon + 1)..].Trim();
 
-            if (label.Equals("Instance ID", StringComparison.OrdinalIgnoreCase))
+            if (label.Equals("Instance ID", StringComparison.OrdinalIgnoreCase)
+                || label.Contains("Instance", StringComparison.OrdinalIgnoreCase) && value.StartsWith(@"SWD\Wintun\", StringComparison.OrdinalIgnoreCase))
             {
                 currentId = value.StartsWith(@"SWD\Wintun\", StringComparison.OrdinalIgnoreCase) ? value : null;
+                if (currentId is not null && !string.IsNullOrEmpty(cleanGuid)
+                    && currentId.Contains(cleanGuid, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add(currentId);
+                    currentId = null;
+                }
                 continue;
             }
 
             if (currentId is null) continue;
 
-            
-            
-            
             if (label.Equals("Friendly Name", StringComparison.OrdinalIgnoreCase) ||
-                label.Equals("Description", StringComparison.OrdinalIgnoreCase))
+                label.Equals("Description", StringComparison.OrdinalIgnoreCase)
+                || label.Contains("name", StringComparison.OrdinalIgnoreCase)
+                || label.Contains("description", StringComparison.OrdinalIgnoreCase))
             {
                 if (value.Contains("se7en", StringComparison.OrdinalIgnoreCase) ||
-                    value.Contains("tun2socks", StringComparison.OrdinalIgnoreCase))
+                    value.Contains("tun2socks", StringComparison.OrdinalIgnoreCase) ||
+                    value.Contains("zeptun", StringComparison.OrdinalIgnoreCase) ||
+                    value.Contains("mihomo", StringComparison.OrdinalIgnoreCase))
                 {
                     result.Add(currentId);
+                    currentId = null;
                 }
-                currentId = null;
             }
         }
 
@@ -219,6 +236,7 @@ public sealed partial class WintunTunManager
     {
         var startedAt = DateTime.UtcNow;
         var deadline = startedAt + AdapterWaitTimeout;
+        var triedEnable = false;
         while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
         {
             if (proc.HasExited)
@@ -229,6 +247,17 @@ public sealed partial class WintunTunManager
                 return false;
             }
             if (WintunRouteApi.IsAdapterUp(TunInterfaceName)) return true;
+
+            if (!triedEnable && (DateTime.UtcNow - startedAt).TotalMilliseconds >= 2000)
+            {
+                var nic = WintunRouteApi.FindAdapter(TunInterfaceName);
+                if (nic is not null && nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                {
+                    triedEnable = true;
+                    WriteDiag($"wait adapter: '{TunInterfaceName}' exists with status={nic.OperationalStatus}; requesting admin=enabled");
+                    try { await WintunDnsShell.EnableAdapterAsync(TunInterfaceName); } catch { }
+                }
+            }
             await Task.Delay(100, ct);
         }
 
@@ -247,6 +276,63 @@ public sealed partial class WintunTunManager
             catch { }
         }
         return !ct.IsCancellationRequested && WintunRouteApi.IsAdapterUp(TunInterfaceName);
+    }
+
+        internal static async Task CleanupStaleAdapterStateAsync()
+    {
+        try { WintunDnsShell.DisableNrptPolicy(); } catch { }
+        if (WintunRouteApi.FindAdapter(TunInterfaceName) is not null)
+        {
+            try
+            {
+                await Task.WhenAll(
+                    WintunDnsShell.ClearAdapterDnsAsync(TunInterfaceName),
+                    WintunDnsShell.ResetAdapterMetricAsync(TunInterfaceName));
+            }
+            catch { }
+        }
+    }
+
+    private void PersistRouteJournal()
+    {
+        var realIf = _realIfIndex;
+        if (realIf == 0) return;
+
+        TunRouteJournal.Entry[] snapshot;
+        lock (_routeLock)
+        {
+            snapshot = _appliedRoutes
+                .Where(e => e.IfIndex == realIf)
+                .Select(e => new TunRouteJournal.Entry(
+                    e.Destination.ToString(), e.Prefix, e.NextHop.ToString(), e.Metric))
+                .ToArray();
+        }
+
+        TunRouteJournal.Save(realIf, snapshot);
+    }
+
+    internal static int RecoverStaleRoutes(ILogger? logger)
+    {
+        return TunRouteJournal.RecoverStale(
+            TunRouteJournal.AdapterAlias,
+            static (ifIndex, entry) =>
+            {
+                try
+                {
+                    WintunRouteApi.DeleteRoute(new WintunRouteApi.RouteEntry(
+                        ifIndex,
+                        System.Net.IPAddress.Parse(entry.Destination),
+                        entry.Prefix,
+                        System.Net.IPAddress.Parse(entry.NextHop),
+                        entry.Metric));
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            },
+            logger);
     }
 
         private void CleanupLegacyTunWorkDirs()

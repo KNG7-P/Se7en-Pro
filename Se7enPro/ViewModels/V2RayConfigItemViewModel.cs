@@ -1,6 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Se7enPro.Models;
+using Se7enPro.Services;
 
 namespace Se7enPro.ViewModels;
 
@@ -13,6 +14,8 @@ public sealed partial class V2RayConfigItemViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Subtitle))]
     [NotifyPropertyChangedFor(nameof(ShareLink))]
+    [NotifyPropertyChangedFor(nameof(CountryCode))]
+    [NotifyPropertyChangedFor(nameof(HasCountryFlag))]
     private string _name = "";
 
     [ObservableProperty]
@@ -70,6 +73,8 @@ public sealed partial class V2RayConfigItemViewModel : ObservableObject
 
     public string Subtitle => $"{Protocol.ToUpperInvariant()} • {Address}:{Port}";
     public string AddressPort => $"{Address}:{Port}";
+    public string CountryCode => CountryHelper.ExtractCountryCode(Name);
+    public bool HasCountryFlag => !string.IsNullOrEmpty(CountryCode);
 
     public string ProtocolBadge => Protocol.ToUpperInvariant();
 
@@ -101,11 +106,13 @@ public sealed partial class V2RayConfigItemViewModel : ObservableObject
 
     public string LatencyDisplay => Latency switch
     {
-        -2 => "Testing...",
-        -3 => "Timeout",
+        -2 => Loc.Of("Testing..."),
+        -3 => Loc.Of("Timeout"),
         >= 0 => $"{Latency} ms",
-        _ => "Test"
+        _ => Loc.Of("Test")
     };
+
+    public void RefreshLocale() => OnPropertyChanged(nameof(LatencyDisplay));
 
     public string LatencyColor => Latency switch
     {
@@ -131,8 +138,8 @@ public sealed partial class V2RayConfigItemViewModel : ObservableObject
     {
         get
         {
-            var encName = Uri.EscapeDataString(Name);
-            return $"{Protocol}://{Entry.UserId}@{Address}:{Port}#{encName}";
+            SyncToEntry();
+            return V2RayLinkParser.ToShareLink(Entry);
         }
     }
 

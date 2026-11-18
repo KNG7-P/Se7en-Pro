@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -8,6 +9,36 @@ namespace Se7enPro.Services;
 
 public sealed class StartupReaper : IStartupReaper
 {
+    private static readonly HashSet<string> EngineExecutableNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "psiphon-tunnel-core.exe",
+        "Se7enPro.Tunnel.exe",
+        "tun2socks.exe",
+        "Se7enPro.Tun.exe",
+        "zeptun.exe",
+        "Se7enPro.Zeptun.exe",
+        "mihomo.exe",
+        "Se7enPro.Mihomo.exe",
+        "tor.exe",
+        "lyrebird.exe",
+        "conjure-client.exe",
+        "aether.exe",
+        "xray.exe",
+        "sing-box.exe",
+        "shard.exe",
+        "Se7enPro.Aether.exe",
+        "Se7enPro.Tor.exe",
+        "Se7enPro.Shard.exe",
+        "Se7enPro.Lantern.exe",
+        "Se7enPro.Veep.exe",
+        "veep-core.exe",
+        "lanternd.exe",
+    };
+
+    private static readonly HashSet<string> EngineBaseNames = new(
+        EngineExecutableNames.Select(Path.GetFileNameWithoutExtension).Where(s => !string.IsNullOrEmpty(s))!,
+        StringComparer.OrdinalIgnoreCase);
+
     private readonly ILogger<StartupReaper> _logger;
 
     public StartupReaper(ILogger<StartupReaper> logger) => _logger = logger;
@@ -29,16 +60,44 @@ public sealed class StartupReaper : IStartupReaper
         }
 
         var ownPid = -1;
-        try { ownPid = Process.GetCurrentProcess().Id; } catch {  }
+        var ownSession = -1;
+        try
+        {
+            var self = Process.GetCurrentProcess();
+            ownPid = self.Id;
+            ownSession = self.SessionId;
+        }
+        catch {  }
 
         var killed = 0;
+        var failedToKill = 0;
         foreach (var p in processes)
         {
             try
             {
                 if (p.Id == ownPid) continue;
 
-                // Match on executable image path only
+                string pName;
+                try
+                {
+                    pName = p.ProcessName;
+                }
+                catch
+                {
+                    continue;
+                }
+                if (string.IsNullOrEmpty(pName) || !EngineBaseNames.Contains(pName))
+                    continue;
+
+                try
+                {
+                    if (ownSession >= 0 && p.SessionId != ownSession) continue;
+                }
+                catch
+                {
+                    continue;
+                }
+
                 string? imagePath;
                 try
                 {
@@ -52,6 +111,10 @@ public sealed class StartupReaper : IStartupReaper
                 if (string.IsNullOrEmpty(imagePath)) continue;
                 if (!IsUnderAny(imagePath, normalisedRoots, liveRoots)) continue;
 
+                var imageName = Path.GetFileName(imagePath);
+                if (string.IsNullOrEmpty(imageName) || !EngineExecutableNames.Contains(imageName))
+                    continue;
+
                 _logger.LogInformation(
                     "Killing stale child pid {Pid} ({Image})",
                     p.Id,
@@ -62,6 +125,7 @@ public sealed class StartupReaper : IStartupReaper
                     p.Kill(entireProcessTree: true);
                     if (!p.WaitForExit(2000))
                     {
+                        failedToKill++;
                         _logger.LogWarning(
                             "Stale child pid {Pid} did not exit within 2s",
                             p.Id);
@@ -73,6 +137,7 @@ public sealed class StartupReaper : IStartupReaper
                 }
                 catch (Exception ex)
                 {
+                    failedToKill++;
                     _logger.LogWarning(ex, "Failed to kill stale pid {Pid}", p.Id);
                 }
             }
@@ -82,8 +147,11 @@ public sealed class StartupReaper : IStartupReaper
             }
         }
 
-        TryRemoveStaleLocks(Path.Combine(localAppData, "Se7en", "tunnel-core"));
-        TryRemoveStaleLocks(Path.Combine(localAppData, "Psiphon", "tunnel-core"));
+        if (failedToKill == 0)
+        {
+            TryRemoveStaleLocks(Path.Combine(localAppData, "Se7en", "tunnel-core"));
+            TryRemoveStaleLocks(Path.Combine(localAppData, "Psiphon", "tunnel-core"));
+        }
 
         if (killed > 0)
         {
@@ -91,9 +159,6 @@ public sealed class StartupReaper : IStartupReaper
         }
     }
 
-    /// <summary>
-    /// Builds the normalised set of directories whose executables belong to Se7en Pro.
-    /// </summary>
     internal static string[] BuildReapRoots(out int liveRoots)
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -104,6 +169,8 @@ public sealed class StartupReaper : IStartupReaper
             Path.Combine(localAppData, "Se7en"),
             Path.Combine(localAppData, "Se7en", "tunnel-core"),
             Path.Combine(localAppData, "Se7en", "tun2socks"),
+            Path.Combine(localAppData, "Se7en", "zeptun"),
+            Path.Combine(localAppData, "Se7en", "mihomo"),
             Path.Combine(localAppData, "Se7en", "tor"),
             Path.Combine(localAppData, "Se7en", "aether"),
             Path.Combine(localAppData, "Se7en", "shard"),
@@ -129,7 +196,13 @@ public sealed class StartupReaper : IStartupReaper
         return normalisedRoots;
     }
 
-    /// <summary>Decides whether a process belongs to Se7en Pro based on image path.</summary>
+    internal static bool ShouldReap(string? imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath)) return false;
+        var roots = BuildReapRoots(out var liveRoots);
+        return ShouldReap(imagePath, roots, liveRoots);
+    }
+
     internal static bool ShouldReap(string? imagePath, string[] normalisedRoots, int liveRoots)
     {
         if (string.IsNullOrWhiteSpace(imagePath)) return false;

@@ -17,6 +17,7 @@ public partial class CloseConfirmationDialog : Window
     public CloseConfirmationDialog()
     {
         InitializeComponent();
+        ModalWindowHelper.AttachCentered(this);
         Loaded += (_, _) =>
         {
             if (Owner is MainWindow mw) mw.ShowBackdrop();
@@ -48,5 +49,13 @@ public partial class CloseConfirmationDialog : Window
         Result = CloseAction.Cancel;
         DialogResult = false;
         Close();
+    }
+
+    private void OnDialogBorderMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed)
+        {
+            try { DragMove(); } catch { }
+        }
     }
 }

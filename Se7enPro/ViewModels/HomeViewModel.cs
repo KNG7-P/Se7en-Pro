@@ -27,9 +27,17 @@ public sealed partial class HomeViewModel : PageViewModelBase
     private double _upBytesPerSec;
 
     private bool _suppressRegionSideEffects;
+    private readonly Debouncer _regionRestartDebouncer = new(TimeSpan.FromSeconds(1));
     private int _bytesUpdateQueued;
     private int _progressUpdateQueued;
     private int _routeUpdateQueued;
+
+    private EventHandler<ConnectionState>? _stateHandler;
+    private EventHandler? _progressHandler;
+    private EventHandler? _bytesHandler;
+    private EventHandler? _routeHandler;
+    private EventHandler<Notice>? _noticeHandler;
+    private EventHandler? _settingsHandler;
 
     public override string Title => "Home";
     public override string Route => "home";
@@ -51,7 +59,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
         _systemProxyEnabled = _settings.Settings.SetSystemProxy;
 
-        _selectedEgressRegion = ReadRegionFromSettings();
+        _selectedEgressRegion = RegionInCurrentList(ReadRegionFromSettings());
 
         
         
@@ -60,8 +68,9 @@ public sealed partial class HomeViewModel : PageViewModelBase
         
         
         
-        _tunnel.StateChanged += (_, s) => Post(() => ApplyState(s));
-        _tunnel.ConnectProgressChanged += (_, _) =>
+        _stateHandler = (_, s) => Post(() => ApplyState(s));
+        _tunnel.StateChanged += _stateHandler;
+        _progressHandler = (_, _) =>
         {
             if (Interlocked.Exchange(ref _progressUpdateQueued, 1) == 1) return;
             Post(() =>
@@ -72,9 +81,9 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(StatusSubtext));
             });
         };
-        _tunnel.BytesTransferredChanged += (_, _) =>
+        _tunnel.ConnectProgressChanged += _progressHandler;
+        _bytesHandler = (_, _) =>
         {
-            
             if (Interlocked.Exchange(ref _bytesUpdateQueued, 1) == 1) return;
             Post(() =>
             {
@@ -82,7 +91,8 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 ApplyTotalCounters();
             });
         };
-        _tunnel.RouteChanged += (_, _) =>
+        _tunnel.BytesTransferredChanged += _bytesHandler;
+        _routeHandler = (_, _) =>
         {
             if (Interlocked.Exchange(ref _routeUpdateQueued, 1) == 1) return;
             Post(() =>
@@ -105,10 +115,9 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 CopyCurrentSniCommand.NotifyCanExecuteChanged();
             });
         };
-        _tunnel.NoticeReceived += (_, n) =>
+        _tunnel.RouteChanged += _routeHandler;
+        _noticeHandler = (_, n) =>
         {
-            
-            
             if (n.NoticeType != "ClientRegion" && n.NoticeType != "ConnectedServerRegion")
                 return;
             Post(() =>
@@ -122,6 +131,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(DetectedLocationTooltip));
             });
         };
+        _tunnel.NoticeReceived += _noticeHandler;
 
         _tun.StateChanged += (_, _) => Post(() =>
         {
@@ -130,7 +140,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
             OnPropertyChanged(nameof(TunHasMessage));
         });
 
-        _settings.SettingsChanged += (_, _) => Post(() =>
+        _settingsHandler = (_, _) => Post(() =>
         {
             var externalMethod = ConnectionMethodExtensions.ParseConnectionMethod(_settings.Settings.ConnectionMethod).ToToken();
             if (!string.Equals(SelectedConnectionMethod, externalMethod, StringComparison.Ordinal))
@@ -156,6 +166,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 try { TunModeEnabled = expectedTun; }
                 finally { _suppressTunSideEffects = false; }
             }
+            OnPropertyChanged(nameof(RoutingEngineDisplay));
 
             var expectedProxy = _settings.Settings.SetSystemProxy;
             if (expectedProxy != SystemProxyEnabled)
@@ -173,6 +184,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 finally { _suppressRegionSideEffects = false; }
             }
         });
+        _settings.SettingsChanged += _settingsHandler;
 
         _uptimeTimer = new UiTimer(TimeSpan.FromSeconds(1), () =>
         {
@@ -186,6 +198,26 @@ public sealed partial class HomeViewModel : PageViewModelBase
             _connectionMethods, nameof(ConnectionMethodOption.GroupKey));
         _selectedMethodOption = OptionForKey(_connectionMethods, initialMethodToken) ?? _connectionMethods.FirstOrDefault();
         ApplyState(_tunnel.State);
+        RestoreEgressRegionSelection();
+        Post(RestoreEgressRegionSelection);
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.HasShutdownStarted)
+        {
+            dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(RestoreEgressRegionSelection));
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (!disposing) return;
+        if (_stateHandler is not null) _tunnel.StateChanged -= _stateHandler;
+        if (_progressHandler is not null) _tunnel.ConnectProgressChanged -= _progressHandler;
+        if (_bytesHandler is not null) _tunnel.BytesTransferredChanged -= _bytesHandler;
+        if (_routeHandler is not null) _tunnel.RouteChanged -= _routeHandler;
+        if (_noticeHandler is not null) _tunnel.NoticeReceived -= _noticeHandler;
+        if (_settingsHandler is not null) _settings.SettingsChanged -= _settingsHandler;
+        try { _uptimeTimer?.Stop(); } catch { }
+        try { _regionRestartDebouncer?.Dispose(); } catch { }
     }
 
     [ObservableProperty]
@@ -224,8 +256,15 @@ public sealed partial class HomeViewModel : PageViewModelBase
             ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp or ConnectionMethod.MasqueInMasque => SettingsTab.Aether,
             ConnectionMethod.Tor => SettingsTab.Tor,
             ConnectionMethod.Shard => SettingsTab.Shard,
+            ConnectionMethod.Foxy => SettingsTab.Foxy,
+            ConnectionMethod.Lantern => SettingsTab.General,
+            ConnectionMethod.Veep => SettingsTab.General,
+            ConnectionMethod.LanternOverWarp or ConnectionMethod.VeepOverWarp => SettingsTab.Chained,
             ConnectionMethod.PsiphonOverWarp or ConnectionMethod.TorOverWarp or
-            ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray => SettingsTab.Chained,
+            ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray or
+            ConnectionMethod.FoxyOverWarp or ConnectionMethod.FoxyOverV2Ray or
+            ConnectionMethod.WarpOverV2Ray or ConnectionMethod.PsiphonOverFoxy or
+            ConnectionMethod.PsiphonOverLantern => SettingsTab.Chained,
             _ => SettingsTab.General
         };
         if (App.Services != null)
@@ -241,14 +280,22 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 else if (CurrentMethod == ConnectionMethod.PsiphonOverWarp) settingsVm.SelectedChainedSubMode = "psiphon_warp";
                 else if (CurrentMethod == ConnectionMethod.TorOverWarp) settingsVm.SelectedChainedSubMode = "tor_warp";
                 else if (CurrentMethod == ConnectionMethod.PsiphonOverV2Ray) settingsVm.SelectedChainedSubMode = "psiphon_v2ray";
+                else if (CurrentMethod == ConnectionMethod.PsiphonOverFoxy) settingsVm.SelectedChainedSubMode = "psiphon_foxy";
+                else if (CurrentMethod == ConnectionMethod.PsiphonOverLantern) settingsVm.SelectedChainedSubMode = "psiphon_lantern";
                 else if (CurrentMethod == ConnectionMethod.TorOverV2Ray) settingsVm.SelectedChainedSubMode = "tor_v2ray";
+                else if (CurrentMethod == ConnectionMethod.FoxyOverWarp) settingsVm.SelectedChainedSubMode = "foxy_warp";
+                else if (CurrentMethod == ConnectionMethod.FoxyOverV2Ray) settingsVm.SelectedChainedSubMode = "foxy_v2ray";
+                else if (CurrentMethod == ConnectionMethod.WarpOverV2Ray) settingsVm.SelectedChainedSubMode = "warp_v2ray";
+                else if (CurrentMethod == ConnectionMethod.LanternOverWarp) settingsVm.SelectedChainedSubMode = "lantern_warp";
+                else if (CurrentMethod == ConnectionMethod.VeepOverWarp) settingsVm.SelectedChainedSubMode = "veep_warp";
             }
         }
         _navigation.NavigateTo("settings");
     }
 
     public bool IsConnected => State == ConnectionState.Connected;
-    public bool IsConnecting => State == ConnectionState.Connecting || State == ConnectionState.Disconnecting;
+    public bool IsConnecting => State == ConnectionState.Connecting;
+    public bool IsDisconnecting => State == ConnectionState.Disconnecting;
     public bool IsDisconnected => State == ConnectionState.Disconnected || State == ConnectionState.Error;
 
     public string StatusHeadline => State switch
@@ -288,7 +335,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
             }
             if (HasRegion) return ServerRegionName;
             if (HasRouteIp) return CurrentRouteIp;
-            return Loc.T("Loc_finalEndpointLocation", "Final Endpoint & Location");
+            return Loc.T("finalEndpointLocation", "Final Endpoint & Location");
         }
     }
 
@@ -307,6 +354,30 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
     public ObservableCollection<Country> EgressRegions { get; } =
     CountryHelper.BuildSeedRegions();
+
+    public ObservableCollection<Country> TorRegions { get; } =
+    CountryHelper.BuildTorExitRegions();
+
+    public ObservableCollection<Country> FoxyRegions { get; } =
+    CountryHelper.BuildFoxyRegions();
+
+    public ObservableCollection<Country> LanternRegions { get; } =
+    CountryHelper.BuildLanternRegions();
+
+    public ObservableCollection<Country> VeepRegions { get; } =
+    CountryHelper.BuildVeepRegions();
+
+    public ObservableCollection<Country> ActiveRegions => CurrentMethod switch
+    {
+        ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray => TorRegions,
+        ConnectionMethod.Foxy or ConnectionMethod.FoxyOverWarp or ConnectionMethod.FoxyOverV2Ray => FoxyRegions,
+        ConnectionMethod.Lantern or ConnectionMethod.LanternOverWarp => LanternRegions,
+        ConnectionMethod.Veep or ConnectionMethod.VeepOverWarp => VeepRegions,
+        _ => EgressRegions,
+    };
+
+    [ObservableProperty]
+    private Country? _selectedRegionItem;
 
     [ObservableProperty]
     private string _selectedEgressRegion = "auto";
@@ -328,7 +399,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
     private bool _suppressMethodSideEffects;
 
-    public bool CanChangeMethod => State != ConnectionState.Connecting && State != ConnectionState.Disconnecting;
+    public bool CanChangeMethod => State is ConnectionState.Disconnected or ConnectionState.Error;
 
     partial void OnSelectedMethodOptionChanged(ConnectionMethodOption? value)
     {
@@ -374,13 +445,22 @@ public sealed partial class HomeViewModel : PageViewModelBase
                 _ => "masque",
             };
         }
-        else if (token is "psiphon_over_warp" or "tor_over_warp" or "psiphon_over_v2ray" or "tor_over_v2ray")
+        else if (token is "psiphon_over_warp" or "tor_over_warp" or "foxy_over_warp"
+                 or "psiphon_over_v2ray" or "tor_over_v2ray" or "foxy_over_v2ray" or "warp_over_v2ray"
+                 or "psiphon_over_foxy" or "psiphon_over_lantern" or "lantern_over_warp" or "veep_over_warp")
         {
             _settings.Settings.ChainedSubMode = token switch
             {
                 "psiphon_over_v2ray" => "psiphon_v2ray",
+                "psiphon_over_foxy" => "psiphon_foxy",
+                "psiphon_over_lantern" => "psiphon_lantern",
                 "tor_over_warp" => "tor_warp",
                 "tor_over_v2ray" => "tor_v2ray",
+                "foxy_over_warp" => "foxy_warp",
+                "foxy_over_v2ray" => "foxy_v2ray",
+                "warp_over_v2ray" => "warp_v2ray",
+                "lantern_over_warp" => "lantern_warp",
+                "veep_over_warp" => "veep_warp",
                 _ => "psiphon_warp",
             };
         }
@@ -390,14 +470,6 @@ public sealed partial class HomeViewModel : PageViewModelBase
         OnPropertyChanged(nameof(MethodDisplayName));
         OnPropertyChanged(nameof(ConfigureMethodLabel));
         RaiseMethodDependentProperties();
-
-        if (State == ConnectionState.Connected)
-        {
-            _ = Task.Run(async () =>
-            {
-                try { await _tunnel.RestartAsync(); } catch { }
-            });
-        }
     }
 
         public ConnectionMethod CurrentMethod =>
@@ -409,52 +481,182 @@ public sealed partial class HomeViewModel : PageViewModelBase
         var code = CurrentMethod switch
         {
             ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray => s.TorExitCountry,
-            ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray => s.EgressRegion,
+            ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.PsiphonOverFoxy or ConnectionMethod.PsiphonOverLantern => s.EgressRegion,
+            ConnectionMethod.Foxy or ConnectionMethod.FoxyOverWarp or ConnectionMethod.FoxyOverV2Ray => s.FirefoxServerCountry,
+            ConnectionMethod.Lantern or ConnectionMethod.LanternOverWarp => s.LanternRegion,
+            ConnectionMethod.Veep or ConnectionMethod.VeepOverWarp => s.VeepRegion,
             _ => "auto",
         };
-        if (string.IsNullOrWhiteSpace(code) || string.Equals(code, "auto", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(code)
+            || string.Equals(code, "auto", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(code, "rec", StringComparison.OrdinalIgnoreCase))
             return "auto";
+        if (CurrentMethod is ConnectionMethod.Veep or ConnectionMethod.VeepOverWarp)
+            return code.Trim().ToLowerInvariant();
         return code.Trim().ToUpperInvariant();
     }
 
-    partial void OnSelectedEgressRegionChanged(string value)
+    partial void OnSelectedRegionItemChanged(Country? value)
     {
         if (_suppressRegionSideEffects) return;
+        if (value is null)
+        {
+            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.HasShutdownStarted)
+            {
+                dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(RestoreEgressRegionSelection));
+            }
+            else
+            {
+                Post(RestoreEgressRegionSelection);
+            }
+            return;
+        }
 
-        var isAuto = string.IsNullOrWhiteSpace(value) || string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase);
+        var code = value.Code;
+        var previousCode = _selectedEgressRegion;
+        _selectedEgressRegion = code;
+        OnPropertyChanged(nameof(SelectedEgressRegion));
+
+        var isAuto = string.Equals(code, "auto", StringComparison.OrdinalIgnoreCase);
         var s = _settings.Settings;
         switch (CurrentMethod)
         {
             case ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray:
-                s.TorExitCountry = isAuto ? "" : value.ToLowerInvariant();
+                s.TorExitCountry = isAuto ? "" : code.ToLowerInvariant();
                 break;
-            case ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray:
-                s.EgressRegion = isAuto ? "" : value.ToUpperInvariant();
+            case ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.PsiphonOverFoxy or ConnectionMethod.PsiphonOverLantern:
+                s.EgressRegion = isAuto ? "" : code.ToUpperInvariant();
+                break;
+            case ConnectionMethod.Foxy or ConnectionMethod.FoxyOverWarp or ConnectionMethod.FoxyOverV2Ray:
+                s.FirefoxServerCountry = isAuto ? "REC" : code.ToUpperInvariant();
+                s.FirefoxServerCity = "";
+                break;
+            case ConnectionMethod.Lantern or ConnectionMethod.LanternOverWarp:
+                s.LanternRegion = isAuto ? "" : code.ToUpperInvariant();
+                break;
+            case ConnectionMethod.Veep or ConnectionMethod.VeepOverWarp:
+                s.VeepRegion = isAuto ? "auto" : code.ToLowerInvariant();
                 break;
             default:
                 return;
         }
 
         _settings.Save();
-        _ = _tunnel.RestartAsync();
+
+        if (State == ConnectionState.Connected &&
+            _tunnel.ActiveMethod == CurrentMethod &&
+            !string.Equals(previousCode, code, StringComparison.OrdinalIgnoreCase))
+        {
+            _regionRestartDebouncer.Schedule(() =>
+            {
+                if (State == ConnectionState.Connected && _tunnel.ActiveMethod == CurrentMethod)
+                {
+                    _ = Task.Run(() => _tunnel.RestartAsync());
+                }
+            });
+        }
     }
 
-    
+    partial void OnSelectedEgressRegionChanged(string value)
+    {
+        if (_suppressRegionSideEffects) return;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            Post(RestoreEgressRegionSelection);
+            return;
+        }
+
+        var regions = ActiveRegions;
+        if (regions != null && (_selectedRegionItem == null || !string.Equals(_selectedRegionItem.Code, value, StringComparison.OrdinalIgnoreCase)))
+        {
+            var match = regions.FirstOrDefault(r => string.Equals(r.Code, value, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                _suppressRegionSideEffects = true;
+                try
+                {
+                    SelectedRegionItem = match;
+                    OnPropertyChanged(nameof(SelectedRegionItem));
+                }
+                finally { _suppressRegionSideEffects = false; }
+            }
+        }
+    }
+
+    private void RestoreEgressRegionSelection()
+    {
+        var regions = ActiveRegions;
+        if (regions == null || regions.Count == 0) return;
+
+        var targetCode = ReadRegionFromSettings();
+        var match = regions.FirstOrDefault(r => string.Equals(r.Code, targetCode, StringComparison.OrdinalIgnoreCase))
+                    ?? regions.FirstOrDefault(r => string.Equals(r.Code, "auto", StringComparison.OrdinalIgnoreCase))
+                    ?? regions[0];
+
+        _suppressRegionSideEffects = true;
+        try
+        {
+            SelectedRegionItem = match;
+            SelectedEgressRegion = match.Code;
+            OnPropertyChanged(nameof(SelectedRegionItem));
+            OnPropertyChanged(nameof(SelectedEgressRegion));
+        }
+        finally { _suppressRegionSideEffects = false; }
+    }
+
+    private string RegionInCurrentList(string code)
+    {
+        var regions = ActiveRegions;
+        if (regions == null || regions.Count == 0) return "auto";
+        if (string.IsNullOrWhiteSpace(code)
+            || string.Equals(code, "auto", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(code, "rec", StringComparison.OrdinalIgnoreCase))
+        {
+            return regions[0].Code;
+        }
+        var match = regions.FirstOrDefault(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase));
+        return match != null ? match.Code : regions[0].Code;
+    }
 
         public bool ShowRegionPicker =>
         CurrentMethod is ConnectionMethod.Psiphon
                       or ConnectionMethod.Tor
+                      or ConnectionMethod.Foxy
+                      or ConnectionMethod.Lantern
+                      or ConnectionMethod.Veep
                       or ConnectionMethod.PsiphonOverWarp
                       or ConnectionMethod.TorOverWarp
+                      or ConnectionMethod.FoxyOverWarp
+                      or ConnectionMethod.LanternOverWarp
+                      or ConnectionMethod.VeepOverWarp
                       or ConnectionMethod.PsiphonOverV2Ray
-                      or ConnectionMethod.TorOverV2Ray;
+                      or ConnectionMethod.TorOverV2Ray
+                      or ConnectionMethod.FoxyOverV2Ray
+                      or ConnectionMethod.PsiphonOverFoxy
+                      or ConnectionMethod.PsiphonOverLantern;
 
-    public string RegionPickerTitle =>
-        CurrentMethod is ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray ? Loc.Of("Exit country") : Loc.Of("Region");
+    public string RegionPickerTitle => CurrentMethod switch
+    {
+        ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray => Loc.Of("Exit country"),
+        ConnectionMethod.Foxy or ConnectionMethod.FoxyOverWarp or ConnectionMethod.FoxyOverV2Ray => Loc.Of("Edge location"),
+        ConnectionMethod.Lantern or ConnectionMethod.LanternOverWarp => Loc.Of("Region"),
+        ConnectionMethod.Veep or ConnectionMethod.VeepOverWarp => Loc.Of("Location"),
+        _ => Loc.Of("Region"),
+    };
 
-    public string RegionPickerHint => CurrentMethod is ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray
-        ? Loc.Of("Tor exit relay country. Fewer relays in a country means slower circuits.")
-        : Loc.Of("Where your traffic exits. Auto picks the fastest server.");
+    public string RegionPickerHint => CurrentMethod switch
+    {
+        ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray
+            => Loc.Of("Tor exit relay country. Fewer relays in a country means slower circuits."),
+        ConnectionMethod.Foxy or ConnectionMethod.FoxyOverWarp or ConnectionMethod.FoxyOverV2Ray
+            => Loc.Of("Mozilla's edge location your traffic leaves from. Recommended picks the closest edge."),
+        ConnectionMethod.Lantern or ConnectionMethod.LanternOverWarp
+            => Loc.Of("Lantern server location. Auto selects the lowest latency node optimized for Iran."),
+        ConnectionMethod.Veep or ConnectionMethod.VeepOverWarp
+            => Loc.Of("Veep server location. Auto selects the lowest latency proxy node."),
+        _ => Loc.Of("Where your traffic exits. Auto picks the fastest server."),
+    };
 
         public bool ShowTrafficStats => true;
 
@@ -468,20 +670,20 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
     public string RouteIpLabel => CurrentMethod switch
     {
-        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray => "IP",
+        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.PsiphonOverFoxy or ConnectionMethod.PsiphonOverLantern => "IP",
         _ => "EDGE",
     };
 
     public string RouteIpTooltip => CurrentMethod switch
     {
-        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray
+        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.PsiphonOverFoxy or ConnectionMethod.PsiphonOverLantern
             => Loc.T("homeEdgeIpHint", "Edge IP tunnel-core is currently routing through"),
         _ => Loc.T("homeCloudflareEdgeHint", "Cloudflare edge address this session is bound to"),
     };
 
     public string RouteSniLabel => CurrentMethod switch
     {
-        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray => "SNI",
+        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.PsiphonOverFoxy or ConnectionMethod.PsiphonOverLantern => "SNI",
         ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray => "STATUS",
         ConnectionMethod.Shard => "HOST",
         _ => "MODE",
@@ -489,7 +691,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
 
     public string RouteSniTooltip => CurrentMethod switch
     {
-        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray
+        ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.PsiphonOverFoxy or ConnectionMethod.PsiphonOverLantern
             => Loc.T("homeSniHint", "SNI hostname tunnel-core is currently presenting to the CDN"),
         ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray
             => Loc.T("homeTorBootstrapHint", "Tor bootstrap progress"),
@@ -503,6 +705,20 @@ public sealed partial class HomeViewModel : PageViewModelBase
         OnPropertyChanged(nameof(CurrentMethod));
         OnPropertyChanged(nameof(ShowRegionPicker));
         OnPropertyChanged(nameof(ShowRegionBox));
+        _suppressRegionSideEffects = true;
+        try
+        {
+            OnPropertyChanged(nameof(ActiveRegions));
+        }
+        finally
+        {
+            _suppressRegionSideEffects = false;
+        }
+        RestoreEgressRegionSelection();
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.HasShutdownStarted)
+        {
+            dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(RestoreEgressRegionSelection));
+        }
         OnPropertyChanged(nameof(DetectedLocationTooltip));
         OnPropertyChanged(nameof(RegionPickerTitle));
         OnPropertyChanged(nameof(RegionPickerHint));
@@ -531,9 +747,29 @@ public sealed partial class HomeViewModel : PageViewModelBase
     private bool _suppressTunSideEffects;
 
     [RelayCommand]
-    private void RestartAsAdmin() => _ = TryRestartAsAdmin();
+    private async Task RestartAsAdmin()
+    {
+        if (!AdminElevation.IsTrustedInstallPath())
+        {
+            await ShowPortableElevationBlockedAsync();
+            return;
+        }
+        _ = TryRestartAsAdmin();
+    }
 
-        private bool TryRestartAsAdmin()
+    private static Task ShowPortableElevationBlockedAsync() =>
+        Ui.ConfirmAsync(
+            Loc.T("ElevatePortableBlockedTitle", "Elevation unavailable"),
+            string.Format(
+                Loc.T("ElevatePortableBlocked",
+                    "Se7en Pro is running from a folder you can write to:\n\n{0}\n\n" +
+                    "Elevating this copy would let another program running as you replace " +
+                    "Se7enPro.exe and gain Administrator rights.\n\n" +
+                    "Install Se7en Pro under Program Files and start the installed copy to use " +
+                    "system-wide tunneling."),
+                AppContext.BaseDirectory.TrimEnd('\\')));
+
+    private bool TryRestartAsAdmin()
     {
         _settings.Settings.SystemWideTunneling = true;
         _settings.Save();
@@ -559,43 +795,24 @@ public sealed partial class HomeViewModel : PageViewModelBase
         _settings.Save();
     }
 
-        private async Task AskForElevationAsync()
+    private async Task AskForElevationAsync()
     {
         if (await Ui.ConfirmElevationAsync())
         {
-            
-            
-            
-            
-            
-            
-            
-            
-            if (!AdminElevation.IsTrustedInstallPath() && !_portableElevationAcknowledged)
+            if (!AdminElevation.IsTrustedInstallPath())
             {
-                
-                
-                
-                _portableElevationAcknowledged = await Ui.ConfirmAsync(
-                    Loc.T("ElevatePortableTitle", "Portable installation"),
-                    string.Format(
-                        Loc.T("ElevatePortableConsent",
-                            "Se7en Pro is running from a folder you can write to:\n\n{0}\n\n" +
-                            "Because that folder is not protected by Administrator rights, another program " +
-                            "running as you could replace Se7enPro.exe and inherit Administrator rights the " +
-                            "next time this is launched. This is expected for a portable copy. Continue?"),
-                        AppContext.BaseDirectory.TrimEnd('\\')));
+                await ShowPortableElevationBlockedAsync();
             }
-
-            if (TryRestartAsAdmin()) return;
+            else if (TryRestartAsAdmin())
+            {
+                return;
+            }
         }
 
         _suppressTunSideEffects = true;
         try { TunModeEnabled = false; }
         finally { _suppressTunSideEffects = false; }
     }
-
-        private bool _portableElevationAcknowledged;
 
     public string TunStatusText
     {
@@ -652,9 +869,10 @@ public sealed partial class HomeViewModel : PageViewModelBase
         public bool HasServerRegion => !string.IsNullOrEmpty(_tunnel.ConnectedServerRegion);
 
         public string ActiveMethodName =>
-        ConnectionMethodExtensions
-            .ParseConnectionMethod(_settings.Settings.ConnectionMethod)
-            .ToDisplayName();
+        (State is ConnectionState.Connected or ConnectionState.Connecting
+            ? _tunnel.ActiveMethod
+            : ConnectionMethodExtensions.ParseConnectionMethod(_settings.Settings.ConnectionMethod))
+        .ToDisplayName();
 
     
     
@@ -776,7 +994,12 @@ public sealed partial class HomeViewModel : PageViewModelBase
     }
 
     public string RoutingEngineDisplay => TunModeEnabled
-        ? Loc.Of("WinTUN L3 Adapter")
+        ? (WintunTunManager.NormalizeTunMethod(_settings.Settings.TunMethod) switch
+        {
+            "zeptun" => Loc.Of("Zeptun L3 Adapter"),
+            "mihomo" => Loc.Of("Mihomo L3 Adapter"),
+            _ => Loc.Of("WinTUN L3 Adapter"),
+        })
         : (SystemProxyEnabled ? Loc.Of("System Web Proxy") : Loc.Of("Local Inbound Proxy"));
 
     private void ApplyState(ConnectionState s)
@@ -835,6 +1058,7 @@ public sealed partial class HomeViewModel : PageViewModelBase
         OnPropertyChanged(nameof(TotalTrafficText));
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(IsConnecting));
+        OnPropertyChanged(nameof(IsDisconnecting));
         OnPropertyChanged(nameof(IsDisconnected));
         OnPropertyChanged(nameof(StatusHeadline));
         OnPropertyChanged(nameof(StatusSubtext));
@@ -846,6 +1070,12 @@ public sealed partial class HomeViewModel : PageViewModelBase
         OnPropertyChanged(nameof(ConnectingProgress));
         OnPropertyChanged(nameof(ConnectingProgressText));
         RaiseMethodDependentProperties();
+
+        if (s is ConnectionState.Connected or ConnectionState.Error or ConnectionState.Disconnected)
+        {
+            Interlocked.Exchange(ref _isToggling, 0);
+        }
+
         ToggleConnectionCommand.NotifyCanExecuteChanged();
     }
 
@@ -934,7 +1164,6 @@ public sealed partial class HomeViewModel : PageViewModelBase
             catch { }
             finally
             {
-                ApplyState(ConnectionState.Disconnected);
                 Interlocked.Exchange(ref _isToggling, 0);
                 ToggleConnectionCommand.NotifyCanExecuteChanged();
             }
@@ -948,10 +1177,30 @@ public sealed partial class HomeViewModel : PageViewModelBase
             if (State == ConnectionState.Connected)
             {
                 await _tunnel.StopAsync();
-                ApplyState(ConnectionState.Disconnected);
             }
             else if (State == ConnectionState.Disconnected || State == ConnectionState.Error)
             {
+                if (CurrentMethod is ConnectionMethod.Foxy or ConnectionMethod.FoxyOverWarp
+                    or ConnectionMethod.FoxyOverV2Ray or ConnectionMethod.PsiphonOverFoxy)
+                {
+                    var accounts = _settings.Settings.FirefoxAccounts;
+                    if (accounts == null || accounts.Count == 0)
+                    {
+                        System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                        {
+                            if (Views.FoxyAccountRequiredDialog.Show() && App.Services != null)
+                            {
+                                var settingsVm = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<SettingsViewModel>(App.Services);
+                                if (settingsVm != null)
+                                {
+                                    settingsVm.SelectedTab = SettingsTab.Foxy;
+                                }
+                                _navigation.NavigateTo("settings");
+                            }
+                        });
+                        return;
+                    }
+                }
                 await Task.Run(() => _tunnel.StartAsync());
             }
         }
@@ -981,13 +1230,22 @@ public sealed partial class HomeViewModel : PageViewModelBase
     [ObservableProperty]
     private bool _isCipherCopied;
 
+    private int _httpCopyGen;
+    private int _socksCopyGen;
+    private int _endpointCopyGen;
+    private int _cipherCopyGen;
+
     [RelayCommand]
     private void CopyHttpProxy()
     {
         if (TryCopy(HttpProxyEndpoint))
         {
             IsHttpCopied = true;
-            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() => IsHttpCopied = false));
+            var gen = Interlocked.Increment(ref _httpCopyGen);
+            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() =>
+            {
+                if (Volatile.Read(ref _httpCopyGen) == gen) IsHttpCopied = false;
+            }));
         }
     }
 
@@ -997,7 +1255,11 @@ public sealed partial class HomeViewModel : PageViewModelBase
         if (TryCopy(SocksProxyEndpoint))
         {
             IsSocksCopied = true;
-            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() => IsSocksCopied = false));
+            var gen = Interlocked.Increment(ref _socksCopyGen);
+            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() =>
+            {
+                if (Volatile.Read(ref _socksCopyGen) == gen) IsSocksCopied = false;
+            }));
         }
     }
 
@@ -1007,7 +1269,11 @@ public sealed partial class HomeViewModel : PageViewModelBase
         if (TryCopy(EndpointDisplay))
         {
             IsEndpointCopied = true;
-            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() => IsEndpointCopied = false));
+            var gen = Interlocked.Increment(ref _endpointCopyGen);
+            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() =>
+            {
+                if (Volatile.Read(ref _endpointCopyGen) == gen) IsEndpointCopied = false;
+            }));
         }
     }
 
@@ -1017,15 +1283,18 @@ public sealed partial class HomeViewModel : PageViewModelBase
         if (TryCopy(CipherDisplay))
         {
             IsCipherCopied = true;
-            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() => IsCipherCopied = false));
+            var gen = Interlocked.Increment(ref _cipherCopyGen);
+            System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Post(() =>
+            {
+                if (Volatile.Read(ref _cipherCopyGen) == gen) IsCipherCopied = false;
+            }));
         }
     }
 
     private static bool TryCopy(string text)
     {
         if (string.IsNullOrEmpty(text) || text == "—") return false;
-        Ui.SetClipboard(text);
-        return true;
+        return Ui.SetClipboard(text);
     }
 
     private static string FormatBytes(long bytes)

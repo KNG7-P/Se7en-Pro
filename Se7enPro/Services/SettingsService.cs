@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Models;
 
@@ -36,6 +37,7 @@ public sealed class SettingsService : ISettingsService
     public SettingsService(ILogger<SettingsService> logger)
     {
         _logger = logger;
+        ProtectedSecret.Warning ??= message => _logger.LogWarning("{SecretWarning}", message);
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var dir = Path.Combine(localAppData, "Se7en");
         Directory.CreateDirectory(dir);
@@ -121,7 +123,7 @@ public sealed class SettingsService : ISettingsService
         {
             if (!File.Exists(_path))
             {
-                Settings = new UserSettings();
+                Settings = new UserSettings { SettingsSchemaVersion = CurrentSettingsSchema };
                 _foreignKeys = null;
                 Save();
                 return;
@@ -148,6 +150,7 @@ public sealed class SettingsService : ISettingsService
                            ?? new UserSettings();
                 CaptureForeignKeys(rescue);
                 MigrateRemovedAutoMethod();
+                MigrateAetherDefaults();
                 return;
             }
             catch (Exception rescueEx)
@@ -155,7 +158,7 @@ public sealed class SettingsService : ISettingsService
                 _logger.LogWarning(rescueEx, "Last good settings copy unusable; falling back to defaults");
             }
 
-            Settings = new UserSettings();
+            Settings = new UserSettings { SettingsSchemaVersion = CurrentSettingsSchema };
             _foreignKeys = null;
         }
     }
@@ -181,66 +184,177 @@ public sealed class SettingsService : ISettingsService
         Save();
     }
 
+    private const int CurrentSettingsSchema = 6;
+
     private void MigrateAetherDefaults()
     {
         var settings = Settings;
         if (settings is null) return;
-        bool changed = false;
 
-        if (string.IsNullOrWhiteSpace(settings.AetherFragmentSize))
+        if (settings.SettingsSchemaVersion >= CurrentSettingsSchema) return;
+
+        if (settings.SettingsSchemaVersion < 1)
         {
-            settings.AetherFragmentSize = "16-32";
-            changed = true;
-        }
-        if (string.IsNullOrWhiteSpace(settings.AetherFragmentDelay))
-        {
-            settings.AetherFragmentDelay = "2-10";
-            changed = true;
-        }
-        if (string.IsNullOrWhiteSpace(settings.AetherScanModeMim) || settings.AetherScanModeMim.Equals("balanced", StringComparison.OrdinalIgnoreCase))
-        {
-            settings.AetherScanModeMim = "turbo";
-            changed = true;
-        }
-        if (settings.AetherMasqueTransport == "h2" || string.IsNullOrWhiteSpace(settings.AetherMasqueTransport))
-        {
-            settings.AetherMasqueTransport = "h3";
-            settings.AetherMasqueQuic = true;
-            changed = true;
+            if (string.IsNullOrWhiteSpace(settings.AetherFragmentSize))
+            {
+                settings.AetherFragmentSize = "16-32";
+            }
+            if (string.IsNullOrWhiteSpace(settings.AetherFragmentDelay))
+            {
+                settings.AetherFragmentDelay = "2-10";
+            }
+            if (string.IsNullOrWhiteSpace(settings.AetherScanModeMim)
+                || settings.AetherScanModeMim.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.AetherScanModeMim = "turbo";
+            }
         }
 
-        if (changed)
+        if (settings.SettingsSchemaVersion < 2)
         {
-            _logger?.LogInformation("Migrated Aether settings: transport=h3, mimScan=turbo");
-            Save();
+            settings.AetherMasqueTransport = "h2";
+            settings.AetherMasqueQuic = false;
         }
+
+        if (settings.SettingsSchemaVersion < 3)
+        {
+            settings.AetherMasqueTransport = "h2";
+            settings.AetherMasqueQuic = false;
+        }
+
+        if (settings.SettingsSchemaVersion < 4)
+        {
+            settings.AetherFragment = false;
+            if (string.IsNullOrWhiteSpace(settings.AetherScanMode)
+                || settings.AetherScanMode.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+                settings.AetherScanMode = "turbo";
+            if (string.IsNullOrWhiteSpace(settings.AetherScanModeMasque)
+                || settings.AetherScanModeMasque.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+                settings.AetherScanModeMasque = "turbo";
+            if (string.IsNullOrWhiteSpace(settings.AetherScanModeWireguard)
+                || settings.AetherScanModeWireguard.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+                settings.AetherScanModeWireguard = "turbo";
+            if (string.IsNullOrWhiteSpace(settings.AetherScanModeWarp)
+                || settings.AetherScanModeWarp.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+                settings.AetherScanModeWarp = "turbo";
+            if (string.IsNullOrWhiteSpace(settings.AetherNoizeMasque)
+                || settings.AetherNoizeMasque.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+                settings.AetherNoizeMasque = "firewall";
+            if (string.IsNullOrWhiteSpace(settings.AetherNoizeMim)
+                || settings.AetherNoizeMim.Equals("balanced", StringComparison.OrdinalIgnoreCase))
+                settings.AetherNoizeMim = "firewall";
+        }
+
+        if (settings.SettingsSchemaVersion < 5)
+        {
+            settings.V2RayEnableFragment = false;
+        }
+
+        if (settings.SettingsSchemaVersion < 6)
+        {
+            foreach (var cfg in settings.V2RayConfigs)
+            {
+                cfg.EnableFragment = null;
+            }
+        }
+
+        settings.SettingsSchemaVersion = CurrentSettingsSchema;
+        _logger?.LogInformation(
+            "Applied one-time Aether defaults migration and stamped settings schema v{Version}",
+            CurrentSettingsSchema);
+        Save();
     }
 
-    public void Save()
+    public void ResetToDefaults()
     {
-        
-        
-        
-        
+        var defaults = new UserSettings { SettingsSchemaVersion = CurrentSettingsSchema };
+        foreach (var prop in typeof(UserSettings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (!prop.CanRead || !prop.CanWrite) continue;
+            prop.SetValue(Settings, prop.GetValue(defaults));
+        }
+
+        Save();
+    }
+
+    public bool Save() => SaveCore(notify: true);
+
+    public bool SaveQuietly() => SaveCore(notify: false);
+
+    private bool SaveCore(bool notify)
+    {
+        string? json = null;
+        for (var attempt = 0; attempt < 5 && json is null; attempt++)
+        {
+            try
+            {
+                lock (Settings.SyncRoot)
+                {
+                    json = JsonSerializer.Serialize(Settings, JsonOpts);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                Thread.Sleep(20 * (attempt + 1));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to serialize settings for {Path}", _path);
+                return false;
+            }
+        }
+
+        if (json is null)
+        {
+            _logger.LogError("Failed to save settings to {Path}: the settings collection kept changing", _path);
+            return false;
+        }
+
         lock (_writeLock)
         {
             try
             {
-                var json = MergeForeignKeys(JsonSerializer.Serialize(Settings, JsonOpts));
-                json = ProtectSecrets(json);
+                json = ProtectSecrets(MergeForeignKeys(json));
                 var temp = _path + ".tmp";
                 File.WriteAllText(temp, json);
-                if (File.Exists(_path)) File.Copy(_path, _backupPath, overwrite: true);
-                File.Move(temp, _path, overwrite: true);
+
+                try
+                {
+                    if (File.Exists(_path)) File.Copy(_path, _backupPath, overwrite: true);
+                }
+                catch { }
+
+                var moved = false;
+                for (var attempt = 0; attempt < 5; attempt++)
+                {
+                    try
+                    {
+                        File.Move(temp, _path, overwrite: true);
+                        moved = true;
+                        break;
+                    }
+                    catch (IOException)
+                    {
+                        Thread.Sleep(25 * (attempt + 1));
+                    }
+                }
+
+                if (!moved)
+                {
+                    File.WriteAllText(_path, json);
+                    try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save settings to {Path}", _path);
-                return;
+                return false;
             }
         }
 
-        SettingsChanged?.Invoke(this, EventArgs.Empty);
+        if (notify)
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
+        return true;
     }
 
     
@@ -255,7 +369,47 @@ public sealed class SettingsService : ISettingsService
     {
         "upstreamProxyPassword",
         "lanProxyPassword",
+        "firefoxCustomProxyPassword",
+        "upstreamProxy",
     };
+
+    private static readonly string[] FoxyTokenKeys =
+    {
+        "sessionToken",
+        "accessToken",
+        "refreshToken",
+        "proxyPassToken",
+    };
+
+    private static void ProtectFoxyAccounts(JsonObject obj, bool protect)
+    {
+        if (obj["firefoxAccounts"] is not JsonArray accounts) return;
+
+        foreach (var entry in accounts)
+        {
+            if (entry is not JsonObject account) continue;
+            foreach (var key in FoxyTokenKeys)
+            {
+                try
+                {
+                    if (account[key] is not JsonValue value || !value.TryGetValue<string>(out var token)
+                        || string.IsNullOrEmpty(token)) continue;
+
+                    if (protect)
+                    {
+                        if (!ProtectedSecret.LooksProtected(token)) account[key] = ProtectedSecret.Protect(token);
+                    }
+                    else
+                    {
+                        account[key] = ProtectedSecret.Unprotect(token);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
 
     private string ProtectSecrets(string json)
     {
@@ -288,6 +442,8 @@ public sealed class SettingsService : ISettingsService
                     }
                 }
             }
+
+            ProtectFoxyAccounts(obj, protect: true);
 
             return obj.ToJsonString(JsonOpts);
         }
@@ -326,6 +482,8 @@ public sealed class SettingsService : ISettingsService
                     }
                 }
             }
+
+            ProtectFoxyAccounts(obj, protect: false);
 
             return obj.ToJsonString(JsonOpts);
         }

@@ -52,9 +52,6 @@ public static class AdminElevation
             {
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Programs"),
             };
 
             foreach (var root in allowed)
@@ -86,10 +83,9 @@ public static class AdminElevation
 
             if (!IsTrustedInstallPath(exePath))
             {
-                
-                
                 System.Diagnostics.Debug.WriteLine(
-                    $"[elevation] elevating from a user-writable location (user consented): {exePath}");
+                    $"[elevation] refusing to elevate a binary outside Program Files: {exePath}");
+                return false;
             }
 
             var psi = new ProcessStartInfo

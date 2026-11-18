@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -30,8 +31,8 @@ public sealed partial class WintunTunManager
 
         if (task is not null)
         {
-            try { await task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
-            catch (TimeoutException) { WriteDiag("supervisor did not exit within 5s after cancel"); }
+            try { await task.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false); }
+            catch (TimeoutException) { WriteDiag("supervisor did not exit within 15s after cancel"); }
             catch { }
         }
         try { cts?.Dispose(); } catch { }
@@ -57,7 +58,7 @@ public sealed partial class WintunTunManager
         catch (OperationCanceledException) { }
     }
 
-        private async Task KillTunAsync()
+        private async Task KillTunAsync(bool restoreProxy = true)
     {
         Process? proc;
         StreamWriter? writer;
@@ -76,8 +77,11 @@ public sealed partial class WintunTunManager
         Task? refresherTask;
         CancellationTokenSource? processSplitCts;
         Task? processSplitTask;
+        var realIf = 0;
         lock (_routeLock)
         {
+            _routeGeneration++;
+            realIf = _realIfIndex;
             routes = _appliedRoutes.ToArray();
             _appliedRoutes.Clear();
             _dynamicRoutes.Clear();
@@ -93,16 +97,11 @@ public sealed partial class WintunTunManager
             processSplitTask = _processSplitTask;
             _processSplitCts = null;
             _processSplitTask = null;
+            _realRouteKnown = false;
+            _realIfIndex = 0;
+            _realGateway = IPAddress.Any;
+            _tunIfIndex = 0;
         }
-        _realRouteKnown = false;
-        
-        
-        
-        
-        
-        _realIfIndex = 0;
-        _realGateway = IPAddress.Any;
-        _tunIfIndex = 0;
 
         try { refresherCts?.Cancel(); } catch { }
         try { processSplitCts?.Cancel(); } catch { }
@@ -119,18 +118,45 @@ public sealed partial class WintunTunManager
         try { refresherCts?.Dispose(); } catch { }
         try { processSplitCts?.Dispose(); } catch { }
 
-        foreach (var r in routes)
-        {
-            try { WintunRouteApi.DeleteRoute(r); }
-            catch {  }
-        }
-
-        try { forwarder?.Stop(); } catch { }
-        try { forwarder?.Dispose(); } catch { }
+        
+        
+        
         if (dnsSet)
         {
             try { await WintunDnsShell.ClearAdapterDnsAsync(TunInterfaceName); } catch { }
         }
+        try { WintunDnsShell.DisableNrptPolicy(); } catch { }
+        try { _dnsLeakProtector.Disarm(); } catch { }
+
+        try { await WintunDnsShell.ResetAdapterMetricAsync(TunInterfaceName); } catch { }
+
+        try { forwarder?.Stop(); } catch { }
+        try { forwarder?.Dispose(); } catch { }
+
+        var undeleted = new List<TunRouteJournal.Entry>();
+        foreach (var r in routes)
+        {
+            try { WintunRouteApi.DeleteRoute(r); }
+            catch
+            {
+                if (r.IfIndex == realIf)
+                {
+                    undeleted.Add(new TunRouteJournal.Entry(
+                        r.Destination.ToString(), r.Prefix, r.NextHop.ToString(), r.Metric));
+                }
+            }
+        }
+
+        if (undeleted.Count == 0)
+        {
+            TunRouteJournal.Clear();
+        }
+        else
+        {
+            TunRouteJournal.Save(realIf, undeleted);
+            WriteDiag($"{undeleted.Count} route(s) could not be removed; journal kept for the next start");
+        }
+
         WintunRouteApi.FlushDnsCache();
 
         if (proc is not null)
@@ -158,20 +184,18 @@ public sealed partial class WintunTunManager
 
         try { writer?.Dispose(); } catch { }
 
-        RestoreSystemProxyAfterTun();
+        if (restoreProxy) RestoreSystemProxyAfterTun();
     }
 
         private void SuppressSystemProxy()
     {
         if (!_settings.Settings.SetSystemProxy) return;
+        if (_proxySuppressedByTun) return;
         try
         {
             _systemProxy.Clear();
-            if (!_proxySuppressedByTun)
-            {
-                _proxySuppressedByTun = true;
-                WriteDiag("system proxy suppressed while the TUN owns system-wide traffic");
-            }
+            _proxySuppressedByTun = true;
+            WriteDiag("system proxy suppressed while the TUN owns system-wide traffic");
         }
         catch (Exception ex)
         {
@@ -192,6 +216,11 @@ public sealed partial class WintunTunManager
                 _systemProxy.Set(_tunnel.HttpProxyPort);
                 WriteDiag("system proxy restored — the tunnel still holds the connection");
             }
+            else
+            {
+                _systemProxy.Clear();
+                WriteDiag("system proxy restored to its pre-TUN state");
+            }
         }
         catch (Exception ex)
         {
@@ -202,6 +231,7 @@ public sealed partial class WintunTunManager
     public async ValueTask DisposeAsync()
     {
         _tunnel.StateChanged -= OnTunnelStateChanged;
+        _tunnel.RouteChanged -= OnTunnelRouteChanged;
         _settings.SettingsChanged -= OnSettingsChanged;
 
         CancellationTokenSource? cts;

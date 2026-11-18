@@ -11,9 +11,6 @@ using Se7enPro.Services;
 
 namespace VerifyCriticalFixes;
 
-/// <summary>
-/// Verifies resolver relay ordering over loopback sockets.
-/// </summary>
 internal static class RelayOrderTests
 {
     internal static async Task<int> RunAsync()
@@ -22,7 +19,6 @@ internal static class RelayOrderTests
 
         var failures = 0;
 
-        // Two distinguishable upstreams: "alpha" answers, "beta" is a black hole.
         using var alpha = new FakeDnsServer("A") { Answer = true };
         using var beta = new FakeDnsServer("B") { Answer = false };
         alpha.Start();
@@ -31,8 +27,6 @@ internal static class RelayOrderTests
         using var relay = new FakeSocksRelay();
         relay.Start();
 
-        // The user's list: alpha first, the dead beta second. If ordering is honoured,
-        // alpha answers and beta is never dialled.
         var targets = new List<DnsServerEntry>
         {
             new(DnsTransport.Udp, alpha.EndPointText,
@@ -41,9 +35,6 @@ internal static class RelayOrderTests
                 IPAddress.Loopback, "127.0.0.1", beta.Port),
         };
 
-        // Start() is deliberately not called: it binds 127.0.0.1:53, which needs
-        // privileges and collides with anything already listening. SendOneAsync drives
-        // the same relay path without the listener.
         var forwarder = new SocksDnsForwarder(relay.Port, "203.0.113.99", relayTargets: targets);
         try
         {
@@ -63,9 +54,6 @@ internal static class RelayOrderTests
                           "the dead resolver behind it was never dialled",
                           $"beta queries = {beta.Queries}");
 
-            // Now the reverse: only the dead one is configured. The relay must be
-            // dialled, get nothing, and the forwarder must report no answer rather than
-            // inventing one.
             alpha.Reset();
             beta.Reset();
             using var deadOnly = new SocksDnsForwarder(relay.Port, "203.0.113.99",
@@ -82,9 +70,6 @@ internal static class RelayOrderTests
             Program.Check(none is null,
                           "a dead resolver yields no answer rather than a fabricated one");
 
-            // Falling through: dead first, live second. The live one must still answer,
-            // which is what makes the configured list a preference rather than a
-            // single point of failure.
             alpha.Reset();
             beta.Reset();
             using var fallthrough = new SocksDnsForwarder(relay.Port, "203.0.113.99",
@@ -103,15 +88,12 @@ internal static class RelayOrderTests
                           "the second entry was reached after the first failed",
                           $"alpha queries = {alpha.Queries}");
 
-            // An empty relay list must be refused rather than accepted: a session with no
-            // resolver resolves nothing at all.
             var before = targets.Count;
             forwarder.UpdateRelayTargets(Array.Empty<DnsServerEntry>());
             Program.Check(before > 0 && forwarder.RelayTargetsSnapshot.Count == before,
                           "an empty relay-target update is rejected, leaving the list intact",
                           $"count = {forwarder.RelayTargetsSnapshot.Count}");
 
-            // A non-empty update must be taken.
             var replacement = new List<DnsServerEntry>
             {
                 new(DnsTransport.Udp, alpha.EndPointText,
@@ -139,20 +121,13 @@ internal static class RelayOrderTests
         return failures;
     }
 
-    /// <summary>Drives one query through the forwarder's public path.</summary>
     private static async Task<byte[]?> RelayOnceAsync(
         SocksDnsForwarder forwarder, byte[] query, TimeSpan timeout)
     {
-        // The forwarder listens on 127.0.0.1:53, which needs privileges this test does
-        // not assume. Reach the relay logic through the internal entry point instead.
+
         return await forwarder.SendOneAsync(query, timeout);
     }
 
-    /// <summary>
-    /// A DNS server on the loopback interface, speaking the length-prefixed framing the
-    /// forwarder uses when it relays a query. TCP, not UDP: that is what the forwarder
-    /// actually speaks to its upstream once the SOCKS hop is spliced out.
-    /// </summary>
     private sealed class FakeDnsServer : IDisposable
     {
         private TcpListener? _listener;
@@ -160,7 +135,6 @@ internal static class RelayOrderTests
 
         public FakeDnsServer(string tag) { }
 
-        /// <summary>False makes it a black hole: it accepts, reads, and never answers.</summary>
         public bool Answer { get; set; }
         public int Port { get; private set; }
         public int Queries;
@@ -208,8 +182,7 @@ internal static class RelayOrderTests
                         Interlocked.Increment(ref Queries);
                         if (!Answer)
                         {
-                            // Black hole: hold the connection open, say nothing. The
-                            // forwarder must time this out rather than fabricate a reply.
+
                             await Task.Delay(TimeSpan.FromSeconds(8));
                             return;
                         }
@@ -249,23 +222,22 @@ internal static class RelayOrderTests
             _cts?.Dispose();
         }
 
-        /// <summary>Echoes the query with the QR bit set and one A record.</summary>
         private static byte[] BuildAnswer(byte[] query)
         {
             var q = (byte[])query.Clone();
             if (q.Length < 12) return q;
-            q[2] |= 0x80;     // QR = response
-            q[3] |= 0x80;     // RA
-            q[6] = 0; q[7] = 1;   // ANCOUNT = 1
+            q[2] |= 0x80;
+            q[3] |= 0x80;
+            q[6] = 0; q[7] = 1;
 
             var answer = new List<byte>(q);
-            answer.Add(0xC0); answer.Add(0x0C);   // name pointer to offset 12
-            answer.Add(0x00); answer.Add(0x01);   // TYPE = A
-            answer.Add(0x00); answer.Add(0x01);   // CLASS = IN
+            answer.Add(0xC0); answer.Add(0x0C);
+            answer.Add(0x00); answer.Add(0x01);
+            answer.Add(0x00); answer.Add(0x01);
             answer.Add(0x00); answer.Add(0x00);
-            answer.Add(0x00); answer.Add(0x3C);   // TTL = 60
-            answer.Add(0x00); answer.Add(0x04);   // RDLENGTH = 4
-            // 203.0.113.1, a TEST-NET-3 address, so nothing here can be mistaken for a real host.
+            answer.Add(0x00); answer.Add(0x3C);
+            answer.Add(0x00); answer.Add(0x04);
+
             answer.Add(203);
             answer.Add(0);
             answer.Add(113);
@@ -274,10 +246,6 @@ internal static class RelayOrderTests
         }
     }
 
-    /// <summary>
-    /// A minimal SOCKS5 server that records which host:port each CONNECT asked for and
-    /// splices the connection through to that target.
-    /// </summary>
     private sealed class FakeSocksRelay : IDisposable
     {
         private TcpListener? _listener;
@@ -318,7 +286,7 @@ internal static class RelayOrderTests
                 using (client)
                 await using (var stream = client.GetStream())
                 {
-                    // greeting
+
                     var greet = new byte[2];
                     if (!await ReadExact(stream, greet)) { LastError = "short greeting"; return; }
                     var methodCount = greet[1];
@@ -327,15 +295,13 @@ internal static class RelayOrderTests
                     await stream.WriteAsync(new byte[] { 0x05, 0x00 });
                     await stream.FlushAsync();
 
-
-                    // request
                     var header = new byte[4];
                     if (!await ReadExact(stream, header))
                     {
                         LastError = "short header (client closed before sending CONNECT)";
                         return;
                     }
-                    if (header[1] != 0x01) { LastError = $"cmd={header[1]}"; return; } // only CONNECT
+                    if (header[1] != 0x01) { LastError = $"cmd={header[1]}"; return; }
 
                     string host;
                     int port;
@@ -379,7 +345,7 @@ internal static class RelayOrderTests
                     }
                     catch
                     {
-                        // 0x05 = connection refused
+
                         await stream.WriteAsync(new byte[] { 0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0 });
                         return;
                     }
@@ -397,8 +363,6 @@ internal static class RelayOrderTests
         }
 
         public string? LastError { get; private set; }
-
-        
 
         private static async Task Pump(NetworkStream from, NetworkStream to)
         {

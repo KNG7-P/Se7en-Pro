@@ -61,12 +61,21 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+; Puts the machine back the way it was: stops leftover engines, restores the system
+; proxy and removes TUN bypass routes. Without it the proxy still points at a dead
+; local port after uninstall and the user loses internet.
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--cleanup"; Flags: runhidden waituntilterminated; RunOnceId: "Se7enCleanup"
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{localappdata}\Se7en"
+
 [Code]
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
 begin
-  Exec('taskkill.exe', '/F /IM Se7enPro.exe /IM Se7enPro.Tunnel.exe /IM Se7enPro.Aether.exe /IM Se7enPro.Tor.exe /IM Se7enPro.Shard.exe /IM aether.exe /IM tor.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/F /IM Se7enPro.exe /IM Se7enPro.Tunnel.exe /IM Se7enPro.Aether.exe /IM Se7enPro.Tor.exe /IM Se7enPro.Shard.exe /IM Se7enPro.Lantern.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(500);
   Result := '';
 end;

@@ -1,5 +1,4 @@
-// Snapshot of the PRE-FIX StartupReaper decision logic (git HEAD), kept only so the
-// verification harness can demonstrate the regression it had. Not part of the app.
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -50,10 +49,9 @@ internal static class OldReaper
     {
         var n = 0;
         foreach (var r in Roots()) if (!string.IsNullOrEmpty(r)) n++;
-        return 0; // Roots() is already normalised; count used below is derived separately.
+        return 0;
     }
 
-    /// <summary>The exact predicate from the pre-fix code (StartupReaper.cs:76-117).</summary>
     internal static bool OldShouldReap(string? imagePath, string? processName, string[] normalisedRoots, int count)
     {
         bool isKnownEngine =
@@ -65,7 +63,7 @@ internal static class OldReaper
 
         if (string.IsNullOrEmpty(imagePath))
         {
-            // Pre-fix: unreadable image still killed by name.
+
             return isKnownEngine;
         }
 

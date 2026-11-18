@@ -16,6 +16,11 @@ public sealed class SystemProxyService : ISystemProxyService
     private const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
     private const int INTERNET_OPTION_REFRESH = 37;
 
+    private const string StandardBypassList =
+        "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;"
+        + "172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;"
+        + "192.168.*;169.254.*;[::1];<local>";
+
     [DllImport("wininet.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern bool InternetSetOption(
         IntPtr hInternet,
@@ -29,7 +34,9 @@ public sealed class SystemProxyService : ISystemProxyService
 
     public bool IsApplied => File.Exists(BackupPath);
 
-    public void Set(int httpProxyPort)
+    public void Set(int httpProxyPort) => Set(httpProxyPort, null);
+
+    public void Set(int httpProxyPort, System.Collections.Generic.IEnumerable<string>? bypassEntries)
     {
         try
         {
@@ -47,9 +54,9 @@ public sealed class SystemProxyService : ISystemProxyService
                     ProxyEnable = key.GetValue("ProxyEnable") as int? ?? 0,
                     ProxyServer = key.GetValue("ProxyServer") as string ?? "",
                     ProxyOverride = key.GetValue("ProxyOverride") as string ?? "",
-                    
-                    
-                    
+
+
+
                     AutoConfigUrl = key.GetValue("AutoConfigURL") as string ?? "",
                 };
                 WriteBackup(backup);
@@ -58,7 +65,17 @@ public sealed class SystemProxyService : ISystemProxyService
             key.SetValue("ProxyEnable", 1, RegistryValueKind.DWord);
             key.SetValue("ProxyServer", $"127.0.0.1:{httpProxyPort}", RegistryValueKind.String);
 
-            key.SetValue("ProxyOverride", "<local>", RegistryValueKind.String);
+            var bypassList = StandardBypassList;
+            if (bypassEntries != null)
+            {
+                var extra = string.Join(";", System.Linq.Enumerable.Where(bypassEntries, e => !string.IsNullOrWhiteSpace(e)));
+                if (extra.Length > 0)
+                {
+                    bypassList = $"{bypassList};{extra}";
+                }
+            }
+
+            key.SetValue("ProxyOverride", bypassList, RegistryValueKind.String);
 
             
             
@@ -116,12 +133,36 @@ public sealed class SystemProxyService : ISystemProxyService
             }
             else
             {
-                
-                
-                
-                _logger.LogWarning(
-                    "No proxy backup found; disabling the system proxy without touching the rest of the configuration");
+                var current = new ProxyBackup
+                {
+                    ProxyEnable = key.GetValue("ProxyEnable") as int? ?? 0,
+                    ProxyServer = key.GetValue("ProxyServer") as string ?? "",
+                    ProxyOverride = key.GetValue("ProxyOverride") as string ?? "",
+                    AutoConfigUrl = key.GetValue("AutoConfigURL") as string ?? "",
+                };
+
+                if (current.ProxyEnable == 0)
+                {
+                    _logger.LogInformation("No active system proxy configured; nothing to clear");
+                    return;
+                }
+
+                if (current.ProxyServer.StartsWith("127.0.0.1:", StringComparison.Ordinal)
+                    || current.ProxyServer.StartsWith("localhost:", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(current.ProxyOverride, StandardBypassList, StringComparison.OrdinalIgnoreCase))
+                {
+                    key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
+                    try { key.DeleteValue("ProxyServer", throwOnMissingValue: false); } catch { }
+                    try { key.DeleteValue("ProxyOverride", throwOnMissingValue: false); } catch { }
+                    NotifyWinINet();
+                    _logger.LogWarning("Removed a leftover Se7en system proxy; no original backup was available");
+                    return;
+                }
+
+                WriteBackup(current);
                 key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
+                _logger.LogInformation(
+                    "System proxy disabled; the manual configuration was backed up for restore");
             }
 
             NotifyWinINet();
@@ -144,6 +185,10 @@ public sealed class SystemProxyService : ISystemProxyService
                 {
                     var json = File.ReadAllText(LegacyBackupPath);
                     backup = JsonSerializer.Deserialize<ProxyBackup>(json);
+                    if (backup is not null)
+                    {
+                        WriteBackup(backup);
+                    }
                     try { File.Delete(LegacyBackupPath); } catch { }
                 }
                 catch { }
@@ -186,17 +231,10 @@ public sealed class SystemProxyService : ISystemProxyService
                 [JsonPropertyName("autoConfigUrl")] public string AutoConfigUrl { get; set; } = "";
     }
 
-    private void WriteBackup(ProxyBackup backup)
+    private static void WriteBackup(ProxyBackup backup)
     {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(BackupPath)!);
-            File.WriteAllText(BackupPath, JsonSerializer.Serialize(backup));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not write proxy backup at {Path}", BackupPath);
-        }
+        Directory.CreateDirectory(Path.GetDirectoryName(BackupPath)!);
+        File.WriteAllText(BackupPath, JsonSerializer.Serialize(backup));
     }
 
     private ProxyBackup? ReadBackup()

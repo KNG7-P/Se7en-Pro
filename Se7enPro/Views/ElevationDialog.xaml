@@ -4,7 +4,7 @@
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="0" CornerRadius="18" GlassFrameThickness="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
     </WindowChrome.WindowChrome>
 
-    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22,20" Margin="12">
+    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22,20" Margin="12" MouseLeftButtonDown="OnDialogBorderMouseLeftButtonDown">
 
         <StackPanel>
             <Grid Margin="0,0,0,18">
@@ -12,7 +12,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Width="42" Height="42" CornerRadius="12" Background="#1CF59E0B" BorderBrush="#50F59E0B" BorderThickness="1" Margin="0,0,12,0">
+                <Border Grid.Column="0" Width="42" Height="42" CornerRadius="12" Background="{DynamicResource Status.WarningSoft}" BorderBrush="{DynamicResource Status.WarningBorder}" BorderThickness="1" Margin="0,0,12,0">
                     <materialDesign:PackIcon Kind="ShieldLockOutline" Width="22" Height="22" Foreground="{StaticResource Brand.WarningBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -34,7 +34,7 @@
 
                 <Button Grid.Column="1" Style="{StaticResource UI.GhostButton}" Content="{DynamicResource Loc_dialogCancel}" MinWidth="96" Margin="0,0,10,0" Click="OnCancelClicked" IsCancel="True" />
 
-                <Button Grid.Column="2" x:Name="ElevateButton" Style="{StaticResource UI.PrimaryButton}" MinWidth="190" Click="OnElevateClicked">
+                <Button Grid.Column="2" x:Name="ElevateButton" Style="{StaticResource UI.PrimaryButton}" MinWidth="190" Click="OnElevateClicked" IsDefault="True">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <materialDesign:PackIcon Kind="Shield" Width="14" Height="14" Foreground="{DynamicResource TextOnCyanBrush}" VerticalAlignment="Center" Margin="0,0,7,0" />
                         <TextBlock Text="{DynamicResource Loc_restartAsAdministrator}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextOnCyanBrush}" VerticalAlignment="Center" />

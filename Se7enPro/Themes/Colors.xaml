@@ -1,10 +1,9 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    
-    
-    
+    <FontFamily x:Key="UI.FontFamily">Inter, Segoe UI, sans-serif</FontFamily>
+    <FontFamily x:Key="BrandFont">Inter, Segoe UI, sans-serif</FontFamily>
+    <FontFamily x:Key="UI.MonoFontFamily">JetBrains Mono, Consolas, monospace</FontFamily>
 
-    
     <Color x:Key="Brand.Bg">#FF080A12</Color>
     <Color x:Key="Brand.BgDeep">#FF04050A</Color>
     <Color x:Key="Brand.Sidebar">#FF0E1019</Color>
@@ -170,6 +169,10 @@
     <SolidColorBrush x:Key="Brand.TelegramSoftBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.13" />
     <SolidColorBrush x:Key="Brand.TelegramHoverBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.24" />
     <SolidColorBrush x:Key="Brand.TelegramBorderBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.40" />
+    <SolidColorBrush x:Key="Surface.TelegramSoftBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.13" />
+    <SolidColorBrush x:Key="Surface.TelegramHoverBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.24" />
+    <SolidColorBrush x:Key="Surface.TelegramBorderBrush" Color="{StaticResource Brand.TelegramColor}" Opacity="0.40" />
+    <SolidColorBrush x:Key="Surface.TelegramBrush" Color="{StaticResource Brand.TelegramColor}" />
 
     
     <Color x:Key="Surface.AppBgColor">#FF080A12</Color>
@@ -361,5 +364,20 @@
     <SolidColorBrush x:Key="MaterialDesign.Brush.Outline" Color="#FF242634" />
     <SolidColorBrush x:Key="MaterialDesign.Brush.OutlineVariant" Color="#FF363A4E" />
     <SolidColorBrush x:Key="MaterialDesign.Brush.Scrim" Color="#B305060C" />
+
+    <!-- Semantic status & feature accent brushes -->
+    <SolidColorBrush x:Key="Status.SuccessSoft" Color="#2010B981" />
+    <SolidColorBrush x:Key="Status.SuccessBorder" Color="#4010B981" />
+    <SolidColorBrush x:Key="Status.DangerSoft" Color="#1AEF4444" />
+    <SolidColorBrush x:Key="Status.DangerBorder" Color="#40EF4444" />
+    <SolidColorBrush x:Key="Status.WarningSoft" Color="#1AF59E0B" />
+    <SolidColorBrush x:Key="Status.WarningBorder" Color="#45F59E0B" />
+    <SolidColorBrush x:Key="Status.CyanSoft" Color="#1A00D4FF" />
+    <SolidColorBrush x:Key="Status.CyanBorder" Color="#4000D4FF" />
+    <SolidColorBrush x:Key="Status.PurpleSoft" Color="#26A855F7" />
+    <SolidColorBrush x:Key="Status.PurpleBorder" Color="#4DA855F7" />
+    <SolidColorBrush x:Key="Status.Foxy" Color="#FFFF7139" />
+    <SolidColorBrush x:Key="Status.FoxySoft" Color="#1AFF7139" />
+    <SolidColorBrush x:Key="Status.FoxyBorder" Color="#40FF7139" />
 
 </ResourceDictionary>

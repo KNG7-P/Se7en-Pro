@@ -1,0 +1,208 @@
+<Window x:Class="Se7enPro.Views.AddFoxyAccountDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" Title="{DynamicResource Loc_foxySignInTitle}" Width="470" SizeToContent="Height" WindowStartupLocation="CenterOwner" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False" FontFamily="{StaticResource UI.FontFamily}" TextElement.Foreground="{DynamicResource TextPrimaryBrush}" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Grayscale" UseLayoutRounding="True">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="4" CornerRadius="18" GlassFrameThickness="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
+    </WindowChrome.WindowChrome>
+
+    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22" Margin="12" MouseLeftButtonDown="OnDialogBorderMouseLeftButtonDown">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="2,2">
+            <StackPanel Margin="2">
+
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10" Background="{DynamicResource Status.FoxySoft}" BorderBrush="{DynamicResource Status.FoxyBorder}" BorderThickness="1" Margin="0,0,12,0">
+                        <materialDesign:PackIcon Kind="Firefox" Width="20" Height="20" Foreground="{DynamicResource Status.Foxy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Loc_foxySignInTitle}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Loc_foxySignInSubtitle}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Button Grid.Column="2" Style="{StaticResource UI.ModalCloseButton}" VerticalAlignment="Top" ToolTip="{DynamicResource Loc_close}" Click="OnCancelClicked" AutomationProperties.Name="{DynamicResource Loc_close}">
+                        <materialDesign:PackIcon Kind="WindowClose" Width="14" Height="14" />
+                    </Button>
+                </Grid>
+
+                <StackPanel x:Name="ProtocolStepPanel" Visibility="Visible">
+                    <TextBlock Text="CONNECTION METHOD BEFORE SIGN-IN" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                    <ComboBox x:Name="TransportComboBox" Style="{StaticResource UI.CustomComboBox}" Height="42" SelectedIndex="0" SelectionChanged="OnTransportSelectionChanged" AutomationProperties.Name="Connection method before sign-in">
+                        <ComboBoxItem Tag="Masque" Content="Aether MASQUE" />
+                        <ComboBoxItem Tag="WireGuard" Content="Aether WireGuard" />
+                        <ComboBoxItem Tag="V2Ray" Content="V2Ray" />
+                        <ComboBoxItem Tag="Veep" Content="Veep" />
+                        <ComboBoxItem Tag="Lantern" Content="Lantern" />
+                        <ComboBoxItem Tag="None" Content="Direct" />
+                    </ComboBox>
+                    <TextBlock x:Name="TransportHintText" Text="Temporary MASQUE proxy for sign-in." FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,7,0,0" TextWrapping="Wrap" />
+
+                    <Border x:Name="TransportStatusCard" Visibility="Collapsed" Margin="0,12,0,0" CornerRadius="10" Padding="12,10" Background="#150EA5E9" BorderBrush="#400EA5E9" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Column="0" Width="28" Height="28" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <ProgressBar x:Name="TransportConnectingRing" Width="22" Height="22" IsIndeterminate="True" Style="{StaticResource MaterialDesignCircularProgressBar}" Foreground="#0EA5E9" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                                <Border x:Name="TransportConnectedBadge" Width="26" Height="26" CornerRadius="13" Background="#2510B981" BorderBrush="#6010B981" BorderThickness="1" Visibility="Collapsed">
+                                    <materialDesign:PackIcon Kind="Check" Width="15" Height="15" Foreground="#10B981" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="TransportStatusTitle" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="TransportStatusDetail" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="MethodChoicePanel" Visibility="Collapsed">
+                    <Border x:Name="MethodTransportPill" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="9" Padding="10,7" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <materialDesign:PackIcon x:Name="MethodTransportIcon" Grid.Column="0" Kind="CheckCircleOutline" Width="15" Height="15" Foreground="#10B981" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock x:Name="MethodTransportText" Grid.Column="1" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="2" Style="{StaticResource UI.GhostButton}" Content="Change" Height="26" Padding="9,0" FontSize="11" Click="OnChangeTransportClicked" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="CHOOSE SIGN-IN TYPE" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8" />
+
+                    <Button x:Name="BrowserSignInButton" Style="{StaticResource UI.GhostButton}" Height="Auto" Padding="14,12" HorizontalContentAlignment="Stretch" Click="OnBrowserSignInClicked">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="32" Height="32" CornerRadius="8" Background="{DynamicResource Status.FoxySoft}" BorderBrush="{DynamicResource Status.FoxyBorder}" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <materialDesign:PackIcon Kind="Web" Width="17" Height="17" Foreground="{DynamicResource Status.Foxy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Sign in via Browser" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Open Mozilla sign-in page" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <materialDesign:PackIcon Grid.Column="2" Kind="ChevronRight" Width="18" Height="18" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                    </Button>
+
+                    <Button x:Name="DirectSignInButton" Style="{StaticResource UI.GhostButton}" Height="Auto" Padding="14,12" Margin="0,10,0,0" HorizontalContentAlignment="Stretch" Click="OnChooseCredentialsClicked">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="32" Height="32" CornerRadius="8" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <materialDesign:PackIcon Kind="FormTextboxPassword" Width="17" Height="17" Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Sign in without Browser" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Sign in with email and password" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <materialDesign:PackIcon Grid.Column="2" Kind="ChevronRight" Width="18" Height="18" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel x:Name="CredentialsStepPanel" Visibility="Collapsed">
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="BackToMethodButton" Grid.Column="0" Style="{StaticResource UI.GhostButton}" Height="26" Padding="8,0" FontSize="11" Margin="0,0,8,0" Click="OnBackToMethodClicked">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="ArrowLeft" Width="13" Height="13" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="Sign-in type" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock x:Name="CredentialsTransportText" Grid.Column="1" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+
+                    <StackPanel x:Name="EmailRow">
+                        <TextBlock Text="{DynamicResource Loc_foxyEmail}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                        <TextBox x:Name="EmailInput" Style="{StaticResource UI.CustomTextBox}" Height="42" FontSize="13" Margin="0,0,0,12" TextChanged="OnInputChanged" KeyDown="OnInputKeyDown" materialDesign:HintAssist.Hint="you@example.com" AutomationProperties.Name="{DynamicResource Loc_foxyEmail}" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="PasswordRow">
+                        <TextBlock Text="{DynamicResource Loc_foxyPassword}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                        <PasswordBox x:Name="PasswordInput" Style="{StaticResource UI.CustomPasswordBox}" Height="42" FontSize="13" Margin="0,0,0,4" PasswordChanged="OnPasswordChanged" KeyDown="OnInputKeyDown" AutomationProperties.Name="{DynamicResource Loc_foxyPassword}" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="CodeRow" Visibility="Collapsed" Margin="0,8,0,0">
+                        <Border Background="{DynamicResource Status.FoxySoft}" BorderBrush="{DynamicResource Status.FoxyBorder}" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <materialDesign:PackIcon Grid.Column="0" Kind="EmailFastOutline" Width="15" Height="15" Foreground="{DynamicResource Status.Foxy}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Loc_foxyVerificationHint}" FontSize="11.5" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="{DynamicResource Loc_foxyVerificationCode}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                        <TextBox x:Name="CodeInput" Style="{StaticResource UI.CustomTextBox}" Height="42" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="15" CharacterCasing="Upper" MaxLength="6" Margin="0,0,0,4" TextChanged="OnInputChanged" KeyDown="OnInputKeyDown" materialDesign:HintAssist.Hint="A1B2C3" AutomationProperties.Name="{DynamicResource Loc_foxyVerificationCode}" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="CaptchaRow" Visibility="Collapsed" Margin="0,8,0,0">
+                        <Border Background="{DynamicResource Status.FoxySoft}" BorderBrush="{DynamicResource Status.FoxyBorder}" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <materialDesign:PackIcon Grid.Column="0" Kind="ShieldCheckOutline" Width="15" Height="15" Foreground="{DynamicResource Status.Foxy}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1" Text="Enter the characters shown below." FontSize="11.5" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource Surface.CardBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,10" HorizontalAlignment="Left">
+                            <Image x:Name="CaptchaImage" Height="64" Stretch="Uniform" />
+                        </Border>
+                        <TextBlock Text="CAPTCHA TEXT" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                        <TextBox x:Name="CaptchaInput" Style="{StaticResource UI.CustomTextBox}" Height="42" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="15" Margin="0,0,0,4" TextChanged="OnInputChanged" KeyDown="OnInputKeyDown" materialDesign:HintAssist.Hint="Enter characters" AutomationProperties.Name="CAPTCHA text" />
+                    </StackPanel>
+                </StackPanel>
+
+                <Border x:Name="ErrorBorder" Background="{DynamicResource Status.DangerSoft}" BorderBrush="{DynamicResource Status.DangerBorder}" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,12,0,0" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <materialDesign:PackIcon Grid.Column="0" Kind="AlertCircleOutline" Width="15" Height="15" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock x:Name="ErrorText" Grid.Column="1" FontSize="11.5" Foreground="{StaticResource DangerBrush}" AutomationProperties.LiveSetting="Assertive" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ProgressBar x:Name="BusyIndicator" Width="14" Height="14" IsIndeterminate="True" Style="{StaticResource MaterialDesignCircularProgressBar}" Foreground="{DynamicResource Status.Foxy}" Visibility="Collapsed" VerticalAlignment="Center" />
+                        <TextBlock x:Name="BusyText" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+
+                    <Button Grid.Column="1" Style="{StaticResource UI.DialogCancelButton}" Content="{DynamicResource Loc_dialogCancel}" Padding="18,0" MinWidth="88" Margin="0,0,10,0" VerticalAlignment="Center" Click="OnCancelClicked" IsCancel="True" />
+
+                    <Button x:Name="PrimaryButton" Grid.Column="2" Style="{StaticResource UI.PrimaryButton}" Content="Continue" Padding="22,0" MinWidth="112" VerticalAlignment="Center" Click="OnPrimaryClicked" IsDefault="True" />
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</Window>

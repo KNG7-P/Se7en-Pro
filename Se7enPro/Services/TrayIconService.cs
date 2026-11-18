@@ -59,12 +59,14 @@ public sealed class TrayIconService : ITrayIconService
 
         
         
-        Loc.Changed += () =>
+        _locChangedHandler = () =>
         {
+            if (_disposed) return;
             showItem.Text = Loc.Of("Show Se7en Pro");
             exitItem.Text = Loc.Of("Exit");
             UpdateConnectionState(_state);
         };
+        Loc.Changed += _locChangedHandler;
 
         _notifyIcon.ContextMenuStrip = menu;
         _notifyIcon.MouseClick += (_, e) =>
@@ -93,6 +95,7 @@ public sealed class TrayIconService : ITrayIconService
     }
 
     private EventHandler? _processExitHandler;
+    private Action? _locChangedHandler;
 
     private void OnProcessExit()
     {
@@ -195,14 +198,18 @@ public sealed class TrayIconService : ITrayIconService
         _ => _iconDefault,
     };
 
-    private static string BuildTooltip(ConnectionState state) => state switch
+    private static string BuildTooltip(ConnectionState state)
     {
-        ConnectionState.Connected => Loc.Of("Se7en Pro — Connected"),
-        ConnectionState.Connecting => Loc.Of("Se7en Pro — Connecting…"),
-        ConnectionState.Disconnecting => Loc.Of("Se7en Pro — Disconnecting…"),
-        ConnectionState.Error => Loc.Of("Se7en Pro — Error"),
-        _ => Loc.Of("Se7en Pro — Disconnected"),
-    };
+        var text = state switch
+        {
+            ConnectionState.Connected => Loc.Of("Se7en Pro — Connected"),
+            ConnectionState.Connecting => Loc.Of("Se7en Pro — Connecting…"),
+            ConnectionState.Disconnecting => Loc.Of("Se7en Pro — Disconnecting…"),
+            ConnectionState.Error => Loc.Of("Se7en Pro — Error"),
+            _ => Loc.Of("Se7en Pro — Disconnected"),
+        };
+        return text.Length > 63 ? text[..60] + "..." : text;
+    }
 
     private static string BuildToggleConnectionLabel(ConnectionState state) => state switch
     {
@@ -273,6 +280,12 @@ public sealed class TrayIconService : ITrayIconService
     {
         if (_disposed) return;
         _disposed = true;
+
+        if (_locChangedHandler is not null)
+        {
+            Loc.Changed -= _locChangedHandler;
+            _locChangedHandler = null;
+        }
 
         if (_processExitHandler is not null)
         {

@@ -102,7 +102,7 @@ public sealed class StateToBadgeBackgroundConverter : IValueConverter
     private static readonly SolidColorBrush GreenBg = MakeFrozen("#2210B981");
     private static readonly SolidColorBrush AmberBg = MakeFrozen("#22F59E0B");
     private static readonly SolidColorBrush RedBg = MakeFrozen("#22EF4444");
-    private static readonly SolidColorBrush GreyBg = MakeFrozen("#14FFFFFF");
+    private static readonly SolidColorBrush GreyBg = MakeFrozen("#1864748B");
 
     private static SolidColorBrush MakeFrozen(string hex)
     {
@@ -131,7 +131,7 @@ public sealed class StateToBadgeBorderConverter : IValueConverter
     private static readonly SolidColorBrush GreenBorder = MakeFrozen("#5510B981");
     private static readonly SolidColorBrush AmberBorder = MakeFrozen("#55F59E0B");
     private static readonly SolidColorBrush RedBorder = MakeFrozen("#55EF4444");
-    private static readonly SolidColorBrush GreyBorder = MakeFrozen("#26FFFFFF");
+    private static readonly SolidColorBrush GreyBorder = MakeFrozen("#3064748B");
 
     private static SolidColorBrush MakeFrozen(string hex)
     {
@@ -252,6 +252,9 @@ internal static class LogPalette
         [LogTags.Aether] = Pair("#C4B5FD", "#6D28D9"),
         [LogTags.Tor] = Pair("#D8B4FE", "#86198F"),
         [LogTags.Shard] = Pair("#7DD3FC", "#0369A1"),
+        [LogTags.Foxy] = Pair("#FDBA74", "#C2410C"),
+        [LogTags.Lantern] = Pair("#FDA4AF", "#BE123C"),
+        [LogTags.Veep] = Pair("#93C5FD", "#1D4ED8"),
         [LogTags.V2Ray] = Pair("#6EE7B7", "#047857"),
         [LogTags.Chain] = Pair("#A5B4FC", "#4338CA"),
         [LogTags.Tun] = Pair("#5EEAD4", "#0F766E"),
@@ -347,7 +350,7 @@ public sealed class StateToOrbActionTextConverter : IValueConverter
             ? s switch
             {
                 ConnectionState.Connected => Loc.Of("DISCONNECT"),
-                ConnectionState.Connecting => Loc.Of("CANCEL"),
+                ConnectionState.Connecting => Loc.Of("Cancel").ToUpperInvariant(),
                 ConnectionState.Disconnecting => Loc.Of("STOPPING"),
                 ConnectionState.Error => Loc.Of("RETRY"),
                 _ => Loc.Of("CONNECT"),

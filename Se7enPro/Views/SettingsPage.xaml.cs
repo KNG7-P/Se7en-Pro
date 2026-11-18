@@ -1,14 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using Se7enPro.ViewModels;
+using Se7enPro.Views.Settings;
 
 namespace Se7enPro.Views;
 
 public partial class SettingsPage : UserControl
 {
-    private bool _syncingPasswordFromVm;
+    private readonly Dictionary<SettingsTab, FrameworkElement> _tabViewCache = new();
 
     public SettingsPage()
     {
@@ -18,7 +20,16 @@ public partial class SettingsPage : UserControl
         {
             if (DataContext is SettingsViewModel vm)
             {
-                SyncPasswordBoxFromVm(vm);
+                UpdateActiveTabContent();
+                vm.PropertyChanged -= OnViewModelPropertyChanged;
+                vm.PropertyChanged += OnViewModelPropertyChanged;
+            }
+        };
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is SettingsViewModel vm)
+            {
+                UpdateActiveTabContent();
                 vm.PropertyChanged -= OnViewModelPropertyChanged;
                 vm.PropertyChanged += OnViewModelPropertyChanged;
             }
@@ -30,23 +41,55 @@ public partial class SettingsPage : UserControl
                 vm.PropertyChanged -= OnViewModelPropertyChanged;
             }
         };
+    }
 
-        ProxyPasswordBox.PasswordChanged += (_, _) =>
+    private void UpdateActiveTabContent()
+    {
+        if (DataContext is not SettingsViewModel vm) return;
+        var tab = vm.SelectedTab;
+
+        if (!_tabViewCache.TryGetValue(tab, out var content))
         {
-            if (_syncingPasswordFromVm) return;
-            if (DataContext is SettingsViewModel vm)
+            content = tab switch
             {
-                vm.ProxyPassword = ProxyPasswordBox.Password;
-            }
-        };
+                SettingsTab.General => new GeneralSettingsView(),
+                SettingsTab.Shard => new ShardSettingsView(),
+                SettingsTab.Chained => new ChainedSettingsView(),
+                SettingsTab.Psiphon => new PsiphonSettingsView(),
+                SettingsTab.Network => new NetworkSettingsView(),
+                SettingsTab.Aether => new AetherSettingsView(),
+                SettingsTab.Tor => new TorSettingsView(),
+                SettingsTab.Foxy => new FoxySettingsView(),
+                _ => new GeneralSettingsView()
+            };
+            content.DataContext = vm;
+            _tabViewCache[tab] = content;
+        }
+
+        if (!ReferenceEquals(TabContentHost.Content, content))
+        {
+            TabContentHost.Content = content;
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not SettingsViewModel vm) return;
-        if (e.PropertyName == nameof(SettingsViewModel.ProxyPassword))
+        if (e.PropertyName == nameof(SettingsViewModel.SelectedTab))
         {
-            SyncPasswordBoxFromVm(vm);
+            UpdateActiveTabContent();
+        }
+        else if (e.PropertyName == nameof(SettingsViewModel.ProxyPassword)
+                 && _tabViewCache.TryGetValue(SettingsTab.Psiphon, out var psiphonView)
+                 && psiphonView is PsiphonSettingsView psv)
+        {
+            psv.SyncPasswordBoxFromVm(vm);
+        }
+        else if (e.PropertyName == nameof(SettingsViewModel.LanProxyPassword)
+                 && _tabViewCache.TryGetValue(SettingsTab.Network, out var networkView)
+                 && networkView is NetworkSettingsView nsv)
+        {
+            nsv.SyncLanPasswordBoxFromVm(vm);
         }
     }
 
@@ -57,16 +100,5 @@ public partial class SettingsPage : UserControl
         if (Enum.TryParse<SettingsTab>(tab, true, out var parsed) && vm.SelectedTab == parsed) return;
 
         vm.SelectTabCommand.Execute(tab);
-    }
-
-    private void SyncPasswordBoxFromVm(SettingsViewModel vm)
-    {
-        var target = vm.ProxyPassword ?? "";
-        if (ProxyPasswordBox.Password != target)
-        {
-            _syncingPasswordFromVm = true;
-            try { ProxyPasswordBox.Password = target; }
-            finally { _syncingPasswordFromVm = false; }
-        }
     }
 }

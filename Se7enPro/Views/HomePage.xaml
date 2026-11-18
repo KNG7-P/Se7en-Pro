@@ -1,4 +1,4 @@
-<UserControl x:Class="Se7enPro.Views.HomePage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" xmlns:conv="clr-namespace:Se7enPro.Converters" xmlns:vm="clr-namespace:Se7enPro.ViewModels" xmlns:controls="clr-namespace:Se7enPro.Controls" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:HomeViewModel}">
+﻿<UserControl x:Class="Se7enPro.Views.HomePage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" xmlns:conv="clr-namespace:Se7enPro.Converters" xmlns:vm="clr-namespace:Se7enPro.ViewModels" xmlns:controls="clr-namespace:Se7enPro.Controls" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:HomeViewModel}">
 
     <UserControl.Resources>
         <conv:StateToButtonTextConverter x:Key="StateToButtonText" />
@@ -62,9 +62,6 @@
                                     <RotateTransform Angle="0" />
                                 </Ellipse.RenderTransform>
                             </Ellipse>
-
-                            
-                            <ProgressBar x:Name="SpinnerRing" Margin="14" IsIndeterminate="{Binding IsConnecting}" Visibility="{Binding IsConnecting, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="{StaticResource Brand.AccentBrush}" Style="{StaticResource MaterialDesignCircularProgressBar}" />
 
                             
                             <Border x:Name="CoreDisc" Margin="24" CornerRadius="1000" BorderBrush="{Binding State, Converter={StaticResource StateToConnectBrush}}" BorderThickness="2.5" Background="{DynamicResource Surface.ConnectCoreBg}" RenderTransformOrigin="0.5,0.5">
@@ -159,7 +156,7 @@
                         
                         <Grid Grid.Column="1" VerticalAlignment="Center">
                             
-                            <Border Background="#1F10B981" BorderBrush="#4D10B981" BorderThickness="1" CornerRadius="10" Padding="9,3" VerticalAlignment="Center" Visibility="{Binding IsConnected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border Background="{DynamicResource Status.SuccessSoft}" BorderBrush="{DynamicResource Status.SuccessBorder}" BorderThickness="1" CornerRadius="10" Padding="9,3" VerticalAlignment="Center" Visibility="{Binding IsConnected, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <materialDesign:PackIcon Kind="ClockOutline" Width="12" Height="12" Foreground="{StaticResource Brand.SuccessBrush}" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding UptimeText}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Brand.SuccessBrush}" Margin="5,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="{Binding UptimeText}" />
@@ -167,7 +164,7 @@
                             </Border>
 
                             
-                            <TextBlock Text="SE7EN CORE" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Visibility="{Binding IsConnected, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                            <TextBlock Text="{DynamicResource Loc_Se7enCoreBadge}" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Visibility="{Binding IsConnected, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
                         </Grid>
                     </Grid>
 
@@ -189,6 +186,10 @@
                                             <Setter Property="FontWeight" Value="Bold" />
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsConnecting}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource Brand.WarningBrush}" />
+                                            <Setter Property="FontWeight" Value="Bold" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsDisconnecting}" Value="True">
                                             <Setter Property="Foreground" Value="{StaticResource Brand.WarningBrush}" />
                                             <Setter Property="FontWeight" Value="Bold" />
                                         </DataTrigger>
@@ -219,7 +220,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 
-                                <Border Grid.Column="0" Background="#1410B981" CornerRadius="6" Padding="5" VerticalAlignment="Center">
+                                <Border Grid.Column="0" Background="{DynamicResource Status.SuccessSoft}" CornerRadius="6" Padding="5" VerticalAlignment="Center">
                                     <materialDesign:PackIcon Kind="ShieldCheck" Width="16" Height="16" Foreground="{Binding TunStatusBrush}" />
                                 </Border>
 
@@ -229,14 +230,14 @@
                                         <TextBlock Text="{DynamicResource Loc_tunMode}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
 
                                         
-                                        <Border Background="#25F59E0B" BorderBrush="#50F59E0B" BorderThickness="1" CornerRadius="4" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding IsAdminElevated, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                                        <Border Background="#25F59E0B" BorderBrush="{DynamicResource Status.WarningBorder}" BorderThickness="1" CornerRadius="4" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding IsAdminElevated, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
                                             <StackPanel Orientation="Horizontal">
                                                 <materialDesign:PackIcon Kind="LockOutline" Width="9" Height="9" Foreground="{StaticResource Brand.WarningBrush}" VerticalAlignment="Center" />
                                                 <TextBlock Text="{DynamicResource Loc_adminReq}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource Brand.WarningBrush}" Margin="3,0,0,0" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </Border>
                                     </StackPanel>
-                                    <TextBlock Text="{DynamicResource Loc_VirtualWintunadapterAllsystemtraff}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                    <TextBlock Text="{DynamicResource Loc_VirtualWintunadapterAllsystemtraff}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{DynamicResource Loc_tunDnsScopeNote}" />
                                 </StackPanel>
 
                                 
@@ -255,14 +256,14 @@
                                 </Grid.ColumnDefinitions>
 
                                 
-                                <Border Grid.Column="0" Background="#1400D4FF" CornerRadius="6" Padding="5" VerticalAlignment="Center">
+                                <Border Grid.Column="0" Background="{DynamicResource Status.CyanSoft}" CornerRadius="6" Padding="5" VerticalAlignment="Center">
                                     <materialDesign:PackIcon Kind="Lan" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" />
                                 </Border>
 
                                 
                                 <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center">
                                     <TextBlock Text="{DynamicResource Loc_SystemProxy}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                                    <TextBlock Text="{DynamicResource Loc_RoutebrowserandWinINetapplications}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{DynamicResource Loc_RoutebrowserandWinINetapplications}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{DynamicResource Loc_RoutebrowserandWinINetapplications}" />
                                 </StackPanel>
 
                                 
@@ -298,7 +299,7 @@
                         </StackPanel>
 
                         
-                        <ComboBox x:Name="ProtocolComboBox" Margin="0,6,0,4" Style="{StaticResource UI.CustomComboBox}" AutomationProperties.Name="{DynamicResource Loc_connectionProtocol}" ItemsSource="{Binding ConnectionMethodsView}" SelectedItem="{Binding SelectedMethodOption, Mode=TwoWay}" IsSynchronizedWithCurrentItem="False" IsTextSearchEnabled="False" IsEnabled="{Binding CanChangeMethod}" Height="38" Padding="12,6,26,6" MaxDropDownHeight="420" HorizontalContentAlignment="Stretch" VerticalAlignment="Center" ToolTip="{DynamicResource Loc_Chooseconnectionengineprotocol}">
+                        <ComboBox x:Name="ProtocolComboBox" Margin="0,6,0,4" Style="{StaticResource UI.CustomComboBox}" AutomationProperties.Name="{DynamicResource Loc_connectionProtocol}" ItemsSource="{Binding ConnectionMethodsView}" SelectedItem="{Binding SelectedMethodOption, Mode=TwoWay}" IsSynchronizedWithCurrentItem="False" IsTextSearchEnabled="False" IsEnabled="{Binding CanChangeMethod}" Height="38" Padding="12,6,8,6" MaxDropDownHeight="420" HorizontalContentAlignment="Stretch" VerticalAlignment="Center" ToolTip="{DynamicResource Loc_Chooseconnectionengineprotocol}">
                             <ComboBox.Resources>
                                 <Style TargetType="ContentPresenter">
                                     <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -361,7 +362,7 @@
                             </StackPanel>
 
                             
-                            <Border Grid.Column="1" Background="#1F10B981" BorderBrush="#4D10B981" BorderThickness="1" CornerRadius="5" Padding="5,1.5" Visibility="{Binding HasRegion, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border Grid.Column="1" Background="{DynamicResource Status.SuccessSoft}" BorderBrush="{DynamicResource Status.SuccessBorder}" BorderThickness="1" CornerRadius="5" Padding="5,1.5" Visibility="{Binding HasRegion, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <controls:CountryFlag CountryCode="{Binding ServerRegionCode}" FlagWidth="16" FlagHeight="11" Margin="0,0,4,0" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding ServerRegionName}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource Brand.SuccessBrush}" VerticalAlignment="Center" />
@@ -370,12 +371,7 @@
                         </Grid>
 
                         
-                        <ComboBox Margin="0,6,0,0" Style="{StaticResource UI.CustomComboBox}" AutomationProperties.Name="{Binding RegionPickerTitle}" ItemsSource="{Binding EgressRegions}" SelectedValue="{Binding SelectedEgressRegion, Mode=TwoWay}" SelectedValuePath="Code" Height="34" MaxDropDownHeight="240" HorizontalContentAlignment="Stretch" VerticalAlignment="Center" ToolTip="{DynamicResource Loc_Selectexitlocationcountry}">
-                            <ComboBox.Resources>
-                                <Style TargetType="ContentPresenter">
-                                    <Setter Property="HorizontalAlignment" Value="Stretch" />
-                                </Style>
-                            </ComboBox.Resources>
+                        <ComboBox Margin="0,6,0,0" Style="{StaticResource UI.CustomComboBox}" AutomationProperties.Name="{Binding RegionPickerTitle}" ItemsSource="{Binding ActiveRegions}" SelectedItem="{Binding SelectedRegionItem, Mode=TwoWay}" IsSynchronizedWithCurrentItem="False" IsTextSearchEnabled="False" Height="38" Padding="12,6,8,6" MaxDropDownHeight="240" HorizontalContentAlignment="Stretch" VerticalAlignment="Center" ToolTip="{DynamicResource Loc_Selectexitlocationcountry}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <Grid HorizontalAlignment="Stretch" VerticalAlignment="Center">
@@ -389,7 +385,7 @@
                                         <controls:CountryFlag Grid.Column="0" CountryCode="{Binding Code}" FlagWidth="26" FlagHeight="18" FlagCornerRadius="4" Margin="0,0,10,0" VerticalAlignment="Center" />
 
                                         
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 
                                         
                                         <Border Grid.Column="2" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="4" Padding="5,1.5" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,0,0">
@@ -424,7 +420,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <Border Grid.Column="0" Background="#1400D4FF" CornerRadius="5" Padding="3.5" VerticalAlignment="Center">
+                            <Border Grid.Column="0" Background="{DynamicResource Status.CyanSoft}" CornerRadius="5" Padding="3.5" VerticalAlignment="Center">
                                 <materialDesign:PackIcon Kind="RadioTower" Width="13" Height="13" Foreground="{StaticResource Brand.AccentBrush}" />
                             </Border>
 
@@ -474,15 +470,18 @@
 
                                     
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Border Background="{StaticResource Brand.AccentSoftBrush}" CornerRadius="3.5" Padding="3" VerticalAlignment="Center">
-                                            <materialDesign:PackIcon Kind="ArrowDown" Width="11" Height="11" Foreground="{StaticResource Brand.AccentBrush}" />
+                                        <Border Background="{DynamicResource Brand.AccentSoftBrush}" CornerRadius="3.5" Padding="3" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon Kind="ArrowDown" Width="11" Height="11" Foreground="{DynamicResource Brand.AccentBrush}" />
                                         </Border>
                                         <StackPanel Margin="6,0,0,0" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="DOWN" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
-                                                <TextBlock Text="{Binding DownSpeedText}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Brand.AccentBrush}" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="{DynamicResource Loc_DownBadge}" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding DownSpeedText}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Brand.AccentBrush}" Margin="4,0,0,0" VerticalAlignment="Center" />
                                             </StackPanel>
-                                            <TextBlock Text="{Binding TotalDownText, StringFormat='Total: {0}'}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="9" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{DynamicResource Loc_TotalPrefix}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="9" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                                <TextBlock Text="{Binding TotalDownText}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="9" Foreground="{DynamicResource TextSecondaryBrush}" Margin="4,0,0,0" />
+                                            </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
 
@@ -491,11 +490,14 @@
                                         <StackPanel Margin="0,0,6,0" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                                 <TextBlock Text="{Binding UpSpeedText}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Brand.PrimaryBrush}" Margin="0,0,4,0" VerticalAlignment="Center" />
-                                                <TextBlock Text="UP" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{DynamicResource Loc_UpBadge}" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
                                             </StackPanel>
-                                            <TextBlock Text="{Binding TotalUpText, StringFormat='Total: {0}'}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="9" HorizontalAlignment="Right" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                <TextBlock Text="{DynamicResource Loc_TotalPrefix}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="9" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                                <TextBlock Text="{Binding TotalUpText}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="9" Foreground="{DynamicResource TextSecondaryBrush}" Margin="4,0,0,0" />
+                                            </StackPanel>
                                         </StackPanel>
-                                        <Border Background="{StaticResource Brand.PrimarySoftBrush}" CornerRadius="3.5" Padding="3" VerticalAlignment="Center">
+                                        <Border Background="{DynamicResource Brand.PrimarySoftBrush}" CornerRadius="3.5" Padding="3" VerticalAlignment="Center">
                                             <materialDesign:PackIcon Kind="ArrowUp" Width="11" Height="11" Foreground="{StaticResource Brand.PrimaryBrush}" />
                                         </Border>
                                     </StackPanel>
@@ -516,9 +518,9 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="*" MinHeight="44" />
+                                <RowDefinition Height="46" MinHeight="44" />
                                 <RowDefinition Height="8" />
-                                <RowDefinition Height="*" MinHeight="44" />
+                                <RowDefinition Height="46" MinHeight="44" />
                             </Grid.RowDefinitions>
 
                             
@@ -529,7 +531,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Background="#1400D4FF" CornerRadius="5" Padding="4" VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Background="{DynamicResource Status.CyanSoft}" CornerRadius="5" Padding="4" VerticalAlignment="Center">
                                         <materialDesign:PackIcon Kind="LanConnect" Width="13" Height="13" Foreground="{StaticResource Brand.AccentBrush}" />
                                     </Border>
                                     <StackPanel Grid.Column="1" Margin="7,0,2,0" VerticalAlignment="Center">
@@ -563,7 +565,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Background="#1400D4FF" CornerRadius="5" Padding="4" VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Background="{DynamicResource Status.CyanSoft}" CornerRadius="5" Padding="4" VerticalAlignment="Center">
                                         <materialDesign:PackIcon Kind="Web" Width="13" Height="13" Foreground="{StaticResource Brand.AccentBrush}" />
                                     </Border>
                                     <StackPanel Grid.Column="1" Margin="7,0,2,0" VerticalAlignment="Center">
@@ -597,7 +599,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Background="#1410B981" CornerRadius="5" Width="22" Height="22" VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Background="{DynamicResource Status.SuccessSoft}" CornerRadius="5" Width="22" Height="22" VerticalAlignment="Center">
                                         <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <controls:CountryFlag CountryCode="{Binding ServerRegionCode}" FlagWidth="15" FlagHeight="11" FlagCornerRadius="2" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding HasRegion, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             <materialDesign:PackIcon Kind="Earth" Width="13" Height="13" Foreground="{StaticResource Brand.SuccessBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding HasRegion, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />

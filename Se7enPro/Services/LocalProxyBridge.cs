@@ -14,7 +14,9 @@ public sealed class LocalProxyBridge : IAsyncDisposable
     
     private const long NotifyIntervalMs = 200;
 
-        private const int MaxConcurrentClients = 64;
+    private const int MaxConcurrentClients = 4096;
+
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
 
     private readonly SemaphoreSlim _slots = new(MaxConcurrentClients, MaxConcurrentClients);
 
@@ -119,24 +121,26 @@ public sealed class LocalProxyBridge : IAsyncDisposable
         {
             try
             {
+                client.NoDelay = true;
+                try { client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true); } catch { }
+                try { target.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true); } catch { }
                 await target.ConnectAsync(IPAddress.Loopback, targetPort, ct);
                 var clientStream = client.GetStream();
                 var targetStream = target.GetStream();
 
                 
-                
-                
-                
-                
-                var up = PumpStreamAsync(clientStream, targetStream, target.Client, isUpload: true, ct);
-                var down = PumpStreamAsync(targetStream, clientStream, client.Client, isUpload: false, ct);
+                using var idle = new CancellationTokenSource(IdleTimeout);
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, idle.Token);
+
+                var up = PumpStreamAsync(clientStream, targetStream, target.Client, isUpload: true, linked.Token, idle);
+                var down = PumpStreamAsync(targetStream, clientStream, client.Client, isUpload: false, linked.Token, idle);
                 await Task.WhenAll(up, down);
             }
             catch { }
         }
     }
 
-    private async Task PumpStreamAsync(NetworkStream source, NetworkStream dest, Socket destSocket, bool isUpload, CancellationToken ct)
+    private async Task PumpStreamAsync(NetworkStream source, NetworkStream dest, Socket destSocket, bool isUpload, CancellationToken ct, CancellationTokenSource idle)
     {
         var buffer = new byte[32768];
         try
@@ -157,6 +161,9 @@ public sealed class LocalProxyBridge : IAsyncDisposable
                     await dest.WriteAsync(buffer.AsMemory(0, n), ct);
                 }
                 catch { break; }
+
+                
+                try { idle.CancelAfter(IdleTimeout); } catch (ObjectDisposedException) { break; }
 
                 if (isUpload)
                 {

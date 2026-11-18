@@ -79,15 +79,17 @@ public static class Ui
         adapter.Invoke(action);
     }
 
-    public static void SetClipboard(string text)
+    public static bool SetClipboard(string text)
     {
         try
         {
-            Adapter?.SetClipboard(text);
+            if (Adapter is null) return false;
+            Adapter.SetClipboard(text);
+            return true;
         }
         catch
         {
-            
+            return false;
         }
     }
 

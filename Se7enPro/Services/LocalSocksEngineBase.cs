@@ -42,8 +42,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
     
     
     private int _processGeneration;
-
-        private int _readinessProbeRunning;
+    private int _readinessProbeGeneration;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly LocalProxyBridge _socksBridge = new();
     private readonly LocalProxyBridge _httpBridge = new();
@@ -74,9 +73,20 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
     public string ConnectedServerRegion { get; protected set; } = "";
     public string CurrentRouteIp { get; protected set; } = "";
     public string CurrentRouteSni { get; protected set; } = "";
+    public virtual string ServerEndpointAddress => "";
 
-    private readonly List<string> _availableRegions = new();
-    public IReadOnlyList<string> AvailableEgressRegions => _availableRegions.AsReadOnly();
+    public virtual IReadOnlyList<string> ServerEndpointAddresses => ServerEndpointAddress.Length > 0
+        ? new[] { ServerEndpointAddress }
+        : Array.Empty<string>();
+
+    protected readonly List<string> _availableRegions = new();
+    public virtual IReadOnlyList<string> AvailableEgressRegions => _availableRegions.AsReadOnly();
+
+    protected void SetAvailableRegions(IEnumerable<string> regions)
+    {
+        _availableRegions.Clear();
+        _availableRegions.AddRange(regions);
+    }
 
     
     
@@ -117,6 +127,10 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
         protected virtual TimeSpan ReadyTimeout => TimeSpan.FromSeconds(45);
 
+        protected virtual bool SupportsNativeLanExposure => false;
+
+        protected void AdoptChildProcess(Process proc) => _childGuard.Adopt(proc);
+
         public TimeSpan? ReadyTimeoutOverride { get; set; }
 
     private TimeSpan EffectiveReadyTimeout => ReadyTimeoutOverride ?? ReadyTimeout;
@@ -134,27 +148,11 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
         protected virtual Task BeforeStartAsync(string workDir, CancellationToken ct) => Task.CompletedTask;
 
-    /// <summary>
-    /// Where this engine keeps its configuration and identity files.
-    /// </summary>
-    /// <remarks>
-    /// Exposed rather than recomputed by callers: identity provisioning has to write into the
-    /// SAME directory the core will read from, and a second copy of this path expression is
-    /// how that quietly stops being true after a rename.
-    /// </remarks>
     internal string WorkDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Se7en",
         WorkSubdirectory);
 
-    /// <summary>
-    /// Default second chance: nothing, because this engine has no fast path to recover from.
-    /// </summary>
-    /// <remarks>
-    /// Declared here rather than left to the interface's default implementation so subclasses
-    /// have something to override - a default interface member is not overridable, and the
-    /// interface alone would force every engine to restate it.
-    /// </remarks>
     public virtual Task<bool> RecoverFromMissingPrerequisitesAsync(CancellationToken ct)
         => Task.FromResult(false);
 
@@ -173,12 +171,13 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         
         
         
-        if (_process is not null && !_process.HasExited)
+        var existingProcess = _process;
+        if (existingProcess is not null && !existingProcess.HasExited)
         {
             _cts ??= new CancellationTokenSource();
-            if (SocksProxyPort > 0 && _readinessProbeRunning == 0)
+            if (SocksProxyPort > 0)
             {
-                StartReadinessProbe(SocksProxyPort, _cts.Token);
+                StartReadinessProbe(existingProcess, _processGeneration, SocksProxyPort, _cts.Token);
             }
             return;
         }
@@ -194,6 +193,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         CancelPendingRestart();
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
+        var startToken = _cts.Token;
 
         SetState(ConnectionState.Connecting);
         Log($"Starting {EngineDisplayName}...");
@@ -258,30 +258,35 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
             }
 
             
+            var canExposeLan = LanPolicy.CanExpose(s);
+            var useDirectLanBind = canExposeLan && SupportsNativeLanExposure;
             var avoidList = new List<int> { publishedSocks, publishedHttp };
-            var coreSocks = PickFreeLoopbackPort(avoidList.ToArray());
+            var coreSocks = useDirectLanBind ? publishedSocks : PickFreeLoopbackPort(avoidList.ToArray());
             avoidList.Add(coreSocks);
-            var coreHttp = PickFreeLoopbackPort(avoidList.ToArray());
+            var coreHttp = useDirectLanBind ? publishedHttp : PickFreeLoopbackPort(avoidList.ToArray());
 
-            await BeforeStartAsync(workDir, _cts?.Token ?? CancellationToken.None);
+            await BeforeStartAsync(workDir, startToken);
 
             var launch = Prepare(workDir, coreSocks, coreHttp);
             var actualCoreSocks = launch.SocksPortOverride ?? coreSocks;
             var actualCoreHttp = launch.HttpProxyPort;
 
-            
-            
-            if (launch.SocksPortOverride.HasValue)
+            var hasExplicitPortOverride = launch.SocksPortOverride.HasValue && launch.SocksPortOverride.Value != coreSocks;
+            if (hasExplicitPortOverride || useDirectLanBind)
             {
                 SocksProxyPort = actualCoreSocks;
                 HttpProxyPort = actualCoreHttp;
             }
             else
             {
-                _socksBridge.Start(publishedSocks, actualCoreSocks, bindAddr);
+                if (s.AllowLanConnections && !canExposeLan)
+                {
+                    Log($"LAN sharing requires a username and password; {EngineDisplayName} stays on 127.0.0.1.");
+                }
+                _socksBridge.Start(publishedSocks, actualCoreSocks, IPAddress.Loopback);
                 if (actualCoreHttp > 0)
                 {
-                    _httpBridge.Start(publishedHttp, actualCoreHttp, bindAddr);
+                    _httpBridge.Start(publishedHttp, actualCoreHttp, IPAddress.Loopback);
                     HttpProxyPort = publishedHttp;
                 }
                 else
@@ -311,7 +316,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
                 
                 RedirectStandardInput = true,
             };
-            psi.EnvironmentVariables["GOMEMLIMIT"] = "40MiB";
+            psi.EnvironmentVariables["GOMEMLIMIT"] = "128MiB";
             psi.EnvironmentVariables["GODEBUG"] = "madvdontneed=1";
             if (launch.EnvironmentVariables is not null)
             {
@@ -322,7 +327,6 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
             }
             foreach (var arg in launch.Arguments) psi.ArgumentList.Add(arg);
 
-            _cts = new CancellationTokenSource();
 
             
             _processGeneration++;
@@ -359,7 +363,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
             _logger.LogInformation("{Engine} core started (pid {Pid}) socks={Port} http={HttpPort}",
                 EngineDisplayName, proc.Id, socksPort, HttpProxyPort);
 
-            StartReadinessProbe(socksPort, _cts.Token);
+            StartReadinessProbe(proc, generation, socksPort, startToken);
         }
         catch (Exception ex)
         {
@@ -367,6 +371,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
             Log($"Failed to start {EngineDisplayName}: {ex.Message}");
             DisposeProcessQuietly(_process);
             _process = null;
+            StopBridges();
             NoteFailureAndMaybeRestart(ranLongEnough: false);
         }
     }
@@ -384,6 +389,8 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         try { await Task.Run(action); }
         finally { _lifecycleGate.Release(); }
     }
+
+    private void ReleaseLifecycleGateIfHeld() {  }
 
     public Task StopAsync() => RunGatedAsync(StopAsyncCoreAsync);
 
@@ -409,6 +416,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         {
             DisposeProcessQuietly(proc);
             _process = null;
+            StopBridges();
             SocksProxyPort = 0;
             HttpProxyPort = 0;
             SetState(ConnectionState.Disconnected);
@@ -426,8 +434,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         {
             _process = null;
             _ = Task.Run(() => DisposeProcessQuietly(proc));
-            _socksBridge.Stop();
-            _httpBridge.Stop();
+            StopBridges();
             _socksBridge.ResetCounters();
             _httpBridge.ResetCounters();
             SocksProxyPort = 0;
@@ -462,6 +469,8 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         _process = null;
         SocksProxyPort = 0;
         HttpProxyPort = 0;
+
+        StopBridges();
 
         var toDispose = proc;
         _ = Task.Run(() => DisposeProcessQuietly(toDispose));
@@ -584,54 +593,87 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
     
 
-    private void StartReadinessProbe(int socksPort, CancellationToken ct)
+    private void StartReadinessProbe(Process proc, int generation, int socksPort, CancellationToken ct)
     {
-        
-        
-        
-        if (Interlocked.Exchange(ref _readinessProbeRunning, 1) == 1) return;
+        if (generation != Volatile.Read(ref _processGeneration) || !ReferenceEquals(proc, _process)) return;
+
+        while (true)
+        {
+            var runningGeneration = Volatile.Read(ref _readinessProbeGeneration);
+            if (runningGeneration >= generation) return;
+            if (Interlocked.CompareExchange(
+                    ref _readinessProbeGeneration, generation, runningGeneration) == runningGeneration) break;
+        }
 
         _ = Task.Run(async () =>
         {
             try
             {
+                var s = _settings.Settings;
+                var needAuth = SupportsNativeLanExposure && LanPolicy.CanExpose(s);
                 var verdict = await SocksProbe.WaitForTunnelAsync(
-                    socksPort, DateTime.UtcNow + EffectiveReadyTimeout, ct);
-                if (verdict is null)
+                    socksPort, DateTime.UtcNow + EffectiveReadyTimeout, ct,
+                    username: needAuth ? s.LanProxyUsername : null,
+                    password: needAuth ? s.LanProxyPassword : null);
+                await _lifecycleGate.WaitAsync(ct);
+                try
                 {
-                    if (ct.IsCancellationRequested) return;
+                    if (generation != Volatile.Read(ref _processGeneration) || !ReferenceEquals(proc, _process)) return;
 
-                    
-                    
-                    Log($"{EngineDisplayName} did not establish a working tunnel within "
-                      + $"{EffectiveReadyTimeout.TotalSeconds:0}s; restarting.");
-                    var proc = _process;
-                    if (proc is null) return;
-                    try
+                    if (verdict is null)
                     {
-                        if (proc.HasExited) return;
-                        _readyProbeTimedOut = true;
-                        proc.Kill(entireProcessTree: true);
-                    }
-                    catch { _readyProbeTimedOut = false; }
-                    return;
-                }
+                        if (ct.IsCancellationRequested) return;
 
-                _consecutiveFastFailures = 0;
-                _consecutiveReadyTimeouts = 0;
-                Log($"{EngineDisplayName} tunnel is up (verified via {verdict}).");
-                SetState(ConnectionState.Connected);
-                OnTunnelConnected(socksPort, HttpProxyPort, ct);
+                        Log($"{EngineDisplayName} did not establish a working tunnel within "
+                          + $"{EffectiveReadyTimeout.TotalSeconds:0}s; restarting.");
+                        try
+                        {
+                            if (proc.HasExited) return;
+                            _readyProbeTimedOut = true;
+                            proc.Kill(entireProcessTree: true);
+                        }
+                        catch
+                        {
+                            _readyProbeTimedOut = false;
+                        }
+                        return;
+                    }
+
+                    _consecutiveFastFailures = 0;
+                    _consecutiveReadyTimeouts = 0;
+                    Log($"{EngineDisplayName} tunnel is up (verified via {verdict}).");
+                    SetState(ConnectionState.Connected);
+                    OnTunnelConnected(socksPort, HttpProxyPort, ct);
+                }
+                finally
+                {
+                    _lifecycleGate.Release();
+                }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "{Engine} readiness probe failed", EngineDisplayName);
+                if (generation == Volatile.Read(ref _processGeneration) && ReferenceEquals(proc, _process))
+                {
+                    _logger.LogWarning(ex, "{Engine} readiness probe failed", EngineDisplayName);
+                }
             }
             finally
             {
-                Interlocked.Exchange(ref _readinessProbeRunning, 0);
+                Interlocked.CompareExchange(ref _readinessProbeGeneration, 0, generation);
             }
         });
+    }
+
+    public virtual void UpdateExitLocation(string ip, string countryCode, string? cityOrColo = null)
+    {
+        ConnectedServerRegion = countryCode;
+        CurrentRouteIp = ip;
+        var locationDetail = !string.IsNullOrEmpty(cityOrColo)
+            ? $"{CountryHelper.FullName(countryCode)} ({cityOrColo})"
+            : CountryHelper.FullName(countryCode);
+        Log($"[Location] Exit route confirmed: {ip} — {locationDetail}");
+        RaiseRouteChanged();
     }
 
     protected virtual void OnTunnelConnected(int socksPort, int httpPort, CancellationToken ct)
@@ -640,22 +682,34 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         {
             try
             {
-                var result = await EndpointProbeHelper.ProbeAsync(socksPort, ct);
-                if (result != null)
+                await Task.Delay(1200, ct);
+
+                var s = _settings.Settings;
+                var needAuth = SupportsNativeLanExposure && LanPolicy.CanExpose(s);
+                var user = needAuth ? s.LanProxyUsername : null;
+                var pass = needAuth ? s.LanProxyPassword : null;
+
+                var result = await EndpointProbeHelper.ProbeAsync(socksPort, ct, user, pass);
+                if (result != null && !string.IsNullOrEmpty(result.Ip))
                 {
-                    if (!string.IsNullOrEmpty(result.CountryCode))
-                    {
-                        ConnectedServerRegion = result.CountryCode;
-                    }
-                    if (!string.IsNullOrEmpty(result.Ip))
-                    {
-                        CurrentRouteIp = result.Ip;
-                    }
-                    var locationDetail = !string.IsNullOrEmpty(result.CityOrColo)
-                        ? $"{CountryHelper.FullName(result.CountryCode)} ({result.CityOrColo})"
-                        : CountryHelper.FullName(result.CountryCode);
-                    Log($"[Location] Exit route confirmed: {result.Ip} — {locationDetail}");
+                    UpdateExitLocation(result.Ip, result.CountryCode ?? "", result.CityOrColo);
+                }
+                else if (!ct.IsCancellationRequested)
+                {
+                    ConnectedServerRegion = "";
+                    CurrentRouteIp = "";
                     RaiseRouteChanged();
+                }
+
+                await Task.Delay(3500, ct);
+                if (State == ConnectionState.Connected && !ct.IsCancellationRequested)
+                {
+                    var verify = await EndpointProbeHelper.ProbeAsync(socksPort, ct, user, pass);
+                    if (verify != null && !string.IsNullOrEmpty(verify.Ip) &&
+                        (verify.Ip != CurrentRouteIp || verify.CountryCode != ConnectedServerRegion))
+                    {
+                        UpdateExitLocation(verify.Ip, verify.CountryCode ?? "", verify.CityOrColo);
+                    }
                 }
             }
             catch (Exception ex)
@@ -716,6 +770,19 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         throw new InvalidOperationException("Could not find a free loopback port");
     }
 
+    protected static (TcpListener Listener, int Port) ReserveFreeLoopbackPort(params int[] avoid)
+    {
+        for (var attempt = 0; attempt < 64; attempt++)
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            if (Array.IndexOf(avoid, port) < 0) return (listener, port);
+            listener.Stop();
+        }
+        throw new InvalidOperationException("Could not reserve a free loopback port");
+    }
+
         protected string StageFile(string sourcePath, string destPath)
     {
         if (!File.Exists(sourcePath))
@@ -728,11 +795,17 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         return destPath;
     }
 
+    protected string StageExecutable(string sourcePath, string destPath)
+    {
+        if (EngineTrust.RunFromBundle && File.Exists(sourcePath)) return sourcePath;
+        return StageFile(sourcePath, destPath);
+    }
+
     private static readonly System.Text.RegularExpressions.Regex RustLogPrefixRegex = new(
         @"^\[\d{4}-\d{2}-\d{2}T[\d:.]+Z\s+(?:INFO|WARN|ERROR|DEBUG|TRACE)\s+[^\]]+\]\s*",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    protected void Log(string line)
+    protected virtual void Log(string line)
     {
         LogLineAppended?.Invoke(this, line);
     }
@@ -799,6 +872,12 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
         try { proc.CancelOutputRead(); } catch { }
         try { proc.CancelErrorRead(); } catch { }
         try { proc.Dispose(); } catch { }
+    }
+
+    private void StopBridges()
+    {
+        _socksBridge.Stop();
+        _httpBridge.Stop();
     }
 
     public void CancelConnecting()

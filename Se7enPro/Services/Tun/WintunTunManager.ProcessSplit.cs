@@ -11,10 +11,81 @@ namespace Se7enPro.Services;
 
 public sealed partial class WintunTunManager
 {
-        private static bool IsLocalProxyPort(int port) => port is
-        10808 or 10809 or   
-        1819 or 1820 or 1821 or 1824 or 1825 or   
-        1080 or 8118;      
+        private bool IsLocalProxyPort(int port)
+    {
+        if (port is 10808 or 10809 or 1819 or 1820 or 1821 or 1824 or 1825) return true;
+        if (port > 0 && (port == _activeSocksPort || port == _tunnel.SocksProxyPort || port == _tunnel.HttpProxyPort)) return true;
+        var s = _settings.Settings;
+        if (s.UseCustomProxyPorts && (port == s.LocalSocksProxyPort || port == s.LocalHttpProxyPort)) return true;
+        return false;
+    }
+
+    private readonly object _pidCacheLock = new();
+    private readonly Dictionary<int, (string? Path, string? Name)> _sharedPidCache = new();
+    private DateTime _pidCacheLastClearedUtc = DateTime.UtcNow;
+
+    internal static string GetEffectiveChainedOuterTransport(Models.UserSettings s, ConnectionMethod method)
+    {
+        var specific = method switch
+        {
+            ConnectionMethod.PsiphonOverWarp => s.ChainedPsiphonOuterTransport,
+            ConnectionMethod.TorOverWarp => s.ChainedTorOuterTransport,
+            ConnectionMethod.FoxyOverWarp => s.ChainedFoxyOuterTransport,
+            ConnectionMethod.LanternOverWarp => s.ChainedLanternOuterTransport,
+            ConnectionMethod.VeepOverWarp => s.ChainedVeepOuterTransport,
+            _ => s.ChainedOuterTransport
+        };
+        var normalized = (specific ?? "").Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(normalized)) return normalized;
+        return (s.ChainedOuterTransport ?? "auto").Trim().ToLowerInvariant();
+    }
+
+    private (string? Path, string? Name) LookupProcessInfoCached(int pid)
+    {
+        lock (_pidCacheLock)
+        {
+            if ((DateTime.UtcNow - _pidCacheLastClearedUtc).TotalSeconds >= 30 || _sharedPidCache.Count > 2048)
+            {
+                _sharedPidCache.Clear();
+                _pidCacheLastClearedUtc = DateTime.UtcNow;
+            }
+            if (_sharedPidCache.TryGetValue(pid, out var cached))
+            {
+                return cached;
+            }
+        }
+
+        var fullPath = WintunRouteApi.TryGetProcessPath(pid);
+        var fileName = string.IsNullOrEmpty(fullPath) ? null : Path.GetFileName(fullPath);
+        var info = (fullPath, fileName);
+
+        lock (_pidCacheLock)
+        {
+            _sharedPidCache[pid] = info;
+        }
+        return info;
+    }
+
+    private bool IsProtectedEngineIp(IPAddress ip)
+    {
+        if (ip.AddressFamily != AddressFamily.InterNetwork) return false;
+        var b = ip.GetAddressBytes();
+        var s = _settings.Settings;
+        var currentMethod = ConnectionMethodExtensions.ParseConnectionMethod(s.ConnectionMethod);
+        var outerTransport = GetEffectiveChainedOuterTransport(s, currentMethod);
+        var needsWarp = currentMethod.UsesWarp()
+            || (currentMethod.IsChained() && outerTransport is "auto" or "masque" or "wireguard" or "warp_on_warp" or "masque_in_masque");
+        if (needsWarp)
+        {
+            if (b[0] == 162 && b[1] == 159 && (b[2] & 0xC0) == 192) return true;
+            if (b[0] == 188 && b[1] == 114 && (b[2] & 0xFC) == 96) return true;
+        }
+        if (currentMethod.IsFoxy())
+        {
+            if (b[0] == 23 && b[1] == 235 && b[2] == 42) return true;
+        }
+        return false;
+    }      
 
     
     
@@ -71,38 +142,125 @@ public sealed partial class WintunTunManager
 
         SplitRules.ClassifySplitEntries(s, out _, out _, out var procNames, out var procPaths);
         if (procNames.Count == 0 && procPaths.Count == 0) return;
+        if (UsesMihomoNativeSplitRules()) return;
 
         var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-        var pidCache = new Dictionary<int, (string? Path, string? Name)>();
-        ScanAndPinProcessConnections(procNames, procPaths, include, pidCache);
+        ScanAndPinProcessConnections(procNames, procPaths, include);
+    }
+
+    private void SweepEngineBypassConnections()
+    {
+        long routeGeneration;
+        int realIfIndex;
+        IPAddress realGateway;
+        lock (_routeLock)
+        {
+            if (!_realRouteKnown) return;
+            routeGeneration = _routeGeneration;
+            realIfIndex = _realIfIndex;
+            realGateway = _realGateway;
+        }
+
+        void PinBypass(IPAddress ip, string source)
+        {
+            if (IPAddress.IsLoopback(ip) || !IsValidPublicInternetIpv4(ip)) return;
+
+            var ipKey = ip.ToString();
+            try
+            {
+                lock (_routeLock)
+                {
+                    if (routeGeneration != _routeGeneration || !_realRouteKnown) return;
+                    if (_dynamicRoutes.ContainsKey(ipKey)) return;
+
+                    var entry = WintunRouteApi.AddRoute(realIfIndex, ip, 32, realGateway);
+                    _appliedRoutes.Add(entry);
+                    _dynamicRoutes[ipKey] = (entry, source);
+                }
+
+                WriteDiag($"engine bypass: {source} → {ip}; host route pinned direct (real gw)");
+                PersistRouteJournal();
+            }
+            catch (Exception ex)
+            {
+                WriteDiag($"engine bypass: route for {ip} ({source}) not pinned: {ex.Message}");
+            }
+        }
+
+        var endpoint = _tunnel.ServerEndpointAddress?.Trim() ?? "";
+        if (endpoint.Length > 0)
+        {
+            if (IPAddress.TryParse(endpoint, out var endpointIp))
+            {
+                PinBypass(endpointIp, "engine:endpoint");
+            }
+            else
+            {
+                try
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            foreach (var a in (await Dns.GetHostAddressesAsync(endpoint).ConfigureAwait(false))
+                                         .Where(a => a.AddressFamily == AddressFamily.InterNetwork))
+                            {
+                                PinBypass(a, "engine:endpoint");
+                            }
+                        }
+                        catch { }
+                    });
+                }
+                catch { }
+            }
+        }
+
+        var connections = WintunRouteApi.GetActiveTcpConnections();
+        if (connections.Count == 0) return;
+
+        foreach (var conn in connections)
+        {
+            var pid = conn.Pid;
+            var procInfo = LookupProcessInfoCached(pid);
+
+            if (string.IsNullOrEmpty(procInfo.Name)) continue;
+            if (!EngineProcessNames.All.Contains(procInfo.Name, StringComparer.OrdinalIgnoreCase)) continue;
+
+            if (string.Equals(procInfo.Name, EngineProcessNames.Shard, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(procInfo.Name, "shard.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                var ep = _tunnel.ServerEndpointAddress?.Trim() ?? "";
+                if (ep.Length > 0 && IPAddress.TryParse(ep, out var epIp) && !conn.RemoteIp.Equals(epIp))
+                {
+                    continue;
+                }
+            }
+
+            PinBypass(conn.RemoteIp, $"engine:{procInfo.Name} (pid {pid})");
+        }
     }
 
         private async Task RunProcessSplitMonitorAsync(CancellationToken ct)
     {
-        var pidCache = new Dictionary<int, (string? Path, string? Name)>();
-        var sweepCount = 0;
-
         while (!ct.IsCancellationRequested)
         {
+            var hasAppRules = false;
             try
             {
+                SweepEngineBypassConnections();
+
                 var s = _settings.Settings;
                 if (s.SplitTunnelEnabled)
                 {
                     SplitRules.ClassifySplitEntries(s, out _, out _, out var procNames, out var procPaths);
-                    if (procNames.Count > 0 || procPaths.Count > 0)
+                    var hasProcessMonitorWork = (procNames.Count > 0 || procPaths.Count > 0)
+                        && !UsesMihomoNativeSplitRules();
+                    hasAppRules = hasProcessMonitorWork;
+                    if (hasProcessMonitorWork)
                     {
                         var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-                        ScanAndPinProcessConnections(procNames, procPaths, include, pidCache);
+                        ScanAndPinProcessConnections(procNames, procPaths, include);
                     }
-                }
-
-                sweepCount++;
-                if (sweepCount >= 100)
-                {
-                    
-                    pidCache.Clear();
-                    sweepCount = 0;
                 }
             }
             catch (Exception ex)
@@ -112,9 +270,7 @@ public sealed partial class WintunTunManager
 
             try
             {
-                var s = _settings.Settings;
-                var hasActiveRules = s.SplitTunnelEnabled;
-                await Task.Delay(hasActiveRules ? 1000 : 5000, ct);
+                await Task.Delay(hasAppRules ? 50 : 250, ct);
             }
             catch (OperationCanceledException)
             {
@@ -126,8 +282,7 @@ public sealed partial class WintunTunManager
     private void ScanAndPinProcessConnections(
         List<string> procNames,
         List<string> procPaths,
-        bool include,
-        Dictionary<int, (string? Path, string? Name)> pidCache)
+        bool include)
     {
         if (!include && !_realRouteKnown) return;
         if (include && _tunIfIndex == 0) return;
@@ -138,13 +293,7 @@ public sealed partial class WintunTunManager
         foreach (var conn in connections)
         {
             var pid = conn.Pid;
-            if (!pidCache.TryGetValue(pid, out var procInfo))
-            {
-                var fullPath = WintunRouteApi.TryGetProcessPath(pid);
-                var fileName = string.IsNullOrEmpty(fullPath) ? null : Path.GetFileName(fullPath);
-                procInfo = (fullPath, fileName);
-                pidCache[pid] = procInfo;
-            }
+            var procInfo = LookupProcessInfoCached(pid);
 
             if (string.IsNullOrEmpty(procInfo.Name)) continue;
 
@@ -175,6 +324,7 @@ public sealed partial class WintunTunManager
             }
 
             if (!IsValidPublicInternetIpv4(remoteIp)) continue;
+            if (include && IsProtectedEngineIp(remoteIp)) continue;
 
             var ipKey = remoteIp.ToString();
             var needsAdd = false;
@@ -205,7 +355,11 @@ public sealed partial class WintunTunManager
                     }
                 }
 
-                if (added)
+                if (!added)
+                {
+                    try { WintunRouteApi.DeleteRoute(entry); } catch { }
+                }
+                else
                 {
                     
                     
@@ -224,6 +378,7 @@ public sealed partial class WintunTunManager
 
                     WriteDiag($"split app: '{matchedName}' (pid {pid}) → {remoteIp}; host route pinned "
                               + $"{(include ? "via tunnel" : "direct (real gw)")}");
+                    PersistRouteJournal();
                 }
             }
             catch (Exception ex)

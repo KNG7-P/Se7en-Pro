@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -13,6 +14,9 @@ using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Services;
+using Se7enPro.Services.Foxy;
+using Se7enPro.Services.Lantern;
+using Se7enPro.Services.Veep;
 using Se7enPro.ViewModels;
 using Se7enPro.Views;
 
@@ -49,6 +53,13 @@ public partial class App : Application
         
         
         Se7enPro.Services.Ui.Adapter = new Se7enPro.Services.WpfUiAdapter();
+
+        if (e.Args.Any(a => a.Equals("--cleanup", StringComparison.OrdinalIgnoreCase)))
+        {
+            RunUninstallCleanup();
+            Shutdown(0);
+            return;
+        }
 
         
         
@@ -125,6 +136,23 @@ public partial class App : Application
         Services.GetRequiredService<IThemeService>().ApplyTheme(settings.Settings.Theme);
         ApplyLanguage(settings.Settings.Language);
 
+        try
+        {
+            var removed = WintunTunManager.RecoverStaleRoutes(Services.GetService<ILogger<App>>());
+            if (removed > 0)
+                Debug.WriteLine($"[startup] removed {removed} leftover TUN route(s) from a crashed session");
+
+            WintunDnsShell.DisableNrptPolicy();
+            _ = Task.Run(async () =>
+            {
+                try { await WintunTunManager.CleanupStaleAdapterStateAsync(); } catch { }
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[startup] stale TUN route/DNS cleanup failed: {ex.Message}");
+        }
+
         Services.GetRequiredService<IChildProcessGuard>();
 
         
@@ -141,27 +169,20 @@ public partial class App : Application
             {
                 try
                 {
-                    Services.GetRequiredService<IStartupReaper>().ReapStaleProcesses();
-                    Services.GetRequiredService<ISystemProxyService>().RestoreIfCrashed();
-                    Services.GetRequiredService<IStartupRegistration>().SyncFromSetting(settings.Settings.StartWithWindows);
-                    var shard = Services.GetService<ShardEngine>();
-                    if (shard is not null)
+                    var tunnel = Services.GetRequiredService<ITunnelCoreManager>();
+                    if (tunnel.State == Se7enPro.Models.ConnectionState.Disconnected)
                     {
-                        await shard.RefreshSubscriptionAsync(force: false);
+                        Services.GetRequiredService<IStartupReaper>().ReapStaleProcesses();
+                        Services.GetRequiredService<ISystemProxyService>().RestoreIfCrashed();
                     }
-                    
-                    
-                    
-                    
-                    
+                    Services.GetRequiredService<IStartupRegistration>().SyncFromSetting(settings.Settings.StartWithWindows);
+                    if (settings.Settings.AutoConnect && tunnel.State == Se7enPro.Models.ConnectionState.Disconnected)
+                    {
+                        _ = StartAutoConnectAsync();
+                    }
                 }
                 catch { }
             });
-        }
-
-        if (settings.Settings.AutoConnect)
-        {
-            _ = StartAutoConnectAsync();
         }
 
         EventManager.RegisterClassHandler(
@@ -220,9 +241,17 @@ public partial class App : Application
     {
         if (Current is App app)
         {
-            try { app._singleInstanceMutex?.ReleaseMutex(); } catch { }
-            try { app._singleInstanceMutex?.Dispose(); } catch { }
-            app._singleInstanceMutex = null;
+            void ReleaseCore()
+            {
+                try { app._singleInstanceMutex?.ReleaseMutex(); } catch { }
+                try { app._singleInstanceMutex?.Dispose(); } catch { }
+                app._singleInstanceMutex = null;
+            }
+
+            if (app.Dispatcher.CheckAccess())
+                ReleaseCore();
+            else
+                try { app.Dispatcher.Invoke(ReleaseCore); } catch { ReleaseCore(); }
         }
     }
 
@@ -230,11 +259,28 @@ public partial class App : Application
     {
         if (Current is App app && app._singleInstanceMutex is null)
         {
-            try
+            void ReacquireCore()
             {
-                app._singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out _);
+                if (app._singleInstanceMutex is not null) return;
+                try
+                {
+                    var m = new Mutex(true, SingleInstanceMutexName, out var createdNew);
+                    if (createdNew)
+                    {
+                        app._singleInstanceMutex = m;
+                    }
+                    else
+                    {
+                        try { m.Dispose(); } catch { }
+                    }
+                }
+                catch { }
             }
-            catch { }
+
+            if (app.Dispatcher.CheckAccess())
+                ReacquireCore();
+            else
+                try { app.Dispatcher.Invoke(ReacquireCore); } catch { ReacquireCore(); }
         }
     }
 
@@ -339,6 +385,10 @@ public partial class App : Application
         services.AddSingleton<TorEngine>();
         services.AddSingleton<ShardEngine>();
         services.AddSingleton<V2RayEngine>();
+        services.AddSingleton<FoxyEngine>();
+        services.AddSingleton<FoxyAccountService>();
+        services.AddSingleton<LanternEngine>();
+        services.AddSingleton<VeepEngine>();
         services.AddSingleton<ITunnelCoreManager, ConnectionManager>();
         services.AddSingleton<ITunManager, WintunTunManager>();
         services.AddSingleton<IKillSwitchService, KillSwitchService>();
@@ -368,8 +418,20 @@ public partial class App : Application
                 await System.Threading.Tasks.Task.Run(() => tunnel.StartAsync());
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Services?.GetService<ILogger<App>>()?.LogWarning(ex, "Auto-connect at startup failed");
+            try
+            {
+                var home = Services?.GetService<HomeViewModel>();
+                if (home is not null)
+                {
+                    home.StatusText = string.Format(
+                        Loc.T("AutoConnectFailed", "Auto-connect failed: {0}"),
+                        ex.Message);
+                }
+            }
+            catch { }
         }
     }
 
@@ -419,28 +481,28 @@ public partial class App : Application
         
         
         
+        TryCleanup("pending settings save", () =>
+        {
+            var settingsVm = Services?.GetService<SettingsViewModel>();
+            settingsVm?.FlushPendingWrites();
+            settingsVm?.Foxy.FlushPendingSave();
+        });
+
         TryCleanup("kill switch", () =>
         {
             Services?.GetService<IKillSwitchService>()?.Disarm();
         });
 
-        TryCleanup("tun teardown", () =>
+        TryCleanup("network teardown", () =>
         {
+            var tasks = new List<Task>();
             var tun = Services?.GetService<ITunManager>();
-            if (tun is not null)
-            {
-                Task.Run(() => tun.DisposeAsync().AsTask())
-                   .WaitAsync(TimeSpan.FromSeconds(8)).GetAwaiter().GetResult();
-            }
-        });
-
-        TryCleanup("engine stop", () =>
-        {
+            if (tun is not null) tasks.Add(Task.Run(() => tun.DisposeAsync().AsTask()));
             var tunnel = Services?.GetService<ITunnelCoreManager>();
-            if (tunnel is not null)
+            if (tunnel is not null) tasks.Add(Task.Run(() => tunnel.StopAsync()));
+            if (tasks.Count > 0)
             {
-                Task.Run(() => tunnel.StopAsync())
-                    .WaitAsync(TimeSpan.FromSeconds(6)).GetAwaiter().GetResult();
+                Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
             }
         });
 
@@ -469,6 +531,37 @@ public partial class App : Application
         catch (Exception ex)
         {
             Debug.WriteLine($"[shutdown] {what} failed: {ex.Message}");
+        }
+    }
+
+    private static void RunUninstallCleanup()
+    {
+        ServiceProvider? provider = null;
+        try
+        {
+            var services = new ServiceCollection();
+            ConfigureServices(services);
+            provider = services.BuildServiceProvider();
+
+            TryCleanup("stale engines", () =>
+                provider.GetRequiredService<IStartupReaper>().ReapStaleProcesses());
+            TryCleanup("system proxy", () =>
+                provider.GetRequiredService<ISystemProxyService>().RestoreIfCrashed());
+            TryCleanup("TUN routes", () =>
+                WintunTunManager.RecoverStaleRoutes(provider.GetService<ILogger<App>>()));
+            TryCleanup("NRPT policy & DNS", () =>
+            {
+                WintunDnsShell.DisableNrptPolicy();
+                WintunTunManager.CleanupStaleAdapterStateAsync().GetAwaiter().GetResult();
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[cleanup] {ex.Message}");
+        }
+        finally
+        {
+            provider?.Dispose();
         }
     }
 

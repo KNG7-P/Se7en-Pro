@@ -16,9 +16,12 @@ namespace Se7enPro.Services;
 
 public sealed partial class WintunTunManager : ITunManager
 {
-    private const string TunInterfaceName = "se7en_tun";
+    internal const string TunInterfaceName = "se7en_tun";
     private const string CachedTunExeName = "Se7enPro.Tun.exe";
-    private const int TunMtu = 1420;
+    private const string CachedZeptunExeName = "Se7enPro.Zeptun.exe";
+    private const string CachedMihomoExeName = "Se7enPro.Mihomo.exe";
+    private const int DefaultTunMtu = 1280;
+    private const int TunInterfaceMetric = 1;
 
         private static readonly IPAddress TunAddressV4 = IPAddress.Parse("198.18.0.1");
     private const byte TunPrefixV4 = 30;
@@ -48,6 +51,7 @@ public sealed partial class WintunTunManager : ITunManager
     private string? _workDir;
     private string? _logPath;
     private StreamWriter? _logWriter;
+    private readonly object _logGate = new();
     private long _logBytesWritten;
     private int _logCapNoticeWritten;
     private const long LogByteCap = 32L * 1024 * 1024;
@@ -57,7 +61,9 @@ public sealed partial class WintunTunManager : ITunManager
 
     
     private readonly object _routeLock = new();
+    private long _routeGeneration;
     private readonly List<WintunRouteApi.RouteEntry> _appliedRoutes = new();
+    private readonly WfpDnsLeakProtector _dnsLeakProtector = new();
     private SocksDnsForwarder? _dnsForwarder;
     private bool _adapterDnsSet;
     private bool _v6Enabled;
@@ -86,6 +92,39 @@ public sealed partial class WintunTunManager : ITunManager
 
     private int _activeSocksPort;
     private string _activeSplitHash = "";
+    private string _activeEndpointHash = "";
+    private string _activeMihomoSplitHash = "";
+    private string _activeTunMethod = "wintun";
+    private int _activeTunMtu = DefaultTunMtu;
+
+    private int ResolveTunMtu()
+    {
+        var s = _settings.Settings;
+        var method = ConnectionMethodExtensions.ParseConnectionMethod(s.ConnectionMethod);
+        if (method is ConnectionMethod.Shard
+            && s.ShardMtu is >= 576 and <= 1460)
+        {
+            return s.ShardMtu;
+        }
+        if (method.IsAether())
+        {
+            var aetherMtu = s.GetAetherMtu(method);
+            if (aetherMtu is >= 576 and <= 1500)
+            {
+                return aetherMtu;
+            }
+        }
+
+        return DefaultTunMtu;
+    }
+
+    internal static string NormalizeTunMethod(string? value)
+    {
+        var v = value?.Trim();
+        if (string.Equals(v, "zeptun", StringComparison.OrdinalIgnoreCase)) return "zeptun";
+        if (string.Equals(v, "mihomo", StringComparison.OrdinalIgnoreCase)) return "mihomo";
+        return "wintun";
+    }
 
     public TunState State { get; private set; } = TunState.Off;
     public string? LastError { get; private set; }
@@ -106,18 +145,25 @@ public sealed partial class WintunTunManager : ITunManager
         _systemProxy = systemProxy;
 
         _tunnel.StateChanged += OnTunnelStateChanged;
+        _tunnel.RouteChanged += OnTunnelRouteChanged;
         _settings.SettingsChanged += OnSettingsChanged;
     }
 
     private async void OnTunnelStateChanged(object? sender, ConnectionState s)
     {
-        try { await ReconcileAsync(); }
+        try { await Task.Run(ReconcileAsync).ConfigureAwait(false); }
         catch (Exception ex) { _logger.LogError(ex, "OnTunnelStateChanged failed"); }
+    }
+
+    private async void OnTunnelRouteChanged(object? sender, EventArgs e)
+    {
+        try { await Task.Run(ReconcileAsync).ConfigureAwait(false); }
+        catch (Exception ex) { _logger.LogError(ex, "OnTunnelRouteChanged failed"); }
     }
 
     private async void OnSettingsChanged(object? sender, EventArgs e)
     {
-        try { await ReconcileAsync(); }
+        try { await Task.Run(ReconcileAsync).ConfigureAwait(false); }
         catch (Exception ex) { _logger.LogError(ex, "OnSettingsChanged failed"); }
     }
 }

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Se7enPro.Services;
 
 namespace Se7enPro.Controls;
 
@@ -171,8 +172,26 @@ public sealed class TrafficChartControl : FrameworkElement
         };
         _sampleTimer.Tick += OnSampleTimerTick;
 
-        Loaded += (_, _) => _sampleTimer.Start();
-        Unloaded += (_, _) => _sampleTimer.Stop();
+        Loaded += (_, _) =>
+        {
+            ThemeService.ThemeChanged -= OnThemeChanged;
+            ThemeService.ThemeChanged += OnThemeChanged;
+            _sampleTimer.Start();
+        };
+        Unloaded += (_, _) =>
+        {
+            ThemeService.ThemeChanged -= OnThemeChanged;
+            _sampleTimer.Stop();
+            _hostWindow = null;
+        };
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e)
+    {
+        _gridPen = null;
+        _labelBrush = null;
+        _idleRendered = false;
+        InvalidateVisual();
     }
 
     private void OnSampleTimerTick(object? sender, EventArgs e)

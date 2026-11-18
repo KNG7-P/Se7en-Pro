@@ -56,10 +56,14 @@ public partial class HomePage : UserControl
         rows[1].Height = new GridLength(1.0, GridUnitType.Star);
         rows[2].Height = GridLength.Auto;
 
-        TilesGrid.ColumnDefinitions[1].Width = new GridLength(8);
-        TilesGrid.RowDefinitions[1].Height = new GridLength(8);
+        var gap = maximize ? 12 : 8;
+        TilesGrid.ColumnDefinitions[1].Width = new GridLength(gap);
+        TilesGrid.RowDefinitions[1].Height = new GridLength(gap);
+        var tileHeight = new GridLength(maximize ? 52 : 46);
+        TilesGrid.RowDefinitions[0].Height = tileHeight;
+        TilesGrid.RowDefinitions[2].Height = tileHeight;
 
-        var radius = new CornerRadius(9);
+        var radius = new CornerRadius(maximize ? 12 : 9);
         var border = new Thickness(1);
         ApplyTileChrome(SocksTile, radius, border);
         ApplyTileChrome(HttpTile, radius, border);

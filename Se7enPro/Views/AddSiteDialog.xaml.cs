@@ -15,6 +15,7 @@ public partial class AddSiteDialog : Window
     public AddSiteDialog()
     {
         InitializeComponent();
+        ModalWindowHelper.AttachCentered(this);
         Loaded += (_, _) =>
         {
             TargetInput.Focus();
@@ -163,5 +164,13 @@ public partial class AddSiteDialog : Window
     {
         ErrorText.Text = message;
         ErrorBorder.Visibility = Visibility.Visible;
+    }
+
+    private void OnDialogBorderMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            try { DragMove(); } catch { }
+        }
     }
 }

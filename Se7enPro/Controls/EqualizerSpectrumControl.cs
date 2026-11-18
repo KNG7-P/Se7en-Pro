@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Se7enPro.Services;
 
 namespace Se7enPro.Controls;
 
@@ -87,8 +88,8 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
 
     private const double BasePhaseStep = 0.08; 
 
-    private static readonly TimeSpan ActiveInterval = TimeSpan.FromMilliseconds(50); 
-    private static readonly TimeSpan IdleInterval = TimeSpan.FromMilliseconds(120);  
+    private static readonly TimeSpan ActiveInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan IdleInterval = TimeSpan.FromMilliseconds(250);
 
     private Window? _hostWindow;
     private bool _lifetimeHooksAttached;
@@ -97,8 +98,8 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
 
     public EqualizerSpectrumControl()
     {
-        
-        
+        ClipToBounds = true;
+
         _animationTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = IdleInterval
@@ -132,6 +133,9 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
 
     private void AttachLifetimeHooks()
     {
+        ThemeService.ThemeChanged -= OnThemeChanged;
+        ThemeService.ThemeChanged += OnThemeChanged;
+
         if (_lifetimeHooksAttached) return;
         _lifetimeHooksAttached = true;
 
@@ -147,6 +151,8 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
 
     private void DetachLifetimeHooks()
     {
+        ThemeService.ThemeChanged -= OnThemeChanged;
+
         if (!_lifetimeHooksAttached) return;
         _lifetimeHooksAttached = false;
 
@@ -158,6 +164,12 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
         }
 
         _animationTimer.Stop();
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e)
+    {
+        _gridPen = null;
+        InvalidateVisual();
     }
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -210,13 +222,14 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
 
         const int barCount = 24;
         const double padX = 6.0;
+        var totalGap = padX * 2 + (barCount - 1) * 1.5;
+        var barWidth = Math.Max(1.5, (w - totalGap) / barCount);
         var slotW = (w - padX * 2) / barCount;
         if (slotW <= 1) return;
 
         if (!IsConnected)
         {
-            
-            var barW = Math.Clamp(slotW * 0.65, 2.5, 8.0);
+            var barW = Math.Clamp(Math.Min(barWidth, slotW * 0.65), 1.5, 8.0);
             for (var i = 0; i < barCount; i++)
             {
                 var x = padX + i * slotW + (slotW - barW) / 2.0;
@@ -230,7 +243,6 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
             return;
         }
 
-        
         var effectivePeak = Math.Max(PeakSpeed, Math.Max(DownSpeed, Math.Max(UpSpeed, 1024.0 * 256)));
         var dlRatio = Math.Clamp(DownSpeed / effectivePeak, 0.0, 1.0);
         var ulRatio = Math.Clamp(UpSpeed / effectivePeak, 0.0, 1.0);
@@ -238,8 +250,8 @@ public sealed class EqualizerSpectrumControl : FrameworkElement
         var dlSpeedFactor = DownSpeed <= 0 ? 0.08 : Math.Pow(dlRatio, 0.35);
         var ulSpeedFactor = UpSpeed <= 0 ? 0.08 : Math.Pow(ulRatio, 0.35);
 
-        var barTotalW = Math.Clamp(slotW * 0.78, 3.0, 12.0);
-        var subBarW = Math.Clamp((barTotalW - 1.2) / 2.0, 1.2, 5.5);
+        var barTotalW = Math.Clamp(Math.Min(barWidth, slotW * 0.78), 1.5, 12.0);
+        var subBarW = Math.Clamp((barTotalW - 1.2) / 2.0, 1.0, 5.5);
 
         for (var i = 0; i < barCount; i++)
         {

@@ -5,16 +5,6 @@ using Se7enPro.Services;
 
 namespace VerifyCriticalFixes;
 
-/// <summary>
-/// Tests for the identity pool.
-///
-/// The store does no networking, so all of this runs offline against a temp directory.
-/// That is the point of the design: rotation, validity and failure attribution are the
-/// parts that decide whether the pool actually helps when the registration endpoint is
-/// blocked, and they are the parts a screenshot cannot check.
-///
-/// Nothing here touches api.cloudflareclient.com or writes anywhere near the real pool.
-/// </summary>
 internal static class IdentityPoolTests
 {
     private const long Day = 86400;
@@ -53,8 +43,6 @@ internal static class IdentityPoolTests
         return failures;
     }
 
-    // ---------------------------------------------------------------- cases
-
     private static int TestValidity()
     {
         var f = 0;
@@ -77,8 +65,6 @@ internal static class IdentityPoolTests
         Check(!IdentityPool.IsUsable(noMaterial, now),
               "an identity with no material is not usable");
 
-        // MASQUE carries a certificate with a real lifetime, and handing out a
-        // nearly-expired one fails later rather than now.
         Check(IdentityPool.IsUsable(SlotOf(Masque("m1", now)), now), "a fresh MASQUE identity is usable");
         Check(IdentityPool.IsUsable(SlotOf(Masque("m2", now)), now + 300 * Day),
               "a MASQUE identity is still usable at 300 days");
@@ -106,8 +92,6 @@ internal static class IdentityPoolTests
         Check(pool.Count(IdentityKind.WireGuard, now) == 3, "three identities are counted",
               pool.Count(IdentityKind.WireGuard, now).ToString());
 
-        // Least-recently-used first: a never-used slot outranks a used one, so a fresh
-        // pool is handed out in turn rather than always reusing the same identity.
         Check(pool.TryCheckout(IdentityKind.WireGuard, "wd1", out var a, now) && a!.DeviceId == "rot-d0",
               "the first checkout hands out the first identity", a?.DeviceId ?? "(none)");
         Check(pool.TryCheckout(IdentityKind.WireGuard, "wd2", out var b, now + 1) && b!.DeviceId == "rot-d1",
@@ -115,19 +99,15 @@ internal static class IdentityPoolTests
         Check(pool.TryCheckout(IdentityKind.WireGuard, "wd3", out var c, now + 2) && c!.DeviceId == "rot-d2",
               "the third checkout hands out the third", c?.DeviceId ?? "(none)");
 
-        // A fourth checkout wraps around, and wraps to the least recently used.
         Check(pool.TryCheckout(IdentityKind.WireGuard, "wd4", out var d, now + 3) && d!.DeviceId == "rot-d0",
               "once the pool is exhausted it wraps to the least recently used",
               d?.DeviceId ?? "(none)");
 
-        // Rotation must actually move usage, otherwise spreading the load - the whole
-        // point - would not happen.
         var used = pool.Snapshot().Where(s => s.UseCount > 0).Select(s => s.UseCount).ToList();
         Check(used.Count == 3 && used.Max() - used.Min() <= 1,
               "usage is spread evenly across the pool",
               string.Join(",", pool.Snapshot().Select(s => s.UseCount)));
 
-        // Kinds are kept apart: a WireGuard identity must never satisfy a MASQUE checkout.
         var mixed = MakePool(root, "mix");
         mixed.Add(Warp("mix-w", now), now);
         Check(!mixed.TryCheckout(IdentityKind.Masque, "wd", out _, now),
@@ -163,17 +143,13 @@ internal static class IdentityPoolTests
               retired.RetireReason ?? "(none)");
         Check(retired.FailCount == 1, "the failure is counted");
 
-        // The other workDir's identity must be untouched - attributing the failure
-        // broadly would retire identities that demonstrably still work.
         var survivor = pool.Snapshot().First(s => s.DeviceId == other!.DeviceId);
         Check(!survivor.Retired, "an identity in use by a different workDir is NOT retired");
 
-        // The next connect must not be handed the dead one again.
         pool.TryCheckout(IdentityKind.WireGuard, "work-c", out var next, now + 10);
         Check(next!.DeviceId != used!.DeviceId,
               "the next connect is not handed the retired identity", next.DeviceId);
 
-        // A success clears the active mapping without retiring anything.
         pool.TryCheckout(IdentityKind.WireGuard, "work-d", out var good, now + 20);
         pool.ReportSuccess("work-d");
         var stillGood = pool.Snapshot().First(s => s.DeviceId == good!.DeviceId);
@@ -200,9 +176,6 @@ internal static class IdentityPoolTests
               "trim caps the pool at the requested size",
               pool.Count(IdentityKind.WireGuard, now + 20).ToString());
 
-        // Trimming must drop the LEAST valuable. The identities that have been handed out and
-        // worked are the ones with evidence behind them, so they are the ones to keep -
-        // dropping them to make room for untried ones would discard every proven entry.
         var kept = pool.Snapshot().Where(s => s.Kind == IdentityKind.WireGuard).ToList();
         Check(kept.Sum(s => s.UseCount) == 3,
               "the identities with recorded use are the ones kept",
@@ -211,7 +184,6 @@ internal static class IdentityPoolTests
               "an untried identity is dropped before a tried one",
               string.Join(",", kept.Select(s => $"{s.DeviceId}:{s.UseCount}")));
 
-        // Kinds trim independently.
         var mixed = MakePool(root, "trim2");
         for (var i = 0; i < 4; i++) mixed.Add(Warp($"x-w{i}", now), now);
         for (var i = 0; i < 2; i++) mixed.Add(Masque($"x-m{i}", now), now);
@@ -219,7 +191,6 @@ internal static class IdentityPoolTests
         Check(mixed.Count(IdentityKind.WireGuard, now) == 2, "WireGuard is trimmed to two");
         Check(mixed.Count(IdentityKind.Masque, now) == 2, "MASQUE is untouched by a WireGuard trim");
 
-        // Adding beyond the cap trims immediately.
         var capped = MakePool(root, "trim3");
         for (var i = 0; i < 4; i++)
             capped.Add(Warp($"y-d{i}", now), now, keepPerKind: 2);
@@ -227,15 +198,12 @@ internal static class IdentityPoolTests
               "Add with keepPerKind caps the pool in one step",
               capped.Count(IdentityKind.WireGuard, now).ToString());
 
-        // A retired identity is always the first to go, however well-used it was.
         var retiredFirst = MakePool(root, "trim4");
         for (var i = 0; i < 3; i++) retiredFirst.Add(Warp($"z-d{i}", now), now);
         retiredFirst.TryCheckout(IdentityKind.WireGuard, "w1", out var good1, now + 1);
         retiredFirst.TryCheckout(IdentityKind.WireGuard, "w2", out var good2, now + 2);
         retiredFirst.ReportFailure("w1", "blocked");
 
-        // Both used identities are now equal on UseCount, so only the retirement can decide
-        // which one is dropped when the pool is over capacity.
         Check(good1!.UseCount == good2!.UseCount,
               "the test case has two equally-used identities, so retirement decides",
               $"{good1.UseCount} vs {good2.UseCount}");
@@ -271,7 +239,6 @@ internal static class IdentityPoolTests
         Check(onDisk.StartsWith("dpapi:v1:", StringComparison.Ordinal),
               "the pool file is DPAPI-protected", onDisk[..Math.Min(24, onDisk.Length)]);
 
-        // And it round-trips: the data survives because DPAPI is encryption, not hashing.
         var reopened = MakePool(root, "crypt");
         Check(reopened.Count(IdentityKind.WireGuard, now) == 1,
               "the identity is readable again in the same session");
@@ -292,22 +259,17 @@ internal static class IdentityPoolTests
 
         File.WriteAllText(pool.StorePath, "this is not the pool file at all");
 
-        // A pool is a cache. Being unable to read it must degrade to "empty", never to a
-        // refusal to connect.
         Check(pool.Count(IdentityKind.WireGuard, now) == 0,
               "a corrupt pool reads as empty");
         Check(!pool.TryCheckout(IdentityKind.WireGuard, "wd", out _, now),
               "a corrupt pool hands out nothing");
         Check(pool.Snapshot().Count == 0, "Snapshot is safe on a corrupt pool");
 
-        // And it recovers: a fresh Add over the wreckage works.
         Check(pool.Add(Warp("k-d2", now), now), "the pool can be repopulated after corruption");
         Check(pool.Count(IdentityKind.WireGuard, now) == 1, "and works again");
 
         return f;
     }
-
-    // ---------------------------------------------------------------- helpers
 
     private static IdentityPool MakePool(string root, string name) =>
         new(Microsoft.Extensions.Logging.Abstractions.NullLogger<IdentityPool>.Instance,
@@ -319,7 +281,6 @@ internal static class IdentityPoolTests
     private static PooledIdentity Masque(string deviceId, long issuedAt) =>
         new(IdentityKind.Masque, deviceId, $"device_id = \"{deviceId}\"", issuedAt);
 
-    /// <summary>A stored slot, as the pool keeps it, for the validity rules.</summary>
     private static IdentityPool.Slot SlotOf(PooledIdentity m) => new()
     {
         Id = m.DeviceId,

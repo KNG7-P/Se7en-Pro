@@ -19,6 +19,10 @@ public enum LogEngineFilter
     Tor,
     Tunnel,
     SHARD,
+    Foxy,
+    Lantern,
+    Veep,
+    Chain,
     System,
 }
 
@@ -64,8 +68,6 @@ public sealed partial class LogsViewModel : PageViewModelBase
     public override string Route => "logs";
     public override string Icon => "TextBoxOutline";
 
-    public event Action? RequestScrollToEnd;
-
     public IReadOnlyList<LogEngineFilterItem> EngineFilterOptions { get; } = new List<LogEngineFilterItem>
     {
         new(LogEngineFilter.All, "All Logs", "FormatListBulleted", ""),
@@ -74,7 +76,11 @@ public sealed partial class LogsViewModel : PageViewModelBase
         new(LogEngineFilter.WARP, "Cloudflare WARP", "LightningBoltOutline", LogTags.Aether),
         new(LogEngineFilter.Tor, "Tor Network", "Incognito", LogTags.Tor),
         new(LogEngineFilter.SHARD, "SHARD", "Grain", LogTags.Shard),
+        new(LogEngineFilter.Foxy, "Foxy", "Firefox", LogTags.Foxy),
+        new(LogEngineFilter.Lantern, "Lantern", "RadioTower", LogTags.Lantern),
+        new(LogEngineFilter.Veep, "Veep", "ShieldCheck", LogTags.Veep),
         new(LogEngineFilter.V2Ray, "V2Ray / Xray", "HubOutline", LogTags.V2Ray),
+        new(LogEngineFilter.Chain, "Chained", "LinkVariant", LogTags.Chain),
         new(LogEngineFilter.Tunnel, "TUN & Routing", "Routes", LogTags.Tun),
         new(LogEngineFilter.System, "App & Lifecycle", "ApplicationBracketsOutline", LogTags.App),
     };
@@ -90,7 +96,12 @@ public sealed partial class LogsViewModel : PageViewModelBase
 
     public BulkObservableCollection<LogLine> FilteredLines { get; } = new();
 
-    public bool IsDarkTheme => _settings.Settings.Theme != "light";
+    public bool IsDarkTheme => _settings.Settings.Theme switch
+    {
+        "light" => false,
+        "system" => Ui.IsSystemDarkTheme(),
+        _ => true,
+    };
 
     public bool HasFilteredLines => FilteredLines.Count > 0;
 
@@ -131,7 +142,7 @@ public sealed partial class LogsViewModel : PageViewModelBase
         _tunnel.LogLineAppended += OnLogLineAppended;
         _tunnel.LogCleared += OnLogCleared;
 
-        _flushTimer = new UiTimer(TimeSpan.FromMilliseconds(250), FlushPending);
+        _flushTimer = new UiTimer(TimeSpan.FromMilliseconds(100), FlushPending);
 
         ReapplyFilter();
     }
@@ -148,14 +159,7 @@ public sealed partial class LogsViewModel : PageViewModelBase
     }
 
     [RelayCommand]
-    private void ToggleAutoScroll()
-    {
-        AutoScroll = !AutoScroll;
-        if (AutoScroll)
-        {
-            RequestScrollToEnd?.Invoke();
-        }
-    }
+    private void ToggleAutoScroll() => AutoScroll = !AutoScroll;
 
     [RelayCommand]
     private void Clear()
@@ -204,11 +208,6 @@ public sealed partial class LogsViewModel : PageViewModelBase
         FilteredLines.ResetWith(filtered);
         OnPropertyChanged(nameof(HasFilteredLines));
         OnPropertyChanged(nameof(SearchPlaceholder));
-
-        if (AutoScroll)
-        {
-            RequestScrollToEnd?.Invoke();
-        }
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -250,11 +249,11 @@ public sealed partial class LogsViewModel : PageViewModelBase
         if (_pending.IsEmpty)
         {
             _flushTimer.Stop();
-            return;
+            if (_pending.IsEmpty) return;
         }
 
         var batch = new List<LogLine>(capacity: 128);
-        const int maxPerTick = 500;
+        const int maxPerTick = 250;
         while (batch.Count < maxPerTick && _pending.TryDequeue(out var line))
         {
             batch.Add(Parse(line));
@@ -286,25 +285,16 @@ public sealed partial class LogsViewModel : PageViewModelBase
 
         if (matchingFromBatch.Count > 0)
         {
-            if (FilteredLines.Count + matchingFromBatch.Count > MaxDisplayedLines + PruneChunk)
+            var keep = MaxDisplayedLines - matchingFromBatch.Count;
+            if (keep < 0) keep = 0;
+            if (FilteredLines.Count > keep)
             {
-                ReapplyFilter();
-            }
-            else
-            {
-                
-                
-                
-                
-                FilteredLines.AddRange(matchingFromBatch);
-                OnPropertyChanged(nameof(HasFilteredLines));
-                OnPropertyChanged(nameof(SearchPlaceholder));
+                FilteredLines.RemoveFirst(FilteredLines.Count - keep);
             }
 
-            if (AutoScroll)
-            {
-                RequestScrollToEnd?.Invoke();
-            }
+            FilteredLines.AddRange(matchingFromBatch);
+            OnPropertyChanged(nameof(HasFilteredLines));
+            OnPropertyChanged(nameof(SearchPlaceholder));
         }
     }
 
@@ -321,7 +311,7 @@ public sealed partial class LogsViewModel : PageViewModelBase
     private static readonly string[] ErrorWords =
         { "error", "fail", "fatal", "panic", "exception", "aborted", "denied", "refused", "unreachable" };
     private static readonly string[] WarningWords =
-        { "warn", "blocked", "bypassed", "retry", "timeout", "expired", "fallback" };
+        { "warn", "blocked", "bypassed", "retry", "timeout", "expired", "fallback", "dropped" };
     private static readonly string[] SuccessWords =
         { "connected", "established", "listening", "ready", "success", "restored", "up again" };
     private static readonly string[] InfoWords =

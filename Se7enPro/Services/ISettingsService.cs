@@ -9,7 +9,11 @@ public interface ISettingsService
 
     void Load();
 
-    void Save();
+    bool Save();
+
+    bool SaveQuietly();
+
+    void ResetToDefaults();
 
     event EventHandler? SettingsChanged;
 }

@@ -43,8 +43,6 @@ public sealed partial class MockSocksServer
         {
             await using var stream = client.GetStream();
 
-            
-            
             var gh = new byte[2];
             await ReadExactlyAsync(stream, gh);
             if (gh[0] != 5) return;
@@ -54,7 +52,11 @@ public sealed partial class MockSocksServer
 
             var head = new byte[4];
             await ReadExactlyAsync(stream, head);
-            if (head[1] != 1) return;
+            if (head[1] != 1)
+            {
+                await stream.WriteAsync(new byte[] { 0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0 });
+                return;
+            }
 
             string host;
             int port;
@@ -84,8 +86,20 @@ public sealed partial class MockSocksServer
             if (host == "198.18.100.7" && port == 9999)
             {
                 await stream.WriteAsync(new byte[] { 0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0 });
+
+                var reqBuf = new byte[1024];
+                var readTask = stream.ReadAsync(reqBuf, 0, reqBuf.Length);
+                await Task.WhenAny(readTask, Task.Delay(500));
                 await stream.WriteAsync(Encoding.ASCII.GetBytes(
                     "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"));
+                await stream.FlushAsync();
+                try { client.Client.Shutdown(System.Net.Sockets.SocketShutdown.Send); } catch { }
+                return;
+            }
+
+            if ((port == 443 || port == 853) && (host == "1.1.1.1" || host == "8.8.8.8"))
+            {
+                await stream.WriteAsync(new byte[] { 0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0 });
                 return;
             }
 

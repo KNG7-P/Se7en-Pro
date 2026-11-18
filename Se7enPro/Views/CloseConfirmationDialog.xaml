@@ -37,7 +37,7 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22,20" Margin="12">
+    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22,20" Margin="12" MouseLeftButtonDown="OnDialogBorderMouseLeftButtonDown">
 
         <StackPanel>
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -8,9 +9,45 @@ namespace Se7enPro.Services;
 
 public abstract record LocalizedItem : INotifyPropertyChanged
 {
+    private static readonly object InstancesLock = new();
+    private static readonly List<WeakReference<LocalizedItem>> Instances = new();
+
+    static LocalizedItem()
+    {
+        Loc.Changed += DispatchLocaleChanged;
+    }
+
+    private static void DispatchLocaleChanged()
+    {
+        List<LocalizedItem> alive;
+        lock (InstancesLock)
+        {
+            alive = new List<LocalizedItem>(Instances.Count);
+            for (var i = Instances.Count - 1; i >= 0; i--)
+            {
+                if (Instances[i].TryGetTarget(out var target))
+                {
+                    alive.Add(target);
+                }
+                else
+                {
+                    Instances.RemoveAt(i);
+                }
+            }
+        }
+
+        foreach (var item in alive)
+        {
+            item.OnLocaleChanged();
+        }
+    }
+
     protected LocalizedItem()
     {
-        Loc.Changed += OnLocaleChanged;
+        lock (InstancesLock)
+        {
+            Instances.Add(new WeakReference<LocalizedItem>(this));
+        }
     }
 
     private void OnLocaleChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));

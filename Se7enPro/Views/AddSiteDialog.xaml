@@ -1,4 +1,4 @@
-<Window x:Class="Se7enPro.Views.AddSiteDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" Title="{DynamicResource Loc_splitAddRoutingRule}" Width="500" SizeToContent="Height" WindowStartupLocation="CenterOwner" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False" FontFamily="{StaticResource UI.FontFamily}" TextElement.Foreground="{DynamicResource TextPrimaryBrush}" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Grayscale" UseLayoutRounding="True">
+﻿<Window x:Class="Se7enPro.Views.AddSiteDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" Title="{DynamicResource Loc_splitAddRoutingRule}" Width="500" SizeToContent="Height" WindowStartupLocation="CenterOwner" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False" FontFamily="{StaticResource UI.FontFamily}" TextElement.Foreground="{DynamicResource TextPrimaryBrush}" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Grayscale" UseLayoutRounding="True">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="4" CornerRadius="18" GlassFrameThickness="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
@@ -40,7 +40,8 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22" Margin="12">
+    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Padding="22" Margin="12" MouseLeftButtonDown="OnDialogBorderMouseLeftButtonDown">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel>
             
             <Grid Margin="0,0,0,16">
@@ -50,7 +51,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10" Background="#1A00D4FF" BorderBrush="#4000D4FF" BorderThickness="1" Margin="0,0,12,0">
+                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10" Background="{DynamicResource Status.CyanSoft}" BorderBrush="{DynamicResource Status.CyanBorder}" BorderThickness="1" Margin="0,0,12,0">
                     <materialDesign:PackIcon Kind="LinkPlus" Width="20" Height="20" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
 
@@ -102,7 +103,7 @@
             </CheckBox>
 
             
-            <Border x:Name="ResolvedIpBorder" Background="#1510B981" BorderBrush="#4010B981" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,10" Visibility="Collapsed">
+            <Border x:Name="ResolvedIpBorder" Background="#1510B981" BorderBrush="{DynamicResource Status.SuccessBorder}" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,10" Visibility="Collapsed">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -117,7 +118,7 @@
             </Border>
 
             
-            <Border x:Name="ErrorBorder" Background="#1AEF4444" BorderBrush="#40EF4444" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,14" Visibility="Collapsed">
+            <Border x:Name="ErrorBorder" Background="{DynamicResource Status.DangerSoft}" BorderBrush="{DynamicResource Status.DangerBorder}" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,14" Visibility="Collapsed">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -151,5 +152,6 @@
                 <Button Grid.Column="3" Style="{StaticResource UI.PrimaryButton}" Content="{DynamicResource Loc_splitAddRuleBtn}" Padding="22,0" MinWidth="110" VerticalAlignment="Center" Click="OnAddClicked" IsDefault="True" />
             </Grid>
         </StackPanel>
+        </ScrollViewer>
     </Border>
 </Window>

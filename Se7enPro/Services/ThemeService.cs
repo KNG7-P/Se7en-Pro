@@ -24,6 +24,8 @@ public sealed class ThemeService : IThemeService
     private string? _lastRequest;
     private BaseTheme? _applied;
 
+    public static event EventHandler? ThemeChanged;
+
     public void ApplyTheme(string theme)
     {
         var isSystem = string.Equals(theme, "system", StringComparison.OrdinalIgnoreCase);
@@ -105,25 +107,25 @@ public sealed class ThemeService : IThemeService
             app.Resources["Surface.ConnectCoreHoverBg"] = Brush(0xFF, 0xD9, 0xE3, 0xFB);
             app.Resources["Surface.ConnectCorePressedBg"] = Brush(0xFF, 0xD1, 0xDC, 0xFA);
             app.Resources["TextOnConnectBrush"] = Brush(0xFF, 0x16, 0x1A, 0x28);
-            app.Resources["Surface.NavSelectedBg"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
-            app.Resources["Surface.NavSelectedBorder"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
+            app.Resources["Surface.NavSelectedBg"] = Brush(0xFF, 0x02, 0x84, 0xC7);
+            app.Resources["Surface.NavSelectedBorder"] = Brush(0xFF, 0x02, 0x84, 0xC7);
             app.Resources["Nav.SelectedIcon"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
             app.Resources["Surface.BorderBrush"] = Brush(0xFF, 0xE2, 0xE7, 0xF1);
 
-            app.Resources["Tab.SelectedBg"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
-            app.Resources["Tab.SelectedBorder"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
+            app.Resources["Tab.SelectedBg"] = Brush(0xFF, 0x02, 0x84, 0xC7);
+            app.Resources["Tab.SelectedBorder"] = Brush(0xFF, 0x02, 0x84, 0xC7);
             app.Resources["Tab.SelectedText"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
             app.Resources["Tab.SelectedIcon"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
             app.Resources["Tab.RestBg"] = Brush(0x73, 0xFF, 0xFF, 0xFF);
             app.Resources["Tab.RestBorder"] = Brush(0x66, 0xE2, 0xE7, 0xF1);
-            app.Resources["Tab.HoverBg"] = Brush(0x14, 0x00, 0xD4, 0xFF);
-            app.Resources["Tab.HoverBorder"] = Brush(0x4D, 0x00, 0xD4, 0xFF);
-            app.Resources["Tab.HoverText"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
+            app.Resources["Tab.HoverBg"] = Brush(0x18, 0x02, 0x84, 0xC7);
+            app.Resources["Tab.HoverBorder"] = Brush(0x4D, 0x02, 0x84, 0xC7);
+            app.Resources["Tab.HoverText"] = Brush(0xFF, 0x02, 0x84, 0xC7);
             app.Resources["Switch.TrackOff"] = Brush(0xFF, 0xE2, 0xE8, 0xF0);
             app.Resources["Switch.ThumbOff"] = Brush(0xFF, 0x64, 0x74, 0x8B);
             app.Resources["Switch.TrackOffBorder"] = Brush(0xFF, 0xCB, 0xD5, 0xE1);
             app.Resources["Switch.TrackOffHover"] = Brush(0xFF, 0xC0, 0xE5, 0xF2);
-            app.Resources["Menu.HoverBg"] = Brush(0x1F, 0x00, 0xD4, 0xFF);
+            app.Resources["Menu.HoverBg"] = Brush(0x1F, 0x02, 0x84, 0xC7);
 
             app.Resources["BgMain"] = Brush(0xFF, 0xEE, 0xF1, 0xF9);
             app.Resources["BgSidebar"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
@@ -139,15 +141,37 @@ public sealed class ThemeService : IThemeService
             app.Resources["TextPrimary"] = Brush(0xFF, 0x16, 0x1A, 0x28);
             app.Resources["TextSecondary"] = Brush(0xFF, 0x56, 0x5D, 0x72);
             app.Resources["TextMuted"] = Brush(0xFF, 0x8A, 0x92, 0xA6);
+            app.Resources["TextOnAccentBrush"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
+            app.Resources["TextOnCyanBrush"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
+
+            app.Resources["Brand.AccentBrush"] = Brush(0xFF, 0x02, 0x84, 0xC7);
+            app.Resources["AccentCyanBrush"] = Brush(0xFF, 0x02, 0x84, 0xC7);
+            app.Resources["Brand.AccentSoftBrush"] = Brush(0x22, 0x02, 0x84, 0xC7);
+            app.Resources["Brand.AccentSelectedBrush"] = Brush(0x2E, 0x02, 0x84, 0xC7);
+            app.Resources["Brand.AccentSelectedBorderBrush"] = Brush(0x8C, 0x02, 0x84, 0xC7);
+            app.Resources["Brand.AccentOutlineBrush"] = Brush(0x80, 0x02, 0x84, 0xC7);
+            app.Resources["Brand.PrimarySoftBrush"] = Brush(0x22, 0x7C, 0x3A, 0xED);
+            app.Resources["Brand.SuccessSoftBrush"] = Brush(0x22, 0x05, 0x96, 0x69);
+            app.Resources["Brand.WarningSoftBrush"] = Brush(0x22, 0xD9, 0x77, 0x06);
+            app.Resources["Brand.ErrorSoftBrush"] = Brush(0x22, 0xDC, 0x26, 0x26);
+            app.Resources["Brand.TelegramSoftBrush"] = Brush(0x1E, 0x22, 0x9E, 0xD9);
+            app.Resources["Brand.TelegramHoverBrush"] = Brush(0x33, 0x22, 0x9E, 0xD9);
+            app.Resources["Brand.TelegramBorderBrush"] = Brush(0x66, 0x22, 0x9E, 0xD9);
+            app.Resources["Brand.TelegramBrush"] = Brush(0xFF, 0x16, 0x7B, 0xB0);
+            app.Resources["Surface.TelegramSoftBrush"] = Brush(0x1E, 0x22, 0x9E, 0xD9);
+            app.Resources["Surface.TelegramHoverBrush"] = Brush(0x33, 0x22, 0x9E, 0xD9);
+            app.Resources["Surface.TelegramBorderBrush"] = Brush(0x66, 0x22, 0x9E, 0xD9);
+            app.Resources["Surface.TelegramBrush"] = Brush(0xFF, 0x16, 0x7B, 0xB0);
 
             app.Resources["WindowBackdrop"] = Brush(0xFF, 0xEE, 0xF1, 0xF9);
             app.Resources["Surface.AppBackground"] = BackgroundBrush(
                 Color.FromRgb(0xEE, 0xF1, 0xF9),
                 Color.FromRgb(0xE3, 0xE8, 0xF4));
 
-            
-            
-            
+            app.Resources["Btn.Primary.Fg"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
+            app.Resources["Btn.Primary.Solid"] = Brush(0xFF, 0x02, 0x84, 0xC7);
+            app.Resources["Btn.Primary.SolidHover"] = Brush(0xFF, 0x03, 0x69, 0xA1);
+            app.Resources["Btn.Primary.SolidPress"] = Brush(0xFF, 0x07, 0x59, 0x85);
             app.Resources["Btn.Primary.Text"] = Brush(0xFF, 0x00, 0x7E, 0x9B);
             app.Resources["Btn.Success.Solid"] = Brush(0xFF, 0x05, 0x96, 0x69);
             app.Resources["Btn.Success.SolidHover"] = Brush(0xFF, 0x04, 0x78, 0x57);
@@ -229,14 +253,37 @@ public sealed class ThemeService : IThemeService
             app.Resources["TextPrimary"] = Brush(0xFF, 0xF3, 0xF4, 0xFB);
             app.Resources["TextSecondary"] = Brush(0xFF, 0x9E, 0xA2, 0xB8);
             app.Resources["TextMuted"] = Brush(0xFF, 0x66, 0x6B, 0x82);
+            app.Resources["TextOnAccentBrush"] = Brush(0xFF, 0xFF, 0xFF, 0xFF);
+            app.Resources["TextOnCyanBrush"] = Brush(0xFF, 0x08, 0x0A, 0x12);
+
+            app.Resources["Brand.AccentBrush"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
+            app.Resources["AccentCyanBrush"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
+            app.Resources["Brand.AccentSoftBrush"] = Brush(0x29, 0x00, 0xD4, 0xFF);
+            app.Resources["Brand.AccentSelectedBrush"] = Brush(0x33, 0x00, 0xD4, 0xFF);
+            app.Resources["Brand.AccentSelectedBorderBrush"] = Brush(0x8C, 0x00, 0xD4, 0xFF);
+            app.Resources["Brand.AccentOutlineBrush"] = Brush(0x80, 0x00, 0xD4, 0xFF);
+            app.Resources["Brand.PrimarySoftBrush"] = Brush(0x29, 0x7C, 0x3A, 0xED);
+            app.Resources["Brand.SuccessSoftBrush"] = Brush(0x29, 0x10, 0xB9, 0x81);
+            app.Resources["Brand.WarningSoftBrush"] = Brush(0x29, 0xF5, 0x9E, 0x0B);
+            app.Resources["Brand.ErrorSoftBrush"] = Brush(0x29, 0xEF, 0x44, 0x44);
+            app.Resources["Brand.TelegramSoftBrush"] = Brush(0x21, 0x22, 0x9E, 0xD9);
+            app.Resources["Brand.TelegramHoverBrush"] = Brush(0x3D, 0x22, 0x9E, 0xD9);
+            app.Resources["Brand.TelegramBorderBrush"] = Brush(0x66, 0x22, 0x9E, 0xD9);
+            app.Resources["Brand.TelegramBrush"] = Brush(0xFF, 0x22, 0x9E, 0xD9);
+            app.Resources["Surface.TelegramSoftBrush"] = Brush(0x21, 0x22, 0x9E, 0xD9);
+            app.Resources["Surface.TelegramHoverBrush"] = Brush(0x3D, 0x22, 0x9E, 0xD9);
+            app.Resources["Surface.TelegramBorderBrush"] = Brush(0x66, 0x22, 0x9E, 0xD9);
+            app.Resources["Surface.TelegramBrush"] = Brush(0xFF, 0x22, 0x9E, 0xD9);
 
             app.Resources["WindowBackdrop"] = Brush(0xFF, 0x08, 0x0A, 0x12);
             app.Resources["Surface.AppBackground"] = BackgroundBrush(
                 Color.FromRgb(0x08, 0x0A, 0x12),
                 Color.FromRgb(0x04, 0x05, 0x0A));
 
-            
-            
+            app.Resources["Btn.Primary.Fg"] = Brush(0xFF, 0x08, 0x0A, 0x12);
+            app.Resources["Btn.Primary.Solid"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
+            app.Resources["Btn.Primary.SolidHover"] = Brush(0xFF, 0x35, 0xDD, 0xFF);
+            app.Resources["Btn.Primary.SolidPress"] = Brush(0xFF, 0x00, 0xB2, 0xD8);
             app.Resources["Btn.Primary.Text"] = Brush(0xFF, 0x00, 0xD4, 0xFF);
             app.Resources["Btn.Success.Solid"] = Brush(0xFF, 0x10, 0xB9, 0x81);
             app.Resources["Btn.Success.SolidHover"] = Brush(0xFF, 0x0E, 0xA2, 0x71);
@@ -257,6 +304,7 @@ public sealed class ThemeService : IThemeService
         }
 
         ApplyMaterialResources(app, bt == BaseTheme.Light);
+        ThemeChanged?.Invoke(null, EventArgs.Empty);
     }
 
     private static void ApplyMaterialResources(Application app, bool light)

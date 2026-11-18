@@ -20,9 +20,9 @@
     <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
     <UseAppHost>true</UseAppHost>
     <RollForward>LatestMajor</RollForward>
-    <Version>1.0.7</Version>
-    <AssemblyVersion>1.0.7.0</AssemblyVersion>
-    <FileVersion>1.0.7.0</FileVersion>
+    <Version>1.0.8</Version>
+    <AssemblyVersion>1.0.8.0</AssemblyVersion>
+    <FileVersion>1.0.8.0</FileVersion>
     <Product>Se7en Pro</Product>
     <Company>Se7en Pro</Company>
     <Authors>Se7en Pro</Authors>
@@ -53,6 +53,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
@@ -62,7 +63,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Resources\server_entries.txt" Condition="Exists('Resources\server_entries.txt')">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\server_entries.bin" Condition="Exists('Resources\server_entries.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <EmbeddedResource Include="$(Se7enServerEntries)" Condition="Exists('$(Se7enServerEntries)')">
       <LogicalName>Se7enPro.Resources.server_entries.bin</LogicalName>
@@ -75,6 +79,22 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
 
+    <Content Include="Resources\zeptun\zeptun.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\zeptun\wintun.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\zeptun\LICENSE">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="Resources\mihomo\mihomo.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\mihomo\wintun.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\aether\aether.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -107,6 +127,18 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
 
+    <Content Include="Resources\lantern\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="Resources\veep\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <Content Include="Resources\foxy\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
   </ItemGroup>
 
   <ItemGroup>
@@ -116,6 +148,15 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>Fonts\%(Filename)%(Extension)</Link>
     </Content>
+  </ItemGroup>
+
+  <!-- The engines (aether, tor, xray, sing-box, tun2socks, psiphon) are launched as
+       separate processes from AppContext.BaseDirectory\Resources, so they have to stay
+       real files next to the exe. Without this, single-file publishing folds every
+       .exe/.dll into the bundle and the app cannot find them at runtime. -->
+  <ItemGroup>
+    <Content Update="Resources\**" ExcludeFromSingleFile="true" />
+    <None Update="Resources\**" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
 </Project>

@@ -9,6 +9,5 @@ public partial class AboutPage : UserControl
     public AboutPage()
     {
         InitializeComponent();
-        DataContext = App.Services.GetRequiredService<AboutViewModel>();
     }
 }

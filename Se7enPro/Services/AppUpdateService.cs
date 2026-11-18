@@ -1,10 +1,11 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -17,12 +18,14 @@ public sealed class AppUpdateService : IAppUpdateService
 {
     private const string RepoApi = "https://api.github.com/repos/KNG7-P/Se7en-Pro/releases/latest";
     private const string RepoPage = "https://github.com/KNG7-P/Se7en-Pro/releases/latest";
-    private const string AppExe = "Se7enPro.exe";
 
     private static readonly TimeSpan ApiBudget = TimeSpan.FromSeconds(20);
 
     private readonly ILogger<AppUpdateService> _logger;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(30) };
+
+    private string _verifiedAssetPath = "";
+    private string _verifiedAssetHash = "";
 
     public AppUpdateService(ILogger<AppUpdateService> logger)
     {
@@ -217,7 +220,8 @@ public sealed class AppUpdateService : IAppUpdateService
         string dir;
         try
         {
-            UpdateIntegrity.HardenStagingDirectory(baseDir);
+            if (!UpdateIntegrity.HardenStagingDirectory(baseDir))
+                _logger.LogWarning("Could not harden the update staging directory ACL: {Dir}", baseDir);
             dir = baseDir;
             if (Directory.Exists(dir))
             {
@@ -230,7 +234,12 @@ public sealed class AppUpdateService : IAppUpdateService
         catch
         {
             dir = Path.Combine(Path.GetTempPath(), "Se7enPro", "updates", Guid.NewGuid().ToString("N"));
-            try { UpdateIntegrity.HardenStagingDirectory(dir); } catch { Directory.CreateDirectory(dir); }
+            try
+            {
+                if (!UpdateIntegrity.HardenStagingDirectory(dir))
+                    _logger.LogWarning("Could not harden the fallback update directory ACL: {Dir}", dir);
+            }
+            catch { Directory.CreateDirectory(dir); }
         }
 
         
@@ -286,6 +295,8 @@ public sealed class AppUpdateService : IAppUpdateService
         try
         {
             var hash = UpdateIntegrity.VerifyAgainstManifest(manifestText, assetLeaf, target);
+            _verifiedAssetPath = Path.GetFullPath(target);
+            _verifiedAssetHash = hash;
             _logger.LogInformation("Update asset {Asset} verified against SHA256SUMS: {Hash}", assetLeaf, hash);
         }
         catch (Exception ex)
@@ -299,94 +310,103 @@ public sealed class AppUpdateService : IAppUpdateService
         return target;
     }
 
-    public Task<bool> InstallAsync(string downloadedPath, string targetVersion)
+    public async Task<bool> InstallAsync(string downloadedPath, string targetVersion)
     {
-        if (downloadedPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(_verifiedAssetHash) ||
+            !string.Equals(Path.GetFullPath(downloadedPath), _verifiedAssetPath, StringComparison.OrdinalIgnoreCase))
         {
-            
-            
-            Process.Start(new ProcessStartInfo(downloadedPath) { UseShellExecute = true });
-            return Task.FromResult(true);
+            throw new AppUpdateException(Loc.Of("This file was not verified by the updater, so nothing was installed."));
         }
 
-        var stage = Path.Combine(Path.GetTempPath(), "Se7enPro", "stage", Guid.NewGuid().ToString("N"));
-        UpdateIntegrity.HardenStagingDirectory(stage);
-        ZipFile.ExtractToDirectory(downloadedPath, stage);
-
-        
-        
-        var root = LocatePayloadRoot(stage)
-                   ?? throw new AppUpdateException(Loc.Of("The downloaded archive does not contain Se7en Pro."));
-
-        var incoming = Path.Combine(root, AppExe);
-        var reported = FileVersionInfo.GetVersionInfo(incoming).FileVersion ?? "";
-
-        
-        
-        
-        if (string.IsNullOrWhiteSpace(reported) ||
-            !Version.TryParse(NormalizeFileVersion(reported), out var reportedVer) ||
-            !Version.TryParse(NormalizeFileVersion(targetVersion), out var targetVer))
+        FileStream locked;
+        try
         {
-            throw new AppUpdateException(Loc.Of(
-                "The downloaded build could not be identified, so it was not installed."));
+            locked = new FileStream(downloadedPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch (Exception ex)
+        {
+            throw new AppUpdateException(Loc.Of("The downloaded update is no longer available.") + " " + ex.Message);
         }
 
-        if (reportedVer < targetVer)
+        using (locked)
         {
-            throw new AppUpdateException(
-                $"The downloaded build reports {reported} but {targetVersion} was expected. Refusing to install an older build.");
+            var actual = Convert.ToHexString(SHA256.HashData(locked)).ToLowerInvariant();
+            if (!string.Equals(actual, _verifiedAssetHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new AppUpdateException(Loc.Of(
+                    "The downloaded update changed after it was verified, so nothing was installed."));
+            }
+
+            if (downloadedPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                Process.Start(new ProcessStartInfo(downloadedPath) { UseShellExecute = true });
+                await Task.Delay(1500);
+                return true;
+            }
+
+            var powershell = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell", "v1.0", "powershell.exe");
+
+            var script = BuildApplyScript(Path.GetFullPath(downloadedPath), _verifiedAssetHash, targetVersion);
+            var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+
+            var needsElevation = !IsDirectoryWritable(AppContext.BaseDirectory);
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = powershell,
+                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}",
+                UseShellExecute = needsElevation,
+                CreateNoWindow = !needsElevation,
+            };
+            if (needsElevation)
+            {
+                psi.Verb = "runas";
+            }
+
+            try
+            {
+                if (Process.Start(psi) is null)
+                {
+                    throw new AppUpdateException(Loc.Of("The update helper did not start, so nothing was installed."));
+                }
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+            {
+                throw new AppUpdateException(Loc.Of(
+                    "The update was cancelled at the elevation prompt. Nothing was installed."));
+            }
+            catch (Exception ex) when (ex is not AppUpdateException)
+            {
+                throw new AppUpdateException(
+                    Loc.Of("The update helper could not start, so nothing was installed.") + " " + ex.Message);
+            }
+
+            return true;
         }
+    }
 
-        _logger.LogInformation("Staged Se7en Pro {Version} (reported {Reported}) from {Root}", targetVersion, reported, root);
-
-        
-        
-        
-        
-        
-        var workDir = Path.Combine(Path.GetTempPath(), "Se7enPro", "apply", Guid.NewGuid().ToString("N"));
-        UpdateIntegrity.HardenStagingDirectory(workDir);
-        var script = Path.Combine(workDir, "apply-update.ps1");
-        File.WriteAllText(script, BuildApplyScript(root), new UTF8Encoding(false));
-
-        var powershell = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.System),
-            "WindowsPowerShell", "v1.0", "powershell.exe");
-
-        var psi = new ProcessStartInfo
+    private static bool IsDirectoryWritable(string dir)
+    {
+        try
         {
-            FileName = powershell,
-            Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{script}\" " +
-                        $"-AppPid {Environment.ProcessId} -Root \"{AppContext.BaseDirectory.TrimEnd('\\')}\"",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        Process.Start(psi);
-
-        try { Directory.Delete(workDir, recursive: true); } catch { }
-        return Task.FromResult(true);
+            var probe = Path.Combine(dir, ".se7en-write-probe-" + Guid.NewGuid().ToString("N"));
+            using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
-        private static string NormalizeFileVersion(string raw)
-    {
-        var v = raw.Trim();
-        var plus = v.IndexOf('+');
-        if (plus > 0) v = v[..plus];
-        return v;
-    }
-
-    private static string? LocatePayloadRoot(string stage)
-    {
-        if (File.Exists(Path.Combine(stage, AppExe))) return stage;
-        return Directory.EnumerateDirectories(stage)
-            .FirstOrDefault(d => File.Exists(Path.Combine(d, AppExe)));
-    }
-
-        private static string BuildApplyScript(string stage) =>
-        """
-        param([int]$AppPid, [string]$Root)
-        $Stage = '@STAGE@'
+    private static string BuildApplyScript(string zipPath, string expectedHash, string expectedVersion) => $$"""
+        $AppPid = {{Environment.ProcessId}}
+        $Root = '{{AppContext.BaseDirectory.TrimEnd('\\').Replace("'", "''")}}'
+        $Zip = '{{zipPath.Replace("'", "''")}}'
+        $Expected = '{{expectedHash}}'
+        $ExpectedVersion = '{{expectedVersion.Replace("'", "''")}}'
         $log = Join-Path $env:TEMP 'Se7enPro-Update.log'
         function Add-Log([string]$m) { try { Add-Content -Path $log -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $m) } catch {} }
         Add-Log ('update start; root=' + $Root)
@@ -396,56 +416,134 @@ public sealed class AppUpdateService : IAppUpdateService
         if (Get-Process -Id $AppPid -ErrorAction SilentlyContinue) { Add-Log 'app still running, aborting'; return }
         Start-Sleep -Milliseconds 1200
 
-        # A newer bundled core must not be downgraded by the release payload.
-        $coreNew = Join-Path $Stage 'Resources\aether\aether.exe'
-        $coreOld = Join-Path $Root 'Resources\aether\aether.exe'
-        $keep = $null
-        if ((Test-Path $coreNew) -and (Test-Path $coreOld)) {
-            try {
-                $a = (Get-Item $coreOld).VersionInfo.ProductVersion
-                $b = (Get-Item $coreNew).VersionInfo.ProductVersion
-                if ([version]$a -gt [version]$b) {
-                    $keep = Join-Path $env:TEMP ('se7en-aether-' + [guid]::NewGuid().ToString('N'))
-                    Copy-Item $coreOld $keep -Force
-                    Add-Log ('keeping newer bundled Aether core ' + $a + ' over ' + $b)
-                }
-            } catch {}
+        function Restart-App { try { Start-Process -FilePath (Join-Path $Root 'Se7enPro.exe') -WorkingDirectory $Root } catch { Add-Log 'relaunch failed' } }
+
+        # One read feeds both the hash check and every file written below, so the
+        # bytes cannot change between verification and the copy (the archive lives
+        # in a folder this user can write to).
+        try { $bytes = [System.IO.File]::ReadAllBytes($Zip) }
+        catch { Add-Log ('cannot read the archive: ' + $_.Exception.Message); Restart-App; return }
+
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $actual = ([System.BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant()
+        if ($actual -ne $Expected) { Add-Log 'archive hash mismatch; nothing installed'; Restart-App; return }
+
+        Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $ms = New-Object System.IO.MemoryStream(,$bytes)
+        $arc = New-Object System.IO.Compression.ZipArchive($ms, [System.IO.Compression.ZipArchiveMode]::Read)
+
+        # The payload sits at the archive root or inside a single top folder.
+        $names = @($arc.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+        $prefix = ''
+        if ($names -notcontains 'Se7enPro.exe') {
+            $hit = @($names | Where-Object { $_ -match '^[^/]+/Se7enPro\.exe$' })
+            if ($hit.Count -eq 0) { Add-Log 'the archive has no payload root; nothing installed'; $arc.Dispose(); Restart-App; return }
+            $prefix = $hit[0].Substring(0, $hit[0].LastIndexOf('/') + 1)
         }
 
+        function Read-EntryVersion([string]$entryName) {
+            $tmp = Join-Path $env:TEMP ('se7en-probe-' + [guid]::NewGuid().ToString('N') + '.exe')
+            try {
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($arc.GetEntry($entryName), $tmp, $true)
+                return [string](Get-Item -LiteralPath $tmp).VersionInfo.FileVersion
+            } catch { return '' }
+            finally { Remove-Item -LiteralPath $tmp -Force }
+        }
+
+        $reported = Read-EntryVersion ($prefix + 'Se7enPro.exe')
+        # FileVersion can carry a suffix ("10.0.17763.1 (WinBuild.160101.0800)"),
+        # so keep only the leading dotted number.
+        $normalized = ($reported -split '\s+')[0] -replace '\+.*$', ''
+        $ok = $false
+        try { $ok = ([version]$normalized) -ge ([version]$ExpectedVersion) } catch {}
+        if (-not $ok) { Add-Log ('payload version ' + $reported + ' does not match ' + $ExpectedVersion + '; nothing installed'); $arc.Dispose(); Restart-App; return }
+
+        # A newer bundled core must not be downgraded by the release payload.
+        $keepCore = $false
+        try {
+            $coreOld = Join-Path $Root 'Resources\aether\aether.exe'
+            if ($arc.GetEntry($prefix + 'Resources/aether/aether.exe') -and (Test-Path -LiteralPath $coreOld)) {
+                $oldVer = (Get-Item -LiteralPath $coreOld).VersionInfo.ProductVersion
+                $newVer = Read-EntryVersion ($prefix + 'Resources/aether/aether.exe')
+                if (([version]$oldVer) -gt ([version]$newVer)) { $keepCore = $true; Add-Log ('keeping newer bundled Aether core ' + $oldVer + ' over ' + $newVer) }
+            }
+        } catch {}
+
         $failed = 0
-        $rootFull = [System.IO.Path]::GetFullPath($Root)
-        foreach ($file in Get-ChildItem -Path $Stage -Recurse -File) {
-            # Refuse anything that does not resolve to a path strictly inside the
-            # stage directory. The previous version trusted
-            # Substring($Stage.Length) blindly, so a reparse point or a crafted
+        $backupDir = Join-Path $env:TEMP ('Se7enPro-Update-' + [guid]::NewGuid().ToString('N'))
+        try { New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction Stop | Out-Null }
+        catch {
+            Add-Log ('cannot create rollback backup directory: ' + $_.Exception.Message)
+            $arc.Dispose(); $ms.Dispose(); return
+        }
+        $backups = @()
+        $addedFiles = @()
+        $prepared = @{}
+        $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+        try {
+        foreach ($entry in $arc.Entries) {
+            $rel = $entry.FullName.Replace('\', '/')
+            if ($rel.Length -eq 0 -or $rel.EndsWith('/')) { continue }
+            if ($prefix.Length -gt 0) {
+                # Refuse entries that do not sit under the payload root.
+                if (-not $rel.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+                $rel = $rel.Substring($prefix.Length)
+            }
+            if ($keepCore -and $rel -eq 'Resources/aether/aether.exe') { continue }
+            # The previous version trusted the relative path blindly, so a crafted
             # archive layout could aim a copy outside the program folder.
-            $rel = $file.FullName.Substring($Stage.Length).TrimStart('\')
-            $target = [System.IO.Path]::GetFullPath((Join-Path $Root $rel))
+            $target = [System.IO.Path]::GetFullPath((Join-Path $Root ($rel.Replace('/', '\'))))
             if (-not $target.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
                 Add-Log ('refused out-of-root target ' + $target); $failed++; continue
             }
             $dir = Split-Path $target -Parent
-            try { if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null } } catch {}
-            $copied = $false
-            for ($i = 0; $i -lt 6 -and -not $copied; $i++) {
-                try { Copy-Item -LiteralPath $file.FullName -Destination $target -Force; $copied = $true }
+            try { if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null } } catch {}
+            if (-not $prepared.ContainsKey($target)) {
+                if ((Test-Path -LiteralPath $target) -and -not (Test-Path -LiteralPath $target -PathType Leaf)) {
+                    $failed++; Add-Log ('target is not a file ' + $target); continue
+                }
+                if (Test-Path -LiteralPath $target -PathType Leaf) {
+                    $backup = Join-Path $backupDir ([guid]::NewGuid().ToString('N') + '.bak')
+                    try {
+                        Copy-Item -LiteralPath $target -Destination $backup -Force -ErrorAction Stop
+                        $backups += [pscustomobject]@{ Target = $target; Backup = $backup }
+                    } catch {
+                        $failed++; Add-Log ('could not back up ' + $target); continue
+                    }
+                } else {
+                    $addedFiles += $target
+                }
+                $prepared[$target] = $true
+            }
+            $written = $false
+            for ($i = 0; $i -lt 6 -and -not $written; $i++) {
+                try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true); $written = $true }
                 catch { Start-Sleep -Milliseconds 700 }
             }
-            if (-not $copied) { $failed++; Add-Log ('could not write ' + $target) }
+            if (-not $written) { $failed++; Add-Log ('could not write ' + $target) }
         }
-
-        if ($keep) { try { Copy-Item $keep $coreOld -Force; Remove-Item $keep -Force } catch {} }
+        } catch { $failed++; Add-Log ('apply failed: ' + $_.Exception.Message) }
+        $arc.Dispose()
+        $ms.Dispose()
 
         Add-Log ('copy finished, failures=' + $failed)
-        # A failed copy is not silently papered over by relaunching the old build
-        # as if the update had worked.
         if ($failed -eq 0) {
-            try { Start-Process -FilePath (Join-Path $Root 'Se7enPro.exe') -WorkingDirectory $Root } catch { Add-Log 'relaunch failed' }
+            Remove-Item -LiteralPath $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+            Restart-App
         } else {
-            Add-Log 'update incomplete; not relaunching'
+            foreach ($item in $backups) {
+                try { Copy-Item -LiteralPath $item.Backup -Destination $item.Target -Force -ErrorAction Stop }
+                catch { Add-Log ('could not restore ' + $item.Target + ': ' + $_.Exception.Message) }
+            }
+            foreach ($target in $addedFiles) {
+                try { Remove-Item -LiteralPath $target -Force -ErrorAction Stop }
+                catch { if (Test-Path -LiteralPath $target) { Add-Log ('could not remove new file ' + $target + ': ' + $_.Exception.Message) } }
+            }
+            Remove-Item -LiteralPath $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+            Add-Log 'update failed; rollback attempted; not relaunching'
         }
-        try { Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force } catch {}
-        """.Replace("@STAGE@", stage.Replace("'", "''"));
+        """;
 
         public sealed class AppUpdateException : Exception
     {

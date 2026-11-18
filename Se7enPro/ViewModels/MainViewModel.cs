@@ -139,8 +139,13 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private static void CloseWindow() => Ui.RequestCloseMainWindow();
 
+    private static string ResolveClientVersion() =>
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version is { } v
+            ? $"v{v.Major}.{v.Minor}.{v.Build}"
+            : "v1.0.7";
+
     public string ClientVersionText =>
-        $"{Loc.T("clientVersion", "v1.0.7")} \u2022 {Loc.T("Loc_windowsEdition", "Windows Client")}";
+        $"{Loc.T("clientVersion", ResolveClientVersion())} \u2022 {Loc.T("windowsEdition", "Windows Client")}";
 
     [RelayCommand]
     private static void OpenTelegramChannel()

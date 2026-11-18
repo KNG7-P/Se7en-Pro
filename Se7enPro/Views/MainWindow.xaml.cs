@@ -25,14 +25,23 @@ public partial class MainWindow : Window
     private readonly Dictionary<object, FrameworkElement> _pageViews = new();
     private bool _forceExit;
     private bool _closeInFlight;
+    private bool _askDialogInFlight;
     private bool _windowShapeQueued;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        Opacity = 1d;
+        ContentRendered += OnFirstFrameRendered;
         var vm = App.Services.GetRequiredService<MainViewModel>();
         DataContext = vm;
         vm.PropertyChanged += OnMainViewModelPropertyChanged;
+
+        var settingsVm = App.Services.GetRequiredService<SettingsViewModel>();
+        ConfigModals.DataContext = settingsVm;
+
+        SizeChanged += OnMainWindowSizeChanged;
 
         _settings = App.Services.GetRequiredService<ISettingsService>();
         _tray = App.Services.GetRequiredService<ITrayIconService>();
@@ -56,7 +65,18 @@ public partial class MainWindow : Window
         StateChanged += (_, _) =>
         {
             QueueWindowShape();
-            if (WindowState == WindowState.Minimized) ScheduleIdleTrim();
+            if (WindowState == WindowState.Minimized)
+            {
+                ScheduleIdleTrim();
+                if (!_forceExit && _settings.Settings.MinimizeToTray)
+                {
+                    Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                    {
+                        if (WindowState == WindowState.Minimized && !_forceExit)
+                            _tray.HideToTray();
+                    }));
+                }
+            }
             else CancelIdleTrim();
         };
 
@@ -67,29 +87,49 @@ public partial class MainWindow : Window
         
         
         
-        Opacity = 0d;
-        ContentRendered += OnFirstFrameRendered;
-
         Loaded += (_, _) =>
         {
             EnsureVisibleOnSomeScreen();
             QueueWindowShape();
 
-            
-            
-            
-            
+            if (!_firstPageAttached && vm.CurrentPage is not null)
+            {
+                _firstPageAttached = true;
+                ShowPage(vm.CurrentPage);
+            }
+
             Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
             {
                 _tray.Initialize();
                 _tray.UpdateConnectionState(_tunnel.State);
+
+                try
+                {
+                    var settingsVm = App.Services.GetService<SettingsViewModel>();
+                    if (settingsVm is not null)
+                    {
+                        _ = GetOrCreatePage(settingsVm);
+                    }
+                }
+                catch { }
             }));
         };
     }
 
-        private void EnsureVisibleOnSomeScreen()
+    private void EnsureVisibleOnSomeScreen()
     {
         if (WindowState != WindowState.Normal) return;
+
+        var workWidth = SystemParameters.WorkArea.Width;
+        var workHeight = SystemParameters.WorkArea.Height;
+        if (workWidth > 0 && Width > workWidth)
+        {
+            Width = Math.Max(MinWidth, workWidth);
+        }
+        if (workHeight > 0 && Height > workHeight)
+        {
+            Height = Math.Max(MinHeight, workHeight);
+        }
 
         var deskLeft = SystemParameters.VirtualScreenLeft;
         var deskTop = SystemParameters.VirtualScreenTop;
@@ -97,8 +137,8 @@ public partial class MainWindow : Window
         var deskHeight = SystemParameters.VirtualScreenHeight;
         if (deskWidth <= 0 || deskHeight <= 0) return;
 
-        var curWidth = ActualWidth > 0 ? ActualWidth : (Width > 0 ? Width : 1000);
-        var curHeight = ActualHeight > 0 ? ActualHeight : (Height > 0 ? Height : 680);
+        var curWidth = ActualWidth > 0 ? Math.Min(ActualWidth, Width) : (Width > 0 ? Width : 1000);
+        var curHeight = ActualHeight > 0 ? Math.Min(ActualHeight, Height) : (Height > 0 ? Height : 680);
 
         const double keepVisible = 120;
         var right = Left + curWidth;
@@ -108,12 +148,16 @@ public partial class MainWindow : Window
             right < deskLeft + keepVisible ||
             Left > deskLeft + deskWidth - keepVisible ||
             bottom < deskTop + keepVisible ||
-            Top > deskTop + deskHeight - keepVisible;
+            Top > deskTop + deskHeight - keepVisible ||
+            Top < SystemParameters.WorkArea.Top ||
+            bottom > SystemParameters.WorkArea.Bottom;
 
         if (!offScreen) return;
 
-        Left = deskLeft + Math.Max(0, (deskWidth - curWidth) / 2);
-        Top = deskTop + Math.Max(0, (deskHeight - curHeight) / 2);
+        var workLeft = SystemParameters.WorkArea.Left;
+        var workTop = SystemParameters.WorkArea.Top;
+        Left = workLeft + Math.Max(0, (workWidth - curWidth) / 2);
+        Top = workTop + Math.Max(0, (workHeight - curHeight) / 2);
     }
 
     
@@ -149,11 +193,15 @@ public partial class MainWindow : Window
         Opacity = 1d;
     }
 
-        private void OnFirstFrameRendered(object? sender, EventArgs e)
+    private void OnFirstFrameRendered(object? sender, EventArgs e)
     {
         ContentRendered -= OnFirstFrameRendered;
         Opacity = 1d;
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(RevealWithFirstPage));
+        if (!_firstPageAttached && DataContext is MainViewModel mvm)
+        {
+            _firstPageAttached = true;
+            ShowPage(mvm.CurrentPage);
+        }
     }
 
     private void OnMainViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -178,12 +226,13 @@ public partial class MainWindow : Window
         PageHost.Content = view;
     }
 
-        protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
+    protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
     {
-        base.OnKeyDown(e);
+        base.OnPreviewKeyDown(e);
         if (e.Handled || e.Key != System.Windows.Input.Key.Escape) return;
-        if (PageHost.Content is not FrameworkElement view) return;
-        if (view.DataContext is not SettingsViewModel vm) return;
+        var vm = ConfigModals.DataContext as SettingsViewModel
+                 ?? (PageHost.Content as FrameworkElement)?.DataContext as SettingsViewModel;
+        if (vm is null) return;
 
         if (vm.IsAddEditConfigDialogOpen) vm.CloseAddEditConfigDialogCommand.Execute(null);
         else if (vm.IsImportDialogOpen) vm.CloseImportDialogCommand.Execute(null);
@@ -228,10 +277,6 @@ public partial class MainWindow : Window
 
     private void ApplyWindowShape()
     {
-        
-        
-        
-        
     }
 
     private void OnTunnelStateChanged(object? sender, ConnectionState e)
@@ -376,6 +421,8 @@ public partial class MainWindow : Window
 
             default:
                 e.Cancel = true;
+                if (_askDialogInFlight) return;
+                _askDialogInFlight = true;
                 Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(HandleAskAction));
                 return;
         }
@@ -383,46 +430,86 @@ public partial class MainWindow : Window
 
     private void HandleAskAction()
     {
-        var dialog = new CloseConfirmationDialog
+        try
         {
-            Owner = this,
-        };
+            var dialog = new CloseConfirmationDialog
+            {
+                Owner = this,
+            };
 
-        var ok = dialog.ShowDialog() == true;
-        if (!ok || dialog.Result == CloseAction.Cancel)
-        {
-            return;
-        }
+            var ok = dialog.ShowDialog() == true;
+            if (!ok || dialog.Result == CloseAction.Cancel)
+            {
+                return;
+            }
 
-        if (dialog.RememberChoice)
-        {
-            _settings.Settings.OnCloseAction = dialog.Result == CloseAction.Minimize ? "minimize" : "exit";
-            _settings.Save();
-        }
+            if (dialog.RememberChoice)
+            {
+                _settings.Settings.OnCloseAction = dialog.Result == CloseAction.Minimize ? "minimize" : "exit";
+                _settings.Save();
+            }
 
-        if (dialog.Result == CloseAction.Minimize)
-        {
-            _tray.HideToTray();
+            if (dialog.Result == CloseAction.Minimize)
+            {
+                _tray.HideToTray();
+            }
+            else
+            {
+                ExitApplication();
+            }
         }
-        else
+        finally
         {
-            ExitApplication();
+            _askDialogInFlight = false;
         }
     }
 
-        public void ExitApplication()
+    public static readonly DependencyProperty IsSidebarCompactProperty = DependencyProperty.Register(
+        nameof(IsSidebarCompact), typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
+
+    public bool IsSidebarCompact
+    {
+        get => (bool)GetValue(IsSidebarCompactProperty);
+        set => SetValue(IsSidebarCompactProperty, value);
+    }
+
+    private bool _manualSidebarOverride;
+
+    private void OnToggleSidebarClicked(object sender, RoutedEventArgs e)
+    {
+        _manualSidebarOverride = true;
+        ApplySidebarCompactState(!IsSidebarCompact);
+    }
+
+    private void OnMainWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_manualSidebarOverride) return;
+        ApplySidebarCompactState(e.NewSize.Width < 860);
+    }
+
+    private void ApplySidebarCompactState(bool compact)
+    {
+        if (IsSidebarCompact == compact) return;
+        IsSidebarCompact = compact;
+        var width = new GridLength(compact ? 72 : 210);
+        SidebarColumn.Width = width;
+        var textVis = compact ? Visibility.Collapsed : Visibility.Visible;
+        TelegramTextPanel.Visibility = textVis;
+        TelegramExternalIcon.Visibility = textVis;
+        SidebarVersionBorder.Visibility = textVis;
+    }
+
+    public void ExitApplication()
     {
         _forceExit = true;
         Application.Current?.Shutdown();
     }
 
-        private void AddEditConfigOverlay_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
-    {
-        if (e.NewValue is true) AddEditConfigScroll.ScrollToHome();
-    }
+    private int _backdropDepth;
 
     public void ShowBackdrop()
     {
+        _backdropDepth++;
         if (ModalBackdropOverlay != null)
         {
             ModalBackdropOverlay.Visibility = Visibility.Visible;
@@ -431,7 +518,8 @@ public partial class MainWindow : Window
 
     public void HideBackdrop()
     {
-        if (ModalBackdropOverlay != null)
+        if (_backdropDepth > 0) _backdropDepth--;
+        if (_backdropDepth == 0 && ModalBackdropOverlay != null)
         {
             ModalBackdropOverlay.Visibility = Visibility.Collapsed;
         }

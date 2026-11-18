@@ -45,52 +45,34 @@ internal sealed partial class SocksDnsForwarder
         if (ParseQuestion(query) is null) return null;
 
         byte[]? answer;
-        IPAddress? seen = null;
-        bool seenViaTunnel = false;
+        var matched = MatchDomain(name, split.Domains);
+        var useLocal = split.ExcludeMode ? matched is not null : matched is null;
+        bool seenViaTunnel = !split.ExcludeMode;
 
-        if (split.LocalDnsIp is not null)
+        if (useLocal && split.LocalDnsIp is not null)
         {
-            var matched = MatchDomain(name, split.Domains);
-            var useLocal = split.ExcludeMode ? matched is not null : matched is null;
-            if (useLocal)
+            answer = await QueryLocalAsync(query, ct);
+            if (answer is null)
             {
-                answer = await QueryLocalAsync(query, ct);
-                if (answer is null)
-                {
-                    Diag?.Invoke($"split dns: local resolver ({split.LocalDnsIp}) did not answer "
-                                 + $"'{name}' (refresh); falling back to the tunnel path");
-                    answer = await QueryUpstreamAsync(query, ct);
-                }
-                else
-                {
-                    seen = ExtractAnswerARecords(answer).FirstOrDefault();
-                }
-            }
-            else
-            {
+                Diag?.Invoke($"split dns: local resolver ({split.LocalDnsIp}) did not answer "
+                             + $"'{name}' (refresh); falling back to the tunnel path");
                 answer = await QueryUpstreamAsync(query, ct);
-                if (answer is not null && !split.ExcludeMode)
-                {
-                    seen = ExtractAnswerARecords(answer).FirstOrDefault();
-                    seenViaTunnel = true;
-                }
             }
         }
         else
         {
             answer = await QueryUpstreamAsync(query, ct);
-            if (answer is not null && !split.ExcludeMode)
-            {
-                seen = ExtractAnswerARecords(answer).FirstOrDefault();
-                seenViaTunnel = true;
-            }
         }
 
         if (answer is null) return null;
-        if (seen is not null)
+        var records = ExtractAnswerARecords(answer).ToArray();
+        if (matched is not null)
         {
-            try { split.AddressSeen?.Invoke(seen, name, seenViaTunnel); } catch { }
+            foreach (var ip in records)
+            {
+                try { split.AddressSeen?.Invoke(ip, name, seenViaTunnel); } catch { }
+            }
         }
-        return ExtractAnswerARecords(answer).ToArray();
+        return records;
     }
 }

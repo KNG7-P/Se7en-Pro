@@ -7,13 +7,6 @@ using System.Text.Json.Nodes;
 
 namespace VerifyCriticalFixes;
 
-/// <summary>
-/// Source-level contract tests for C1 and C2.
-///
-/// These assert on the shipped source text rather than re-implementing the logic, so a
-/// regression that reintroduces the unsafe behaviour fails here even if the code still
-/// compiles. Nothing is executed, no process is started and no network call is made.
-/// </summary>
 internal static class ContractTests
 {
     private static void Check(bool ok, string what) => Program.Check(ok, what);
@@ -26,12 +19,9 @@ internal static class ContractTests
 
         Section("C1 — V2Ray must never build a direct (freedom) outbound");
         var v2ray = File.ReadAllText(FindSource("V2RayEngine.cs", "Se7enPro\\Services"));
+        var v2rayBuilder = File.ReadAllText(FindSource("V2RayConfigBuilder.cs", "Se7enPro\\Services"));
 
-        // A `freedom` outbound may legitimately appear in two places that are NOT the
-        // whole path: the TLS-fragment helper outbound, and the final catch-all entry
-        // that is added *after* a real proxy outbound exists. Those are fine. What must
-        // not exist is a builder that RETURNS ONLY a direct outbound for a bad node.
-        var sb = ExtractMethod(v2ray, "private static object[] BuildSingBoxOutbounds(", 800);
+        var sb = ExtractMethod(v2rayBuilder, "internal static object[] BuildSingBoxOutbounds(", 800);
         Check(!RegexContains(sb, @"type\s*=\s*""direct"""),
               "BuildSingBoxOutbounds no longer returns a direct-only outbound list");
         Check(sb.Contains("ValidateOutboundNode(c)"),
@@ -39,12 +29,12 @@ internal static class ContractTests
         Check(sb.Contains("throw new InvalidOperationException"),
               "BuildSingBoxOutbounds throws rather than returning a direct outbound");
 
-        var fragmentOutbound = RegexContains(v2ray,
+        var fragmentOutbound = RegexContains(v2rayBuilder,
             @"tag = ""fragment"",\s*\r?\n\s*protocol = ""freedom""");
         Check(fragmentOutbound,
               "the TLS-fragment helper outbound is still present (expected: freedom + fragment)");
 
-        var terminalDirect = CountOccurrences(v2ray,
+        var terminalDirect = CountOccurrences(v2rayBuilder,
             "outbounds.Add(new { tag = \"direct\", protocol = \"freedom\", settings = new { } });");
         Check(terminalDirect == 1,
               "exactly one trailing catch-all direct outbound remains for the proxy path");
@@ -55,28 +45,24 @@ internal static class ContractTests
               v2ray.Contains("var configProblem = ValidateOutboundNode(config);"),
               "StartAsync validates the node before launching the core");
 
-        // The guard must set Error and return; it must not merely log.
         var guardBody = ExtractMethod(v2ray, "var configProblem = ValidateOutboundNode(config);", 900);
         Check(guardBody.Contains("SetState(ConnectionState.Error)"),
               "the guard reports ConnectionState.Error");
         Check(guardBody.Contains("return;"),
               "the guard returns without starting the core");
 
-        // GenerateConfigFile must be defensive on its own too.
         var genBody = ExtractMethod(v2ray, "private string GenerateConfigFile(", 700);
         Check(genBody.Contains("ValidateOutboundNode(config)"),
               "GenerateConfigFile validates independently of StartAsync");
         Check(genBody.Contains("throw new InvalidOperationException"),
               "GenerateConfigFile throws instead of emitting a direct config");
 
-        // The config builder must not degrade silently.
-        var outbounds = ExtractMethod(v2ray, "private static object[] BuildXrayOutbounds(", 900);
+        var outbounds = ExtractMethod(v2rayBuilder, "internal static object[] BuildXrayOutbounds(", 900);
         Check(outbounds.Contains("ValidateOutboundNode(c)"),
               "BuildXrayOutbounds refuses a node with no address");
         Check(outbounds.Contains("throw new InvalidOperationException"),
               "BuildXrayOutbounds throws rather than returning a direct outbound");
 
-        // The live-test path must surface the reason instead of a bare -3.
         Check(v2ray.Contains("Cannot test this node:"),
               "the live node test reports the reason a node cannot be used");
 
@@ -92,12 +78,6 @@ internal static class ContractTests
             ("include mode, 10 dynamic routes", () => RouteSimulation.IncludeModeSet(10), false),
         };
 
-        // Routes.cs installs the catch-all pair only when !include, so include mode must
-        // pass installCatchAll:false to both orderings.
-
-        // asyncCost stands in for the work inside ApplyRoutesAsync that happens before the
-        // catch-all pair is added: DNS lookups (3s cap each), the full TCP-table
-        // sweep, and the two blocking Dns.GetHostAddresses calls.
         var asyncCost = TimeSpan.FromMilliseconds(3200);
 
         foreach (var (name, build, expectCatchAll) in scenarios)
@@ -127,7 +107,7 @@ internal static class ContractTests
             }
             else
             {
-                // Include mode: the catch-all must stay absent in both orderings.
+
                 Check(!newR.CatchAllPresentAtEnd,
                       $"[new] {name}: catch-all correctly not installed in include mode");
             }
@@ -144,8 +124,6 @@ internal static class ContractTests
         Check(applyIdx >= 0 && deleteIdx > applyIdx,
               "ApplyRoutesAsync runs BEFORE any DeleteRoute (no leak window)");
 
-        // The old code cleared _appliedRoutes wholesale; that is what removed the
-        // 0.0.0.0/1 + 128.0.0.0/1 catch-all pair before the new set existed.
         Check(!helpers.Contains("_appliedRoutes.RemoveAll("),
               "_appliedRoutes is no longer wiped wholesale before the re-apply");
         Check(!helpers.Contains("survivors"),
@@ -162,11 +140,36 @@ internal static class ContractTests
         Check(routes.Contains("previouslyApplied.Count > 0"),
               "the retirement pass is skipped on the very first apply");
 
-        // The catch-all pair must still be installed on every full-tunnel pass.
-        Check(routes.Contains("IPAddress.Parse(\"0.0.0.0\"), 1, TunAddressV4"),
-              "0.0.0.0/1 catch-all still installed");
-        Check(routes.Contains("IPAddress.Parse(\"128.0.0.0\"), 1, TunAddressV4"),
-              "128.0.0.0/1 catch-all still installed");
+        var catchAllA = routes.IndexOf("ThroughTun(IPAddress.Parse(\"0.0.0.0\"), 1)", StringComparison.Ordinal);
+        var catchAllB = routes.IndexOf("ThroughTun(IPAddress.Parse(\"128.0.0.0\"), 1)", StringComparison.Ordinal);
+        Check(catchAllA >= 0, "0.0.0.0/1 catch-all still installed");
+        Check(catchAllB >= 0, "128.0.0.0/1 catch-all still installed");
+
+        var domainLookup = catchAllA >= 0
+            ? routes.IndexOf("Dns.GetHostAddressesAsync(", catchAllA, StringComparison.Ordinal)
+            : -1;
+        Check(catchAllA >= 0 && domainLookup > catchAllA && domainLookup > catchAllB,
+              "catch-all is installed before split-domain DNS lookups run");
+
+        Section("UI regressions — clipboard, log flushing and split-tunnel warning");
+        var ui = File.ReadAllText(FindSource("IUiAdapter.cs", "Se7enPro\\Services"));
+        var home = File.ReadAllText(FindSource("HomeViewModel.cs", "Se7enPro\\ViewModels"));
+        Check(ui.Contains("public static bool SetClipboard(string text)", StringComparison.Ordinal),
+              "clipboard reports whether the platform write succeeded");
+        Check(home.Contains("return Ui.SetClipboard(text);", StringComparison.Ordinal),
+              "Home only shows a copied checkmark after a successful clipboard write");
+
+        var logs = File.ReadAllText(FindSource("LogsViewModel.cs", "Se7enPro\\ViewModels"));
+        Check(RegexContains(logs, @"_flushTimer\.Stop\(\);\s*if \(_pending\.IsEmpty\) return;"),
+              "log flushing rechecks the queue after stopping the timer");
+
+        var splitPage = File.ReadAllText(FindSource("SplitTunnelPage.xaml", "Se7enPro\\Views"));
+        Check(splitPage.Contains("Text=\"{Binding StatusText}\"", StringComparison.Ordinal),
+              "the split-tunnel warning explains the actual admin or disabled state");
+        Check(splitPage.Contains("Command=\"{Binding EnableSystemWideCommand}\"", StringComparison.Ordinal),
+              "an elevated user gets the enable-system-wide action");
+        Check(splitPage.Contains("Command=\"{Binding RestartAsAdminCommand}\" Visibility=\"{Binding IsAdminElevated", StringComparison.Ordinal),
+              "the restart-as-admin action is hidden from an already elevated user");
 
         Console.WriteLine();
         Console.WriteLine(failures == 0
@@ -174,8 +177,6 @@ internal static class ContractTests
             : $"{failures} CONTRACT CHECK(S) FAILED");
         return failures;
     }
-
-    // ---------------------------------------------------------------- helpers
 
     private static int CountOccurrences(string haystack, string needle)
     {
@@ -187,7 +188,6 @@ internal static class ContractTests
     private static bool RegexContains(string s, string pattern) =>
         System.Text.RegularExpressions.Regex.IsMatch(s, pattern);
 
-    /// <summary>Returns up to <paramref name="maxChars"/> of text starting at an anchor.</summary>
     private static string ExtractMethod(string src, string anchor, int maxChars)
     {
         var i = src.IndexOf(anchor, StringComparison.Ordinal);
@@ -207,9 +207,21 @@ internal static class ContractTests
         {
             var candidate = Path.Combine(dir, relativeFolder, fileName);
             if (File.Exists(candidate)) return candidate;
+            var targetFolder = Path.Combine(dir, relativeFolder);
+            if (Directory.Exists(targetFolder))
+            {
+                var found = Directory.GetFiles(targetFolder, fileName, SearchOption.AllDirectories).FirstOrDefault();
+                if (found != null) return found;
+            }
             var alt = Path.Combine(dir, "Se7enPro",
                                    relativeFolder.Replace("Se7enPro\\", ""), fileName);
             if (File.Exists(alt)) return alt;
+            var altFolder = Path.Combine(dir, "Se7enPro", relativeFolder.Replace("Se7enPro\\", ""));
+            if (Directory.Exists(altFolder))
+            {
+                var foundAlt = Directory.GetFiles(altFolder, fileName, SearchOption.AllDirectories).FirstOrDefault();
+                if (foundAlt != null) return foundAlt;
+            }
             dir = Path.GetDirectoryName(dir.TrimEnd('\\'));
         }
         throw new FileNotFoundException($"could not locate {fileName}");

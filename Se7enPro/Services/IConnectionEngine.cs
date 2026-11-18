@@ -21,6 +21,14 @@ public interface IConnectionEngine
     string CurrentRouteIp { get; }
     string CurrentRouteSni { get; }
 
+    void UpdateExitLocation(string ip, string countryCode, string? cityOrColo = null) { }
+
+    string ServerEndpointAddress => "";
+
+    IReadOnlyList<string> ServerEndpointAddresses => ServerEndpointAddress.Length > 0
+        ? new[] { ServerEndpointAddress }
+        : Array.Empty<string>();
+
     IReadOnlyList<string> AvailableEgressRegions { get; }
 
     long BytesSent { get; }
@@ -42,17 +50,5 @@ public interface IConnectionEngine
     Task StopAsync();
     void CancelConnecting();
 
-    /// <summary>
-    /// Second chance, taken only after <see cref="StartAsync"/> has already failed.
-    /// </summary>
-    /// <remarks>
-    /// Exists for engines that deliberately stand aside on the first attempt and let their
-    /// core handle a prerequisite itself. When that turns out not to work here, the engine
-    /// has to go and get the thing the slow way - typically by bringing up a different tunnel
-    /// entirely - and then the caller starts it again.
-    ///
-    /// Returns true when it did something worth retrying for. Default: no, so engines with
-    /// no such fast path need no change.
-    /// </remarks>
     Task<bool> RecoverFromMissingPrerequisitesAsync(CancellationToken ct) => Task.FromResult(false);
 }

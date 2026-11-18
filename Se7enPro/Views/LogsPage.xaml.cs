@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,63 +11,96 @@ namespace Se7enPro.Views;
 
 public partial class LogsPage : UserControl
 {
+    private LogsViewModel? _viewModel;
     private ScrollViewer? _scrollViewer;
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     private bool _follow = true;
     private bool _scrollQueued;
-    private bool _isProgrammaticScroll;
+    private long _suppressScrollStateUntil;
 
     public LogsPage()
     {
         InitializeComponent();
-        var vm = App.Services.GetRequiredService<LogsViewModel>();
-        DataContext = vm;
-        _follow = vm.AutoScroll;
+        DataContextChanged += OnDataContextChanged;
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
 
-        LogListBox.ApplyTemplate();
-        _scrollViewer = LogListBox.Template?.FindName("ScrollViewer", LogListBox) as ScrollViewer
-                        ?? FindVisualChild<ScrollViewer>(LogListBox);
+    private void AttachViewModel(LogsViewModel? vm)
+    {
+        if (ReferenceEquals(_viewModel, vm)) return;
 
-        if (_scrollViewer is not null)
+        if (_viewModel is not null)
         {
-            _scrollViewer.ScrollChanged += OnLogScrollChanged;
+            ((INotifyCollectionChanged)_viewModel.FilteredLines).CollectionChanged -= OnLinesChanged;
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
-        vm.RequestScrollToEnd += QueueScrollToTail;
+        _viewModel = vm;
 
-        vm.PropertyChanged += OnViewModelPropertyChanged;
-
-        Loaded += (_, _) =>
+        if (_viewModel is not null)
         {
-            _scrollViewer ??= FindVisualChild<ScrollViewer>(LogListBox);
-            if (_scrollViewer is not null)
-            {
-                _scrollViewer.ScrollChanged -= OnLogScrollChanged;
-                _scrollViewer.ScrollChanged += OnLogScrollChanged;
-            }
-            if (_follow) QueueScrollToTail();
-        };
+            _follow = _viewModel.AutoScroll;
+            ((INotifyCollectionChanged)_viewModel.FilteredLines).CollectionChanged += OnLinesChanged;
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        }
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (IsLoaded)
+        {
+            AttachViewModel(e.NewValue as LogsViewModel);
+        }
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        var vm = DataContext as LogsViewModel ?? App.Services?.GetService<LogsViewModel>();
+        if (DataContext is null && vm is not null) DataContext = vm;
+        AttachViewModel(vm);
+
+        var viewer = FindVisualChild<ScrollViewer>(LogListBox);
+        if (!ReferenceEquals(viewer, _scrollViewer))
+        {
+            if (_scrollViewer is not null) _scrollViewer.ScrollChanged -= OnLogScrollChanged;
+            _scrollViewer = viewer;
+            if (_scrollViewer is not null) _scrollViewer.ScrollChanged += OnLogScrollChanged;
+        }
+
+        if (_follow) QueueScrollToEnd();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        AttachViewModel(null);
+        if (_scrollViewer is not null)
+        {
+            _scrollViewer.ScrollChanged -= OnLogScrollChanged;
+            _scrollViewer = null;
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(LogsViewModel.AutoScroll)) return;
-        _follow = sender is LogsViewModel v && v.AutoScroll;
-        if (_follow) QueueScrollToTail();
+        if (e.PropertyName != nameof(LogsViewModel.AutoScroll) || _viewModel is null) return;
+        _follow = _viewModel.AutoScroll;
+        if (_follow) QueueScrollToEnd();
     }
 
-    private void QueueScrollToTail()
+    private void OnLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action is NotifyCollectionChangedAction.Reset or NotifyCollectionChangedAction.Remove)
+        {
+            _suppressScrollStateUntil = Environment.TickCount64 + 300;
+        }
+
+        if (_follow && e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Reset)
+        {
+            QueueScrollToEnd();
+        }
+    }
+
+    private void QueueScrollToEnd()
     {
         if (_scrollQueued) return;
         _scrollQueued = true;
@@ -74,56 +108,51 @@ public partial class LogsPage : UserControl
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
             _scrollQueued = false;
-            if (!_follow) return;
-            try
+            if (!_follow || !IsVisible) return;
+            _scrollViewer ??= FindVisualChild<ScrollViewer>(LogListBox);
+            if (_scrollViewer is not null)
             {
-                _isProgrammaticScroll = true;
-                if (LogListBox.Items.Count > 0)
-                {
-                    var lastItem = LogListBox.Items[^1];
-                    LogListBox.ScrollIntoView(lastItem);
-                }
-                _scrollViewer?.ScrollToBottom();
-            }
-            finally
-            {
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
-                {
-                    _isProgrammaticScroll = false;
-                });
+                _suppressScrollStateUntil = Environment.TickCount64 + 150;
+                _scrollViewer.ScrollToEnd();
             }
         });
     }
 
     private void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        if (_isProgrammaticScroll) return;
+        var viewer = _scrollViewer;
+        if (viewer is null) return;
 
-        if (e.ExtentHeightChange > 0 && _follow)
+        var suppressState = Environment.TickCount64 < _suppressScrollStateUntil;
+
+        if (e.VerticalChange < -0.1 && !suppressState)
         {
-            _isProgrammaticScroll = true;
-            _scrollViewer?.ScrollToBottom();
-            Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+            if (_follow)
             {
-                _isProgrammaticScroll = false;
-            });
+                _follow = false;
+                if (_viewModel is { AutoScroll: true }) _viewModel.AutoScroll = false;
+            }
             return;
         }
 
-        if (e.ViewportHeightChange != 0.0 || e.VerticalChange == 0) return;
-
-        var sv = _scrollViewer;
-        if (sv is null) return;
-
-        var isAtBottom = sv.ScrollableHeight <= 0 || (sv.ScrollableHeight - sv.VerticalOffset) <= 25.0;
-        if (isAtBottom == _follow) return;
-        _follow = isAtBottom;
-
-        if (DataContext is LogsViewModel vm && vm.AutoScroll != isAtBottom)
+        if (e.VerticalChange > 0.1 && !suppressState)
         {
-            vm.AutoScroll = isAtBottom;
+            if (!_follow && IsAtBottom(viewer))
+            {
+                _follow = true;
+                if (_viewModel is { AutoScroll: false }) _viewModel.AutoScroll = true;
+            }
+            return;
+        }
+
+        if (e.ExtentHeightChange != 0 && _follow)
+        {
+            QueueScrollToEnd();
         }
     }
+
+    private static bool IsAtBottom(ScrollViewer viewer) =>
+        viewer.ScrollableHeight <= 0 || viewer.ScrollableHeight - viewer.VerticalOffset <= 2.0;
 
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
     {

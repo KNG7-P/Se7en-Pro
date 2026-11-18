@@ -14,7 +14,7 @@ public sealed partial class AboutViewModel : PageViewModelBase
 
     public string AppName => "Se7en Pro";
     public string Version =>
-        Assembly.GetExecutingAssembly().GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "1.0.5";
+        Assembly.GetExecutingAssembly().GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "1.0.7";
     public string Copyright => "Built on Psiphon 3 (GPLv3). Modern UI by Se7en Pro.";
 
     private static string PsiphonWebPage(string page) =>

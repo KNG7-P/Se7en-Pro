@@ -10,19 +10,14 @@ using Se7enPro.Services;
 
 namespace Se7enPro.ViewModels;
 
-/// <summary>
-/// ViewModel for custom DNS settings configuration.
-/// </summary>
 public sealed partial class DnsSettingsViewModel : ObservableObject
 {
     private static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(650);
 
-    /// <summary>How long the "Saved" confirmation stays up.</summary>
     private static readonly TimeSpan SaveFlashDuration = TimeSpan.FromSeconds(2.5);
 
     private readonly ISettingsService _settings;
 
-    /// <summary>Set while loading, so a programmatic update is not treated as an edit.</summary>
     private bool _loading;
 
     private CancellationTokenSource? _saveDebounce;
@@ -32,23 +27,29 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
     {
         _settings = settings;
 
-        // One template drives all three, so the transports cannot drift apart visually.
         Rows = new List<DnsFieldRow>
         {
-            new(DnsTransport.Udp, Labels.UdpLabel, Labels.UdpHint, Labels.UdpPlaceholder,
+            new(DnsTransport.Udp, () => Labels.UdpLabel, () => Labels.UdpHint, () => Labels.UdpPlaceholder,
                 OnRowEdited),
-            new(DnsTransport.Dot, Labels.DotLabel, Labels.DotHint, Labels.DotPlaceholder,
+            new(DnsTransport.Dot, () => Labels.DotLabel, () => Labels.DotHint, () => Labels.DotPlaceholder,
                 OnRowEdited),
-            new(DnsTransport.Doh, Labels.DohLabel, Labels.DohHint, Labels.DohPlaceholder,
+            new(DnsTransport.Doh, () => Labels.DohLabel, () => Labels.DohHint, () => Labels.DohPlaceholder,
                 OnRowEdited),
         };
+
+        Loc.Changed += OnLocaleChanged;
 
         Load();
     }
 
-    // ---------------------------------------------------------------- state
+    private void OnLocaleChanged()
+    {
+        foreach (var row in Rows) row.RefreshLocalization();
+        RefreshSummary();
+        OnPropertyChanged(nameof(Labels));
+    }
 
-    /// <summary>The three resolver lists, in display order.</summary>
+
     public IReadOnlyList<DnsFieldRow> Rows { get; }
 
     public DnsFieldRow UdpRow => Rows[0];
@@ -59,10 +60,8 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasTunnelWarning))]
     private bool _strictMode;
 
-    /// <summary>Compact count for the header badge, e.g. "2 UDP, 1 DoH".</summary>
     [ObservableProperty] private string _summary = "";
 
-    /// <summary>True while the confirmation is on screen.</summary>
     [ObservableProperty] private bool _isSavedFlash;
 
     [ObservableProperty] private bool _isTesting;
@@ -71,7 +70,6 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
     [ObservableProperty] private string _validationMessage = "";
     [ObservableProperty] private bool _hasValidationError;
 
-    /// <summary>Translated UI strings for this card.</summary>
     public DnsLabels Labels { get; } = new();
 
     public bool HasAnyResolver => UdpRow.HasEntries || DotRow.HasEntries || DohRow.HasEntries;
@@ -79,19 +77,12 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
     public bool HasValidationMessage => ValidationMessage.Length > 0;
     public bool HasTestResultToShow => HasTestResult && TestResult.Length > 0;
 
-    /// <summary>
-    /// Indicates whether strict mode is enabled without plain UDP resolvers configured.
-    /// </summary>
     public bool HasTunnelWarning =>
         StrictMode
         && !UdpRow.HasEntries
         && (DotRow.HasEntries || DohRow.HasEntries);
 
-    // ---------------------------------------------------------------- commands
 
-    /// <summary>
-    /// Probes configured resolvers and reports connectivity status.
-    /// </summary>
     [RelayCommand(CanExecute = nameof(CanTest))]
     private async Task TestResolversAsync()
     {
@@ -138,7 +129,7 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
 
             TestResult = results.Count == 0
                 ? Labels.EnterOneFirst
-                : $"{ok} of {results.Count} answered";
+                : Labels.AnsweredSummary(ok, results.Count);
             if (detail.Length > 0) TestResult += " — " + detail;
 
             ValidationMessage = results.Count > 0 && ok == 0 ? Labels.NoneAnswered : "";
@@ -151,9 +142,6 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Clears all resolver fields and resets strict mode.
-    /// </summary>
     [RelayCommand]
     private void Reset()
     {
@@ -164,9 +152,19 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
 
     private const int ProbeTimeoutSeconds = 8;
 
-    // ---------------------------------------------------------------- persistence
 
-    private void OnRowEdited(DnsFieldRow row) => ScheduleSave();
+    private void OnRowEdited(DnsFieldRow row)
+    {
+        OnPropertyChanged(nameof(HasTunnelWarning));
+        ScheduleSave();
+    }
+
+    public void Flush()
+    {
+        if (_loading) return;
+        _saveDebounce?.Cancel();
+        Commit(immediate: true);
+    }
 
     private void ScheduleSave()
     {
@@ -190,9 +188,6 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
         Commit(immediate: true);
     }
 
-    /// <summary>
-    /// Persists configuration if changes are detected.
-    /// </summary>
     private void Commit(bool immediate)
     {
         var s = _settings.Settings;
@@ -200,13 +195,29 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
         var dot = DotRow.Text.Trim();
         var doh = DohRow.Text.Trim();
 
+        RefreshSummary();
+
+        foreach (var row in Rows)
+        {
+            if (!row.HasProblem) continue;
+            ValidationMessage = $"{row.Label}: {row.Problem}";
+            HasValidationError = true;
+            if (immediate) IsSavedFlash = false;
+            return;
+        }
+
+        if (ValidationMessage.Length > 0)
+        {
+            ValidationMessage = "";
+            HasValidationError = false;
+        }
+
         var unchanged =
             string.Equals(s.CustomDnsUdp ?? "", udp, StringComparison.Ordinal)
             && string.Equals(s.CustomDnsDot ?? "", dot, StringComparison.Ordinal)
             && string.Equals(s.CustomDnsDoh ?? "", doh, StringComparison.Ordinal)
             && s.CustomDnsStrict == StrictMode;
 
-        RefreshSummary();
         if (unchanged)
         {
             if (immediate) IsSavedFlash = false;
@@ -241,7 +252,6 @@ public sealed partial class DnsSettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Re-reads from settings. Used at startup and after a factory reset.</summary>
     public void Load()
     {
         _loading = true;

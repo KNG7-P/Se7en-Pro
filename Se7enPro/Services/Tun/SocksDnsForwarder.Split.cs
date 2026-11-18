@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 
@@ -19,7 +19,11 @@ internal sealed partial class SocksDnsForwarder
 
     private volatile SplitPolicy? _split;
 
-        public void UpdateSplitPolicy(SplitPolicy? policy) => _split = policy;
+        public void UpdateSplitPolicy(SplitPolicy? policy)
+        {
+            _split = policy;
+            _dnsCache.Clear();
+        }
 
         internal static string? MatchDomain(string name, IReadOnlyList<string> domains)
     {

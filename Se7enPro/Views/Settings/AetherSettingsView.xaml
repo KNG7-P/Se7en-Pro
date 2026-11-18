@@ -1,0 +1,796 @@
+<UserControl x:Class="Se7enPro.Views.Settings.AetherSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:conv="clr-namespace:Se7enPro.Converters"
+             xmlns:svc="clr-namespace:Se7enPro.Services"
+             xmlns:vm="clr-namespace:Se7enPro.ViewModels"
+             xmlns:controls="clr-namespace:Se7enPro.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+            <StackPanel>
+                <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsAetherTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel HorizontalAlignment="Stretch">
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                <materialDesign:PackIcon Kind="LightningBolt" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_aetherSectionTitle}" VerticalAlignment="Center" />
+                            <Border Grid.Column="2" Background="{DynamicResource BgInput}" BorderBrush="{DynamicResource BorderBrushDefault}" BorderThickness="1" CornerRadius="10" Padding="3" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource UI.SegmentedPill}" GroupName="AetherTuningMode" Padding="12,5" MinHeight="28" FontSize="11.5" Margin="0,0,3,0"
+                                                 Content="{DynamicResource Loc_aetherFastMode}"
+                                                 IsChecked="{Binding IsAetherFastMode, Mode=TwoWay}"
+                                                 AutomationProperties.Name="{DynamicResource Loc_aetherFastMode}" />
+                                    <RadioButton Style="{StaticResource UI.SegmentedPill}" GroupName="AetherTuningMode" Padding="12,5" MinHeight="28" FontSize="11.5"
+                                                 Content="{DynamicResource Loc_aetherBalancedMode}"
+                                                 IsChecked="{Binding IsAetherBalancedMode, Mode=TwoWay}"
+                                                 AutomationProperties.Name="{DynamicResource Loc_aetherBalancedMode}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherProtocolDesc}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherProtocolType}" />
+                                    <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherProtocolDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="240" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding AetherProtocols}" SelectedValue="{Binding SelectedAetherProtocol, Mode=TwoWay}" SelectedValuePath="Key" DisplayMemberPath="Display" AutomationProperties.Name="{DynamicResource Loc_aetherProtocolType}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource Aether.Row}" Visibility="{Binding ShowsMasqueOptions, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{DynamicResource Loc_aetherQuicDesc}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherTransport}" />
+                                    <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherTransportDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="240" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding AetherMasqueTransports}" SelectedValue="{Binding AetherMasqueTransport, Mode=TwoWay}" SelectedValuePath="Key" DisplayMemberPath="Display" AutomationProperties.Name="{DynamicResource Loc_aetherTransport}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherScanModeDesc}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherScanMode}" />
+                                    <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherScanModeDescShort}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="240" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding AetherScanModes}" SelectedValue="{Binding AetherScanMode, Mode=TwoWay}" SelectedValuePath="Key" DisplayMemberPath="Display" AutomationProperties.Name="{DynamicResource Loc_aetherScanMode}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherIpVersionDesc}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherIpVersion}" Margin="0,0,12,0" />
+                                <ComboBox Grid.Column="1" Width="240" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding AetherIpVersions}" SelectedValue="{Binding AetherIpVersion, Mode=TwoWay}" SelectedValuePath="Key" DisplayMemberPath="Display" AutomationProperties.Name="{DynamicResource Loc_aetherIpVersion}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherNoiseDesc}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherNoise}" />
+                                    <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherNoiseDescShort}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="240" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding AetherNoizeModes}" SelectedValue="{Binding AetherNoize, Mode=TwoWay}" SelectedValuePath="Key" DisplayMemberPath="Display" AutomationProperties.Name="{DynamicResource Loc_aetherNoise}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherFastReconnectDesc}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFastReconnect}" />
+                                    <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherFastReconnectDescShort}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherCacheEdges, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_aetherFastReconnect}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Height="1" Margin="0,8,0,0" Background="{DynamicResource BorderBrushDefault}" Opacity="0.6" />
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherExitLocDesc}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherExitLoc}" />
+                                <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherExitLocDescShort}" Margin="0,1,0,3" />
+                                <TextBox Margin="0,3,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherExitLoc, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="e.g. !IR,AZ,RU or DE,SE" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherExitLoc}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{Binding ManualEndpointDescription}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherManualEndpoint}" />
+                                <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherManualEndpointDescShort}" Margin="0,1,0,3" />
+                                <TextBox Margin="0,3,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherManualPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="{Binding ManualEndpointHint}" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherManualEndpoint}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{Binding AetherUpstreamProxyHint}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{Binding AetherUpstreamProxyLabel}" />
+                                <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherUpstreamProxyDescShort}" Margin="0,1,0,3" />
+                                <TextBox Margin="0,3,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherUpstreamProxy, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="socks5://127.0.0.1:10808" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{Binding AetherUpstreamProxyLabel}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsAetherTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel HorizontalAlignment="Stretch">
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                <materialDesign:PackIcon Kind="Tune" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Settings.SectionTitle}" Text="{Binding AetherModeTitle}" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_mtuDescShort}">
+                            <StackPanel>
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_mtu}" />
+                                        <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_mtuDescShort}" />
+                                    </StackPanel>
+                                    <Grid Grid.Column="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Width="96" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherMtu, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="1280" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_mtu}" />
+                                        <Button Grid.Column="1" Margin="8,0,0,0" Command="{Binding ScanAetherMtuCommand}" IsEnabled="{Binding IsScanningAetherMtu, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.GhostButton}" Padding="12,0" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_mtuFind}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Magnify" Width="14" Height="14" Margin="0,0,5,0" Visibility="{Binding IsScanningAetherMtu, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                                <ProgressBar Width="14" Height="14" IsIndeterminate="True" Style="{StaticResource MaterialDesignCircularProgressBar}" Margin="0,0,5,0" Foreground="{StaticResource Brand.AccentBrush}" Visibility="{Binding IsScanningAetherMtu, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                <TextBlock Text="{DynamicResource Loc_mtuFind}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                                <TextBlock Text="{Binding AetherMtuStatus}" Visibility="{Binding HasAetherMtuStatus, Converter={StaticResource BooleanToVisibilityConverter}}" FontSize="11" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Visibility="{Binding ShowsMasqueOptions, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border Style="{StaticResource Aether.Row}" IsEnabled="{Binding CanUseFragment}" ToolTip="{DynamicResource Loc_aetherFragmentDesc}">
+                                <StackPanel>
+                                    <Grid VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                            <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragment}" />
+                                            <TextBlock Style="{StaticResource Aether.Hint}" Text="{Binding FragmentHint}" />
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherFragment, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_aetherFragment}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Aether.Row}" IsEnabled="{Binding CanUseFragment}" Visibility="{Binding AetherFragment, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid Margin="0,0,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragmentSize}" ToolTip="{DynamicResource Loc_aetherFragmentSizeDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherFragmentSize, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="16-32" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherFragmentSize}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragmentDelay}" ToolTip="{DynamicResource Loc_aetherFragmentDelayDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherFragmentDelay, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="2-10" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherFragmentDelay}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsAetherWireguardSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherFragmentDesc}">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragment}" />
+                                        <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherWireguardFragmentDescShort}" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherFragmentWireguard, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_aetherFragment}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Aether.Row}" Visibility="{Binding AetherFragmentWireguard, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid Margin="0,0,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragmentSize}" ToolTip="{DynamicResource Loc_aetherFragmentSizeDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherFragmentSize, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="16-32" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherFragmentSize}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragmentDelay}" ToolTip="{DynamicResource Loc_aetherFragmentDelayDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherFragmentDelay, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="2-10" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherFragmentDelay}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsAetherWiwSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border Style="{StaticResource Aether.Row}">
+                                <StackPanel>
+                                    <Grid VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                            <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{Binding GoolLabel}" />
+                                            <TextBlock Style="{StaticResource Aether.Hint}" Text="{Binding GoolHint}" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" Width="240" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding AetherGoolModes}" SelectedValue="{Binding AetherGoolMode, Mode=TwoWay}" SelectedValuePath="Key" DisplayMemberPath="Display" AutomationProperties.Name="{Binding GoolLabel}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Aether.Row}" ToolTip="{Binding GoolFragmentHint}">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{Binding GoolFragmentLabel}" />
+                                        <TextBlock Style="{StaticResource Aether.Hint}" Text="{Binding GoolFragmentHint}" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherFragmentWireguard, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="{Binding GoolFragmentLabel}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Aether.Row}" Visibility="{Binding AetherFragmentWireguard, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid Margin="0,0,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragmentSize}" ToolTip="{DynamicResource Loc_aetherFragmentSizeDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherFragmentSize, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="16-32" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherFragmentSize}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherFragmentDelay}" ToolTip="{DynamicResource Loc_aetherFragmentDelayDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherFragmentDelay, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="2-10" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherFragmentDelay}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Aether.Row}" Visibility="{Binding CanEditWiwPeers, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid Margin="0,0,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherOuterEndpoint}" ToolTip="{DynamicResource Loc_aetherOuterEndpointDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherWiwOuterPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="162.159.192.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherOuterEndpoint}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherInnerEndpoint}" ToolTip="{DynamicResource Loc_aetherInnerEndpointDesc}" />
+                                        <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherWiwInnerPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="188.114.96.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherInnerEndpoint}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <Border Style="{StaticResource Aether.Row}" Visibility="{Binding IsAetherMimSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid Margin="0,0,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherOuterEndpoint}" ToolTip="{DynamicResource Loc_aetherOuterEndpointDesc}" />
+                                    <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherMimOuterPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="162.159.192.1:2408" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherOuterEndpoint}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherInnerEndpoint}" ToolTip="{DynamicResource Loc_aetherInnerEndpointDesc}" />
+                                    <TextBox Margin="0,5,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherMimInnerPeer, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="engage.cloudflareclient.com:2408" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherInnerEndpoint}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Visibility="{Binding ShowsTlsExtras, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherMasqueSniDesc}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherMasqueSni}" />
+                                    <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherMasqueSniDesc}" Margin="0,1,0,3" />
+                                    <TextBox Margin="0,3,0,0" Style="{StaticResource UI.CustomTextBox}" Text="{Binding AetherMasqueSni, UpdateSourceTrigger=LostFocus}" materialDesign:HintAssist.Hint="www.cloudflare.com" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_aetherMasqueSni}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherEchDesc}">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{Binding EchLabel}" />
+                                        <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherEchDescShort}" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherEch, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="{Binding EchLabel}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource Aether.Row}" ToolTip="{DynamicResource Loc_aetherTlsVerifyDesc}">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{Binding TlsVerifyLabel}" />
+                                        <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherTlsVerifyDescShort}" />
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding AetherTlsVerify, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="{Binding TlsVerifyLabel}" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Settings.Card}" Margin="0,16,0,0" Visibility="{Binding IsAetherTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel HorizontalAlignment="Stretch">
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                <materialDesign:PackIcon Kind="KeyChain" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_aetherIdentityStatusTitle}" />
+                                <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_aetherIdentityStatusDesc}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Command="{Binding RefreshAetherIdentityStatusCommand}" Style="{StaticResource UI.GhostButton}" Padding="8,4" Cursor="Hand" ToolTip="{DynamicResource Loc_Refresh}">
+                                <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" />
+                            </Button>
+                        </Grid>
+
+                        <Border Style="{StaticResource Aether.Row}" Margin="0,0,0,12" ToolTip="{DynamicResource Loc_aetherIdentityMethodDesc}">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource Aether.RowLabel}" Text="{DynamicResource Loc_aetherIdentityMethod}" />
+                                    <TextBlock Style="{StaticResource Aether.Hint}" Text="{DynamicResource Loc_aetherIdentityMethodDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="220" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding AetherIdentityAcquisitionMethods}" SelectedValue="{Binding AetherIdentityAcquisitionMethod, Mode=TwoWay}" SelectedValuePath="Key" DisplayMemberPath="Display" IsEnabled="{Binding IsFetchingAetherIdentities, Converter={StaticResource InverseBool}}" AutomationProperties.Name="{DynamicResource Loc_aetherIdentityMethod}" />
+                            </Grid>
+                        </Border>
+
+                        <UniformGrid Columns="2" Margin="0,0,0,14">
+                            <Border Margin="0,0,6,6" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="10" Padding="12,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="Key" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon.Style>
+                                                <Style TargetType="materialDesign:PackIcon">
+                                                    <Setter Property="Foreground" Value="#64748B" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherWgIdentity}" Value="True">
+                                                            <Setter Property="Foreground" Value="#10B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </materialDesign:PackIcon.Style>
+                                        </materialDesign:PackIcon>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="WireGuard" FontWeight="SemiBold" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="aether.toml" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="{StaticResource UI.MonoFontFamily}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="8" Padding="7,3" BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#20EF4444" />
+                                                    <Setter Property="BorderBrush" Value="#40EF4444" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherWgIdentity}" Value="True">
+                                                            <Setter Property="Background" Value="#2010B981" />
+                                                            <Setter Property="BorderBrush" Value="#4010B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon.Style>
+                                                        <Style TargetType="materialDesign:PackIcon">
+                                                            <Setter Property="Kind" Value="CloseCircleOutline" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherWgIdentity}" Value="True">
+                                                                    <Setter Property="Kind" Value="CheckCircleOutline" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </materialDesign:PackIcon.Style>
+                                                </materialDesign:PackIcon>
+                                                <TextBlock FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityNotReceived}" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherWgIdentity}" Value="True">
+                                                                    <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityReceived}" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                        <Button Grid.Column="1" Command="{Binding FetchSingleAetherIdentityCommand}" CommandParameter="wireguard" IsEnabled="{Binding IsFetchingAetherIdentities, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.GhostButton}" Background="{DynamicResource Brand.AccentSoftBrush}" BorderBrush="{DynamicResource Brand.AccentOutlineBrush}" BorderThickness="1" Padding="9,4" Cursor="Hand" ToolTip="{DynamicResource Loc_aetherIdentityFetchSingleBtn}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Download" Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                                <TextBlock Text="{DynamicResource Loc_aetherIdentityFetchSingleBtn}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Border Margin="6,0,0,6" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="10" Padding="12,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="Key" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon.Style>
+                                                <Style TargetType="materialDesign:PackIcon">
+                                                    <Setter Property="Foreground" Value="#64748B" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherWarpOnWarpIdentity}" Value="True">
+                                                            <Setter Property="Foreground" Value="#10B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </materialDesign:PackIcon.Style>
+                                        </materialDesign:PackIcon>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="WARP-on-WARP" FontWeight="SemiBold" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="Dual / Gool Identity" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="{StaticResource UI.MonoFontFamily}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="8" Padding="7,3" BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#20EF4444" />
+                                                    <Setter Property="BorderBrush" Value="#40EF4444" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherWarpOnWarpIdentity}" Value="True">
+                                                            <Setter Property="Background" Value="#2010B981" />
+                                                            <Setter Property="BorderBrush" Value="#4010B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon.Style>
+                                                        <Style TargetType="materialDesign:PackIcon">
+                                                            <Setter Property="Kind" Value="CloseCircleOutline" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherWarpOnWarpIdentity}" Value="True">
+                                                                    <Setter Property="Kind" Value="CheckCircleOutline" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </materialDesign:PackIcon.Style>
+                                                </materialDesign:PackIcon>
+                                                <TextBlock FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityNotReceived}" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherWarpOnWarpIdentity}" Value="True">
+                                                                    <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityReceived}" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                        <Button Grid.Column="1" Command="{Binding FetchSingleAetherIdentityCommand}" CommandParameter="warp" IsEnabled="{Binding IsFetchingAetherIdentities, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.GhostButton}" Background="{DynamicResource Brand.AccentSoftBrush}" BorderBrush="{DynamicResource Brand.AccentOutlineBrush}" BorderThickness="1" Padding="9,4" Cursor="Hand" ToolTip="{DynamicResource Loc_aetherIdentityFetchSingleBtn}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Download" Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                                <TextBlock Text="{DynamicResource Loc_aetherIdentityFetchSingleBtn}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Border Margin="0,6,6,0" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="10" Padding="12,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="Key" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon.Style>
+                                                <Style TargetType="materialDesign:PackIcon">
+                                                    <Setter Property="Foreground" Value="#64748B" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherMasqueIdentity}" Value="True">
+                                                            <Setter Property="Foreground" Value="#10B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </materialDesign:PackIcon.Style>
+                                        </materialDesign:PackIcon>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="MASQUE" FontWeight="SemiBold" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="aether-masque.toml" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="{StaticResource UI.MonoFontFamily}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="8" Padding="7,3" BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#20EF4444" />
+                                                    <Setter Property="BorderBrush" Value="#40EF4444" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherMasqueIdentity}" Value="True">
+                                                            <Setter Property="Background" Value="#2010B981" />
+                                                            <Setter Property="BorderBrush" Value="#4010B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon.Style>
+                                                        <Style TargetType="materialDesign:PackIcon">
+                                                            <Setter Property="Kind" Value="CloseCircleOutline" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherMasqueIdentity}" Value="True">
+                                                                    <Setter Property="Kind" Value="CheckCircleOutline" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </materialDesign:PackIcon.Style>
+                                                </materialDesign:PackIcon>
+                                                <TextBlock FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityNotReceived}" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherMasqueIdentity}" Value="True">
+                                                                    <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityReceived}" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                        <Button Grid.Column="1" Command="{Binding FetchSingleAetherIdentityCommand}" CommandParameter="masque" IsEnabled="{Binding IsFetchingAetherIdentities, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.GhostButton}" Background="{DynamicResource Brand.AccentSoftBrush}" BorderBrush="{DynamicResource Brand.AccentOutlineBrush}" BorderThickness="1" Padding="9,4" Cursor="Hand" ToolTip="{DynamicResource Loc_aetherIdentityFetchSingleBtn}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Download" Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                                <TextBlock Text="{DynamicResource Loc_aetherIdentityFetchSingleBtn}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Border Margin="6,6,0,0" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="10" Padding="12,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="Key" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon.Style>
+                                                <Style TargetType="materialDesign:PackIcon">
+                                                    <Setter Property="Foreground" Value="#64748B" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherMasqueInMasqueIdentity}" Value="True">
+                                                            <Setter Property="Foreground" Value="#10B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </materialDesign:PackIcon.Style>
+                                        </materialDesign:PackIcon>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="MASQUE-in-MASQUE" FontWeight="SemiBold" FontSize="12.5" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="Outer + Inner MASQUE" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="{StaticResource UI.MonoFontFamily}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="8" Padding="7,3" BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#20EF4444" />
+                                                    <Setter Property="BorderBrush" Value="#40EF4444" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAetherMasqueInMasqueIdentity}" Value="True">
+                                                            <Setter Property="Background" Value="#2010B981" />
+                                                            <Setter Property="BorderBrush" Value="#4010B981" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon.Style>
+                                                        <Style TargetType="materialDesign:PackIcon">
+                                                            <Setter Property="Kind" Value="CloseCircleOutline" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherMasqueInMasqueIdentity}" Value="True">
+                                                                    <Setter Property="Kind" Value="CheckCircleOutline" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </materialDesign:PackIcon.Style>
+                                                </materialDesign:PackIcon>
+                                                <TextBlock FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityNotReceived}" />
+                                                            <Setter Property="Foreground" Value="#EF4444" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasAetherMasqueInMasqueIdentity}" Value="True">
+                                                                    <Setter Property="Text" Value="{DynamicResource Loc_aetherIdentityReceived}" />
+                                                                    <Setter Property="Foreground" Value="#10B981" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                        <Button Grid.Column="1" Command="{Binding FetchSingleAetherIdentityCommand}" CommandParameter="mim" IsEnabled="{Binding IsFetchingAetherIdentities, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.GhostButton}" Background="{DynamicResource Brand.AccentSoftBrush}" BorderBrush="{DynamicResource Brand.AccentOutlineBrush}" BorderThickness="1" Padding="9,4" Cursor="Hand" ToolTip="{DynamicResource Loc_aetherIdentityFetchSingleBtn}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Download" Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                                <TextBlock Text="{DynamicResource Loc_aetherIdentityFetchSingleBtn}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource Brand.AccentBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </UniformGrid>
+
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Command="{Binding FetchAetherIdentitiesCommand}" IsEnabled="{Binding IsFetchingAetherIdentities, Converter={StaticResource InverseBool}}" Style="{StaticResource UI.PrimaryButton}" Padding="16,8" Cursor="Hand">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="Download" Width="14" Height="14" Margin="0,0,6,0" Visibility="{Binding IsFetchingAetherIdentities, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                    <ProgressBar Width="14" Height="14" IsIndeterminate="True" Style="{StaticResource MaterialDesignCircularProgressBar}" Margin="0,0,6,0" Foreground="White" Visibility="{Binding IsFetchingAetherIdentities, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <TextBlock Text="{DynamicResource Loc_aetherIdentityFetchBtn}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Command="{Binding CancelFetchAetherIdentitiesCommand}" Visibility="{Binding IsFetchingAetherIdentities, Converter={StaticResource BooleanToVisibilityConverter}}" Style="{StaticResource UI.Btn.Danger}" Padding="12,8" Margin="8,0,0,0" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_cancel}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="Close" Width="14" Height="14" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{DynamicResource Loc_cancel}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <TextBlock Grid.Column="2" Text="{Binding AetherIdentityFetchStatusText}" Foreground="{Binding AetherIdentityFetchStatusColor}" FontSize="11.5" VerticalAlignment="Center" Margin="14,0,0,0" TextWrapping="Wrap" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+</UserControl>

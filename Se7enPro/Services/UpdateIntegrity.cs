@@ -24,6 +24,26 @@ internal static class UpdateIntegrity
         "release-assets.githubusercontent.com",
     };
 
+    
+    
+    
+    private static readonly string[] AllowedRepositoryPaths =
+    {
+        "/KNG7-P/Se7en-Pro/",
+        "/repos/KNG7-P/Se7en-Pro/",
+        "/CluvexStudio/Aether/",
+        "/repos/CluvexStudio/Aether/",
+    };
+
+    
+    
+    private static readonly string[] HostsRequiringRepositoryPath =
+    {
+        "github.com",
+        "api.github.com",
+        "raw.githubusercontent.com",
+    };
+
         public static void EnsureTrustedUrl(string? url, string what)
     {
         if (string.IsNullOrWhiteSpace(url))
@@ -47,6 +67,14 @@ internal static class UpdateIntegrity
             throw new InvalidOperationException(
                 $"{what}: refusing to download from untrusted host \"{uri.Host}\".");
         }
+
+        if (HostsRequiringRepositoryPath.Contains(uri.Host, StringComparer.OrdinalIgnoreCase) &&
+            !AllowedRepositoryPaths.Any(p =>
+                uri.AbsolutePath.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"{what}: refusing to download from an unexpected repository path \"{uri.AbsolutePath}\".");
+        }
     }
 
         public static string ComputeSha256(string path)
@@ -57,7 +85,16 @@ internal static class UpdateIntegrity
         return Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
     }
 
-        public static string VerifyAgainstManifest(string manifestText, string fileName, string filePath)
+    public static string ComputeSha256(byte[] bytes) =>
+        Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+        public static string VerifyAgainstManifest(string manifestText, string fileName, string filePath) =>
+        VerifyHash(manifestText, fileName, ComputeSha256(filePath));
+
+    public static string VerifyAgainstManifest(string manifestText, string fileName, byte[] bytes) =>
+        VerifyHash(manifestText, fileName, ComputeSha256(bytes));
+
+    private static string VerifyHash(string manifestText, string fileName, string actual)
     {
         if (string.IsNullOrWhiteSpace(manifestText))
         {
@@ -87,7 +124,6 @@ internal static class UpdateIntegrity
                 $"SHA256SUMS has no entry for \"{fileName}\". Refusing to install an unverified binary.");
         }
 
-        var actual = ComputeSha256(filePath);
         if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
@@ -100,7 +136,7 @@ internal static class UpdateIntegrity
         return expected;
     }
 
-        public static void HardenStagingDirectory(string dir)
+        public static bool HardenStagingDirectory(string dir)
     {
         Directory.CreateDirectory(dir);
 
@@ -136,13 +172,15 @@ internal static class UpdateIntegrity
                     AccessControlType.Allow));
             }
             new DirectoryInfo(dir).SetAccessControl(sd);
+            return true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             
             
             
-            Debug.WriteLine("[update] could not harden the staging directory ACL");
+            Debug.WriteLine("[update] could not harden the staging directory ACL: " + ex.Message);
+            return false;
         }
     }
 }

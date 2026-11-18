@@ -1,0 +1,182 @@
+[
+    {
+        "region":  "fr-prs",
+        "regionName":  "Paris",
+        "host":  "pinot-fr.nexorcdn.com",
+        "port":  50740,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.254.220.91"
+    },
+    {
+        "region":  "fr-prs",
+        "regionName":  "Paris",
+        "host":  "camembert-7-fr.nexorcdn.com",
+        "port":  43185,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.159.103.180"
+    },
+    {
+        "region":  "fr-prs",
+        "regionName":  "Paris",
+        "host":  "parisian-2-fr.nexorcdn.com",
+        "port":  11174,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "62.210.93.57"
+    },
+    {
+        "region":  "nl",
+        "regionName":  "Amsterdam",
+        "host":  "maasdam-9-nl.nexorcdn.com",
+        "port":  26158,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.158.202.117"
+    },
+    {
+        "region":  "nl",
+        "regionName":  "Amsterdam",
+        "host":  "maasdam-6-nl.nexorcdn.com",
+        "port":  11932,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.158.252.139"
+    },
+    {
+        "region":  "nl",
+        "regionName":  "Amsterdam",
+        "host":  "maasdam-1-nl.nexorcdn.com",
+        "port":  14250,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.158.253.109"
+    },
+    {
+        "region":  "gb-lnd",
+        "regionName":  "London",
+        "host":  "erith-3-uk.nexorcdn.com",
+        "port":  15820,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.195.242.237"
+    },
+    {
+        "region":  "gb-lnd",
+        "regionName":  "London",
+        "host":  "erith-5-uk.nexorcdn.com",
+        "port":  18286,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.195.242.240"
+    },
+    {
+        "region":  "gb-lnd",
+        "regionName":  "London",
+        "host":  "erith-2-uk.nexorcdn.com",
+        "port":  41850,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.195.242.234"
+    },
+    {
+        "region":  "us-va",
+        "regionName":  "Virginia",
+        "host":  "prime-us.nexorcdn.com",
+        "port":  14940,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "108.181.133.223"
+    },
+    {
+        "region":  "us-va",
+        "regionName":  "Virginia",
+        "host":  "trout-east-6-us.nexorcdn.com",
+        "port":  21534,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "135.148.100.147"
+    },
+    {
+        "region":  "us-va",
+        "regionName":  "Virginia",
+        "host":  "trout-east-5-us.nexorcdn.com",
+        "port":  13990,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "135.148.100.143"
+    },
+    {
+        "region":  "us-or",
+        "regionName":  "Oregon",
+        "host":  "trout-west-4-us.nexorcdn.com",
+        "port":  30596,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.81.245.6"
+    },
+    {
+        "region":  "us-or",
+        "regionName":  "Oregon",
+        "host":  "trout-west-3-us.nexorcdn.com",
+        "port":  36706,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "51.81.245.101"
+    },
+    {
+        "region":  "us-or",
+        "regionName":  "Oregon",
+        "host":  "trout-west-6-us.nexorcdn.com",
+        "port":  45680,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "66.94.121.156"
+    },
+    {
+        "region":  "sg",
+        "regionName":  "Singapore",
+        "host":  "naga-sg.nexorcdn.com",
+        "port":  12658,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "62.146.239.251"
+    },
+    {
+        "region":  "sg",
+        "regionName":  "Singapore",
+        "host":  "octopus-5-sg.nexorcdn.com",
+        "port":  40443,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "46.250.226.163"
+    },
+    {
+        "region":  "sg",
+        "regionName":  "Singapore",
+        "host":  "singha-sg.nexorcdn.com",
+        "port":  39619,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "147.93.156.3"
+    },
+    {
+        "region":  "ru-spb",
+        "regionName":  "Saint Petersburg",
+        "host":  "brolen-ru.nexorcdn.com",
+        "port":  18260,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "146.70.231.210"
+    },
+    {
+        "region":  "ru-spb",
+        "regionName":  "Saint Petersburg",
+        "host":  "chalo-ru.nexorcdn.com",
+        "port":  44274,
+        "username":  "168ffba80206f2c5f2b85d997238a2ec",
+        "password":  "l7AdVeKU2tltV502",
+        "ip":  "192.159.101.125"
+    }
+]

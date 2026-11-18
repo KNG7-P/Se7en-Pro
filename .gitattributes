@@ -5,8 +5,8 @@
 * text=auto
 
 # ---- Text sources ----
-*.cs     text diff=csharp
-*.xaml   text
+*.cs text eol=lf diff=csharp
+*.xaml text eol=lf
 *.axaml  text
 *.csproj text
 *.sln    text eol=crlf

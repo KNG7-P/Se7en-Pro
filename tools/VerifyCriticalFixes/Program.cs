@@ -6,9 +6,6 @@ using Se7enPro.Services;
 
 namespace VerifyCriticalFixes;
 
-/// <summary>
-/// Offline test runner verifying routing, DNS, identity pool, and cleanup logic.
-/// </summary>
 internal static class Program
 {
     private static int _failures;
@@ -17,10 +14,9 @@ internal static class Program
     {
         if (!ok && !string.IsNullOrEmpty(detail)) what += $"  [{detail}]";
         Console.WriteLine($"{(ok ? "[ OK ]" : "[FAIL]")} {what}");
-        if (!ok) _failures++;
+        if (!ok) Interlocked.Increment(ref _failures);
     }
 
-    /// <summary>Total failures recorded so far.</summary>
     internal static int FailedCount => _failures;
 
     internal static void Section(string title) => Console.WriteLine($"\n=== {title} ===");
@@ -42,13 +38,21 @@ internal static class Program
         VerifyC5_AllowRuleDiscovery();
         VerifyC3_RuleNameInventory();
 
-        _failures += ContractTests.Run();
-        _failures += DnsTests.Run();
-        _failures += await RelayOrderTests.RunAsync();
-        _failures += await AutoSaveTests.RunAsync();
-        _failures += IdentityPoolTests.Run();
-        _failures += IdentityRelayTests.Run();
-        _failures += AetherCapabilityTests.Run();
+        ContractTests.Run();
+        BackendContractTests.Run();
+        V2RayShareLinkTests.Run();
+        DnsTests.Run();
+        await RelayOrderTests.RunAsync();
+        await AutoSaveTests.RunAsync();
+        IdentityPoolTests.Run();
+        IdentityRelayTests.Run();
+        AetherCapabilityTests.Run();
+        RouteJournalTests.Run();
+        LanPolicyTests.Run();
+        MihomoSingBoxModalTests.Run();
+        RecentFeatureTests.Run();
+        await TunnelStabilityFixTests.RunAsync();
+        await FoxyIranBypassTests.RunAsync();
 
         Console.WriteLine();
         Console.WriteLine(_failures == 0
@@ -56,8 +60,6 @@ internal static class Program
             : $"{_failures} CHECK(S) FAILED");
         return _failures == 0 ? 0 : 1;
     }
-
-    // ---------------------------------------------------------------- C6
 
     private static void VerifyC6_AgainstOldBehaviour()
     {
@@ -71,7 +73,6 @@ internal static class Program
 
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
-        // (imagePath, processName)
         var cases = new (string Image, string Name)[]
         {
             (@"C:\Program Files\Tor Browser\Browser\TorBrowser\Tor\tor.exe", "tor"),
@@ -124,7 +125,6 @@ internal static class Program
 
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
-        // Images that must be reaped: they live in directories we own.
         var ours = new[]
         {
             Path.Combine(localAppData, "Se7en", "tunnel-core", "Se7enPro.Tunnel.exe"),
@@ -140,8 +140,6 @@ internal static class Program
                   $"reaps own engine: {Short(p)}");
         }
 
-        // The regression: images that merely share an engine *name* but belong to
-        // someone else must be left alone.
         var foreign = new[]
         {
             @"C:\Users\someone\AppData\Local\Tor Browser\Browser\TorBrowser\Tor\tor.exe",
@@ -161,13 +159,10 @@ internal static class Program
                   $"leaves foreign process alone: {Short(p)}");
         }
 
-        // Unreadable/absent image must never be guessed from the name.
         Check(!StartupReaper.ShouldReap(null, roots, liveRoots), "null image is not reaped");
         Check(!StartupReaper.ShouldReap("", roots, liveRoots), "empty image is not reaped");
         Check(!StartupReaper.ShouldReap("   ", roots, liveRoots), "whitespace image is not reaped");
 
-        // The old code used StartsWith on the root *without* requiring a separator in one
-        // place, so a sibling directory with a shared prefix must not match.
         Check(!StartupReaper.ShouldReap(
                   Path.Combine(localAppData, "Se7enEvil", "Se7enPro.Tunnel.exe"), roots, liveRoots),
               "prefix-sibling directory 'Se7enEvil' is not reaped");
@@ -199,8 +194,6 @@ internal static class Program
                 try { image = p.MainModule?.FileName; } catch { continue; }
                 if (string.IsNullOrEmpty(image)) continue;
 
-                // The reaper skips its own pid, so exclude this harness the same way:
-                // it lives under AppContext.BaseDirectory, which is a reap root.
                 if (StartupReaper.ShouldReap(image, roots, liveRoots))
                     wouldReap.Add($"{p.ProcessName} -> {image}");
 
@@ -216,8 +209,6 @@ internal static class Program
         Console.WriteLine($"  running processes whose NAME looks like an engine: {wouldSkipNamedLikeEngine.Count}");
         foreach (var s in wouldSkipNamedLikeEngine) Console.WriteLine($"    {s}");
 
-        // Any process that merely shares an engine name but is NOT under our roots must
-        // be preserved. This is exactly the Tor Browser / foreign xray regression.
         var foreign = wouldSkipNamedLikeEngine
             .Where(s => !StartupReaper.ShouldReap(s.Split("-> ")[1].Trim(), roots, liveRoots))
             .ToList();
@@ -232,29 +223,24 @@ internal static class Program
               "no foreign engine-named process is selected for killing");
     }
 
-    // ---------------------------------------------------------------- C5
-
     private static void VerifyC5_AllowRuleDiscovery()
     {
         Section("C5 — kill switch must be able to allow the bundled engine programs");
 
-        // EngineProcessNames is the authoritative list the engines launch from.
         var names = EngineProcessNames.All;
         Check(names.Contains("Se7enPro.Tunnel.exe"), "engine list contains the psiphon core");
         Check(names.Count > 0, $"engine list is populated ({names.Count} entries)");
 
-        // The block rule covers the whole public IPv4 space. Verify the bit math of the
-        // carve-outs the app relies on: RFC1918, loopback and CGNAT must stay open.
         var blocked = ParseRanges(
             "0.0.0.0-9.255.255.255,11.0.0.0-126.255.255.255,128.0.0.0-172.15.255.255," +
             "172.32.0.0-192.167.255.255,192.169.0.0-255.255.255.255");
 
         (uint lo, uint hi)[] mustStayOpen =
         {
-            (ToU("127.0.0.1"), ToU("127.0.0.1")),          // loopback upstream proxy
-            (ToU("10.0.0.0"), ToU("10.255.255.255")),      // RFC1918 10/8
-            (ToU("172.16.0.0"), ToU("172.31.255.255")),    // RFC1918 172.16/12
-            (ToU("192.168.0.0"), ToU("192.168.255.255")),  // RFC1918 192.168/16
+            (ToU("127.0.0.1"), ToU("127.0.0.1")),
+            (ToU("10.0.0.0"), ToU("10.255.255.255")),
+            (ToU("172.16.0.0"), ToU("172.31.255.255")),
+            (ToU("192.168.0.0"), ToU("192.168.255.255")),
         };
         foreach (var (lo, hi) in mustStayOpen)
         {
@@ -262,28 +248,19 @@ internal static class Program
                   $"range stays reachable: {Ip(lo)}-{Ip(hi)}");
         }
 
-        // Documented known gap (not part of C5, unchanged by this work): 169.254/16 is
-        // inside the blocked 128.0.0.0-172.15.255.255 span, so link-local/APIPA is
-        // blocked while the kill switch is armed. Harmless for a tunnel, but it should
-        // be carved out next time the ranges are touched.
         Check(blocked.Any(b => b.lo <= ToU("169.254.0.0") && b.hi >= ToU("169.254.0.0")),
               "(known gap, unchanged) 169.254.0.0/16 is inside a blocked range");
 
-        // Public space must actually be covered, or the kill switch is pointless.
         Check(blocked.Any(b => b.lo <= ToU("8.8.8.8") && b.hi >= ToU("8.8.8.8")),
               "8.8.8.8 is blocked by the default ranges");
         Check(blocked.Any(b => b.lo <= ToU("104.16.0.0") && b.hi >= ToU("104.16.0.0")),
               "104.16.0.0 (Cloudflare) is blocked by the default ranges");
     }
 
-    // ---------------------------------------------------------------- C3
-
     private static void VerifyC3_RuleNameInventory()
     {
         Section("C3 — every firewall rule name must be reachable by the purge path");
 
-        // The purge enumerates a single static list. If a rule were added to
-        // ApplyBlockRules but not to that list, a crashed session could never clear it.
         var src = File.ReadAllText(FindSource("KillSwitchService.cs"));
 
         const string v4 = "Se7enPro_KillSwitch_BlockV4";
@@ -296,43 +273,30 @@ internal static class Program
         foreach (var n in allNames)
             Check(src.Contains(n), $"rule name defined: {n}");
 
-        // AllRuleNames is the purge inventory.
         var inventoryMatch = System.Text.RegularExpressions.Regex.Match(
-            src, @"AllRuleNames\s*=\s*\{(?<body>[^}]*)\}");
-        Check(inventoryMatch.Success, "AllRuleNames inventory exists");
+            src, @"LegacyRuleNames\s*=\s*\{(?<body>[^}]*)\}");
+        Check(inventoryMatch.Success, "LegacyRuleNames inventory exists");
         if (inventoryMatch.Success)
         {
             var body = inventoryMatch.Groups["body"].Value;
-            // The inventory lists the C# constants, so check the identifiers, then
-            // resolve each identifier to its literal to prove the mapping is complete.
-            var identifiers = new[] { "RuleNameV4", "RuleNameV6", "RuleNameDnsV4",
-                                      "RuleNameDnsV6", "RuleNameEngine" };
-            foreach (var id in identifiers)
-                Check(body.Contains(id), $"purge inventory references: {id}");
-
-            var definedLiterals = allNames.ToDictionary(
-                n => n,
-                n => System.Text.RegularExpressions.Regex.IsMatch(
-                        src, $@"const\s+string\s+\w+\s*=\s*""{System.Text.RegularExpressions.Regex.Escape(n)}"""));
-            foreach (var kv in definedLiterals)
-                Check(kv.Value, $"literal is bound to a constant: {kv.Key}");
-
-            Check(identifiers.Length == allNames.Length,
-                  $"every one of the {allNames.Length} rule names is in the purge inventory");
+            foreach (var n in allNames)
+                Check(body.Contains($"\"{n}\"") || body.Contains(n),
+                      $"purge inventory references: {n}");
         }
 
-        // The purge must be called before the first Reconcile in the constructor.
         var ctor = src.IndexOf("public KillSwitchService(", StringComparison.Ordinal);
-        var purge = src.IndexOf("PurgeStaleRules();", StringComparison.Ordinal);
-        var reconcile = src.IndexOf("Reconcile();", StringComparison.Ordinal);
-        Check(ctor >= 0 && purge > ctor, "constructor calls PurgeStaleRules()");
-        Check(reconcile > purge, "PurgeStaleRules() runs before the first Reconcile()");
+        var purge = src.IndexOf("PurgeLegacyFirewallRules", ctor, StringComparison.Ordinal);
+        var reconcile = src.IndexOf("Reconcile();", ctor, StringComparison.Ordinal);
+        Check(ctor >= 0 && purge > ctor, "constructor schedules PurgeLegacyFirewallRules()");
+        Check(reconcile > ctor, "constructor runs Reconcile()");
 
-        // No netsh invocation happens here; assert that to document the safety claim.
+        Check(src.Contains("_wfp.Arm("), "WFP installs the block filters");
+        Check(src.Contains("_wfp.Disarm("), "WFP removes the block filters on disarm");
+        Check(!src.Contains("advfirewall firewall add rule"),
+              "no netsh rule is installed any more");
+
         Console.WriteLine("  (this harness never calls netsh and never alters firewall state)");
     }
-
-    // ---------------------------------------------------------------- helpers
 
     private static string Short(string p)
     {
@@ -346,8 +310,14 @@ internal static class Program
         var dir = AppContext.BaseDirectory;
         for (int i = 0; i < 12 && dir is not null; i++)
         {
-            var candidate = Path.Combine(dir, "Se7enPro", "Services", fileName);
+            var servicesDir = Path.Combine(dir, "Se7enPro", "Services");
+            var candidate = Path.Combine(servicesDir, fileName);
             if (File.Exists(candidate)) return candidate;
+            if (Directory.Exists(servicesDir))
+            {
+                var found = Directory.GetFiles(servicesDir, fileName, SearchOption.AllDirectories).FirstOrDefault();
+                if (found != null) return found;
+            }
             dir = Path.GetDirectoryName(dir.TrimEnd('\\'));
         }
         throw new FileNotFoundException($"could not locate {fileName}");

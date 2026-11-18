@@ -37,9 +37,14 @@ public sealed class WpfUiAdapter : IUiAdapter
     public Task<string?> GetClipboardTextAsync() =>
         Task.FromResult(Clipboard.ContainsText() ? Clipboard.GetText() : null);
 
-    public Task<bool> ConfirmAsync(string title, string message) =>
-        Task.FromResult(MessageBox.Show(message, title, MessageBoxButton.YesNo,
-            MessageBoxImage.Question) == MessageBoxResult.Yes);
+    public Task<bool> ConfirmAsync(string title, string message)
+    {
+        var owner = MainWindow;
+        var res = owner is not null
+            ? MessageBox.Show(owner, message, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
+            : MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+        return Task.FromResult(res == MessageBoxResult.Yes);
+    }
 
     public Task<(string Kind, string Value)?> AskRuleAsync()
     {

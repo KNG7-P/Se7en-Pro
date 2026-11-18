@@ -22,6 +22,7 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
 
     private bool _suppressPersist;
     private bool _suppressTunSideEffects;
+    private string _entriesSignature = "";
 
     public override string Title => "Split Tunnel";
     public override string Route => "split";
@@ -42,6 +43,13 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
             string.Equals(s.SplitTunnelMode, "include", StringComparison.OrdinalIgnoreCase)
                 ? "include"
                 : "exclude";
+
+        if (_splitTunnelEnabled && IsAdminElevated && !s.SystemWideTunneling)
+        {
+            s.SystemWideTunneling = true;
+            _settingsService.Save();
+        }
+
         _systemWideEnabled = AdminElevation.IsAdministrator() && s.SystemWideTunneling;
         LoadSplitTunnelEntries();
 
@@ -53,8 +61,14 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
         
         Loc.Changed += () => Post(() =>
         {
+            OnPropertyChanged(nameof(DomainRulesCountText));
+            OnPropertyChanged(nameof(AppRulesSubtitle));
+            OnPropertyChanged(nameof(SplitTunnelModeHint));
+            OnPropertyChanged(nameof(ModeSummary));
+            OnPropertyChanged(nameof(StatusText));
             foreach (var entry in DomainEntries) entry.RaiseDirection();
             foreach (var entry in AppEntries) entry.RaiseDirection();
+            foreach (var entry in SplitTunnelEntries) entry.RaiseDirection();
         });
     }
 
@@ -112,6 +126,13 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
     {
         if (_suppressPersist) return;
         _settingsService.Settings.SplitTunnelEnabled = value;
+        if (value && IsAdminElevated && !SystemWideEnabled)
+        {
+            _suppressTunSideEffects = true;
+            try { SystemWideEnabled = true; }
+            finally { _suppressTunSideEffects = false; }
+            _settingsService.Settings.SystemWideTunneling = true;
+        }
         _settingsService.Save();
         RefreshStatus();
     }
@@ -196,10 +217,12 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
                 if (e is null || string.IsNullOrWhiteSpace(e.Value)) continue;
                 var kind = (e.Kind ?? "domain").Trim().ToLowerInvariant();
                 if (kind != "ip" && kind != "app") kind = "domain";
+                var normalized = Normalize(kind, e.Value) ?? e.Value.Trim();
+                if (Contains(kind, normalized)) continue;
                 var row = new SplitTunnelEntryView
                 {
                     Kind = kind,
-                    Value = e.Value.Trim(),
+                    Value = normalized,
                     IncludeMode = include,
                 };
                 SplitTunnelEntries.Add(row);
@@ -210,7 +233,25 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
             }
         }
 
+        _entriesSignature = BuildStoredEntriesSignature();
         NotifyEntriesChanged();
+    }
+
+    private string BuildStoredEntriesSignature()
+    {
+        var stored = _settingsService.Settings.SplitTunnelEntries;
+        if (stored is null || stored.Count == 0) return "";
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var e in stored)
+        {
+            if (e is null || string.IsNullOrWhiteSpace(e.Value)) continue;
+            sb.Append((e.Kind ?? "domain").Trim().ToLowerInvariant())
+              .Append('|')
+              .Append(e.Value.Trim())
+              .Append('\n');
+        }
+        return sb.ToString();
     }
 
     private void NotifyEntriesChanged()
@@ -243,7 +284,7 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
     {
         if (string.IsNullOrWhiteSpace(raw)) return;
         var p = raw.Trim();
-        var kind = (p.Contains('/') || char.IsDigit(p[0])) ? "ip" : "domain";
+        var kind = Normalize("ip", p) is not null ? "ip" : "domain";
         AddRule(kind, p);
     }
 
@@ -447,6 +488,7 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
             list.Add(new SplitTunnelEntry { Kind = v.Kind, Value = v.Value });
         }
         _settingsService.Settings.SplitTunnelEntries = list;
+        _entriesSignature = BuildStoredEntriesSignature();
         _settingsService.Save();
 
         SplitTunnelEntries.Clear();
@@ -480,11 +522,41 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
     }
 
     [RelayCommand]
-    private void RestartAsAdmin() => _ = TryRestartAsAdmin();
-
-        private async Task AskForElevationAsync()
+    private async Task RestartAsAdmin()
     {
-        if (await Ui.ConfirmElevationAsync() && TryRestartAsAdmin()) return;
+        if (!AdminElevation.IsTrustedInstallPath())
+        {
+            await ShowPortableElevationBlockedAsync();
+            return;
+        }
+        _ = TryRestartAsAdmin();
+    }
+
+    private static Task ShowPortableElevationBlockedAsync() =>
+        Ui.ConfirmAsync(
+            Loc.T("ElevatePortableBlockedTitle", "Elevation unavailable"),
+            string.Format(
+                Loc.T("ElevatePortableBlocked",
+                    "Se7en Pro is running from a folder you can write to:\n\n{0}\n\n" +
+                    "Elevating this copy would let another program running as you replace " +
+                    "Se7enPro.exe and gain Administrator rights.\n\n" +
+                    "Install Se7en Pro under Program Files and start the installed copy to use " +
+                    "system-wide tunneling."),
+                AppContext.BaseDirectory.TrimEnd('\\')));
+
+    private async Task AskForElevationAsync()
+    {
+        if (await Ui.ConfirmElevationAsync())
+        {
+            if (!AdminElevation.IsTrustedInstallPath())
+            {
+                await ShowPortableElevationBlockedAsync();
+            }
+            else if (TryRestartAsAdmin())
+            {
+                return;
+            }
+        }
 
         _suppressTunSideEffects = true;
         try { SystemWideEnabled = false; }
@@ -514,7 +586,7 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
         && SystemWideEnabled
         && _tun.State == TunState.Running;
 
-        public bool ShowSystemWideWarning => SplitTunnelEnabled && !SystemWideEnabled;
+    public bool ShowSystemWideWarning => SplitTunnelEnabled && !IsAdminElevated;
 
     public string StatusText
     {
@@ -613,6 +685,9 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
             finally { _suppressPersist = false; }
         }
 
+        if (!string.Equals(BuildStoredEntriesSignature(), _entriesSignature, StringComparison.Ordinal))
+            LoadSplitTunnelEntries();
+
         RefreshStatus();
     });
 
@@ -635,11 +710,12 @@ public sealed partial class SplitTunnelEntryView : ObservableObject
 
     public string DirectionLabel => Loc.Of(IncludeMode ? "through VPN" : "bypasses VPN");
 
-        public void RaiseDirection()
+    public void RaiseDirection()
     {
         OnPropertyChanged(nameof(DirectionLabel));
         OnPropertyChanged(nameof(DirectionIcon));
         OnPropertyChanged(nameof(DirectionBrush));
+        OnPropertyChanged(nameof(KindLabel));
     }
 
     public string DirectionIcon => IncludeMode ? "ShieldCheckOutline" : "ShieldOffOutline";
@@ -651,9 +727,9 @@ public sealed partial class SplitTunnelEntryView : ObservableObject
 
     public string KindLabel => Kind switch
     {
-        "ip" => "IP / CIDR",
-        "app" => "App",
-        _ => "Site",
+        "ip" => Loc.Of("IP / CIDR"),
+        "app" => Loc.Of("App"),
+        _ => Loc.Of("Site"),
     };
 
     public string Icon => Kind switch

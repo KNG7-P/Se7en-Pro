@@ -7,6 +7,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Se7enPro.Models;
+using Se7enPro.Services.Foxy;
+using Se7enPro.Services.Lantern;
+using Se7enPro.Services.Veep;
 
 namespace Se7enPro.Services;
 
@@ -24,17 +27,28 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private readonly TorEngine _tor;
     private readonly V2RayEngine _v2ray;
     private readonly ShardEngine _shard;
+    private readonly FoxyEngine _foxy;
+    private readonly LanternEngine _lantern;
+    private readonly VeepEngine _veep;
     private readonly IdentityProvisioner _identity;
     private ChainedEngine? _psiphonOverWarp;
     private ChainedEngine? _torOverWarp;
     private ChainedEngine? _psiphonOverV2Ray;
     private ChainedEngine? _torOverV2Ray;
+    private ChainedEngine? _warpOverV2Ray;
+    private ChainedEngine? _foxyOverWarp;
+    private ChainedEngine? _foxyOverV2Ray;
+    private ChainedEngine? _psiphonOverFoxy;
+    private ChainedEngine? _psiphonOverLantern;
+    private ChainedEngine? _lanternOverWarp;
+    private ChainedEngine? _veepOverWarp;
 
     private readonly object _sync = new();
     private readonly List<string> _recentLog = new();
 
     private IConnectionEngine _active;
     private bool _systemProxyApplied;
+    private string _appliedProxyPlan = "";
 
     public ConnectionManager(
         ILogger<ConnectionManager> logger,
@@ -46,6 +60,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
         TorEngine tor,
         V2RayEngine v2ray,
         ShardEngine shard,
+        FoxyEngine foxy,
+        LanternEngine lantern,
+        VeepEngine veep,
         IdentityProvisioner identityProvisioner)
     {
         _logger = logger;
@@ -57,6 +74,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
         _tor = tor;
         _v2ray = v2ray;
         _shard = shard;
+        _foxy = foxy;
+        _lantern = lantern;
+        _veep = veep;
         _identity = identityProvisioner;
 
         _active = SelectEngineForCurrentSettings();
@@ -64,15 +84,62 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
         _settings.SettingsChanged += (_, _) =>
         {
-            if (State is ConnectionState.Disconnected or ConnectionState.Error)
+            if (_lifecycleGate.Wait(0))
             {
-                var desired = SelectEngineForCurrentSettings();
-                if (!ReferenceEquals(_active, desired))
+                try
                 {
-                    SwitchActiveTo(desired);
+                    if (State is ConnectionState.Disconnected or ConnectionState.Error)
+                    {
+                        var desired = SelectEngineForCurrentSettings();
+                        if (!ReferenceEquals(_active, desired))
+                        {
+                            SwitchActiveTo(desired);
+                        }
+                    }
+                }
+                finally
+                {
+                    _lifecycleGate.Release();
                 }
             }
+
+            ApplySystemProxy(State);
         };
+
+        try
+        {
+            Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        }
+        catch { }
+    }
+
+    private void OnPowerModeChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+    {
+        if (e.Mode != Microsoft.Win32.PowerModes.Resume || State != ConnectionState.Connected) return;
+
+        var cts = Volatile.Read(ref _statsCts);
+        if (cts is null) return;
+        var ct = cts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(1500, ct);
+                if (State != ConnectionState.Connected || ct.IsCancellationRequested) return;
+                var socksPort = _active.SocksProxyPort;
+                if (socksPort <= 0) return;
+
+                if (!await CheckTunnelHealthAsync(socksPort, ct) && !ct.IsCancellationRequested &&
+                    State == ConnectionState.Connected &&
+                    Interlocked.CompareExchange(ref _isHandlingDrop, 1, 0) == 0)
+                {
+                    _logger.LogWarning("Tunnel unhealthy after system resume; triggering drop handler");
+                    _ = Task.Run(HandleConnectionDropAsync);
+                }
+            }
+            catch { }
+        }, ct);
     }
 
     
@@ -93,11 +160,16 @@ public sealed class ConnectionManager : ITunnelCoreManager
     public string ConnectedServerRegion => _active.ConnectedServerRegion;
     public string CurrentRouteIp => _active.CurrentRouteIp;
     public string CurrentRouteSni => _active.CurrentRouteSni;
+    public string ServerEndpointAddress => _active.ServerEndpointAddress;
+    public IReadOnlyList<string> ServerEndpointAddresses => _active.ServerEndpointAddresses;
     private long _cachedBytesSent;
     private long _cachedBytesReceived;
     private CancellationTokenSource? _statsCts;
     private NetworkInterface? _cachedTunNic;
     private int _isHandlingDrop;
+    private int _reconnectInProgress;
+    private int _identityRecoveryStarted;
+    private int _everConnected;
 
     
     
@@ -110,8 +182,11 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private void StartStatsMonitor()
     {
         StopStatsMonitor();
-        _statsCts = new CancellationTokenSource();
-        var ct = _statsCts.Token;
+        var cts = new CancellationTokenSource();
+        var ct = cts.Token;
+        var old = Interlocked.Exchange(ref _statsCts, cts);
+        try { old?.Cancel(); } catch { }
+        try { old?.Dispose(); } catch { }
 
         _ = Task.Run(async () =>
         {
@@ -135,7 +210,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
                             lastTrafficActivityUtc = DateTime.UtcNow;
                             consecutiveProbeFailures = 0;
                         }
-                        else if (DateTime.UtcNow - lastTrafficActivityUtc >= TimeSpan.FromSeconds(5))
+                        else if (DateTime.UtcNow - lastTrafficActivityUtc >= TimeSpan.FromSeconds(45))
                         {
                             if (DateTime.UtcNow - lastProbeUtc >= TimeSpan.FromSeconds(4))
                             {
@@ -152,8 +227,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
                                     else
                                     {
                                         consecutiveProbeFailures++;
-                                        _logger.LogWarning("Tunnel health probe failed ({Count}/2)", consecutiveProbeFailures);
-                                        if (consecutiveProbeFailures >= 2 &&
+                                        _logger.LogWarning("Tunnel health probe failed ({Count}/3)", consecutiveProbeFailures);
+                                        if (consecutiveProbeFailures >= 3 &&
                                             Interlocked.CompareExchange(ref _isHandlingDrop, 1, 0) == 0)
                                         {
                                             _ = Task.Run(HandleConnectionDropAsync);
@@ -270,12 +345,17 @@ public sealed class ConnectionManager : ITunnelCoreManager
         _cachedBytesReceived = 0;
     }
 
-    private static async Task<bool> CheckTunnelHealthAsync(int socksPort, CancellationToken ct)
+    private async Task<bool> CheckTunnelHealthAsync(int socksPort, CancellationToken ct)
     {
         if (socksPort <= 0) return false;
+        var s = _settings.Settings;
+        var needAuth = LanPolicy.CanExpose(s) && ActiveMethod is ConnectionMethod.Psiphon or ConnectionMethod.Shard;
+        var user = needAuth ? s.LanProxyUsername : null;
+        var pass = needAuth ? s.LanProxyPassword : null;
+
         try
         {
-            if (await SocksProbe.ProbeConnectAsync(socksPort, "cp.cloudflare.com", 80, ct, TimeSpan.FromSeconds(3)))
+            if (await SocksProbe.ProbeConnectAsync(socksPort, "cp.cloudflare.com", 80, ct, TimeSpan.FromSeconds(3), user, pass))
             {
                 return true;
             }
@@ -286,7 +366,19 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
         try
         {
-            if (await SocksProbe.ProbeConnectAsync(socksPort, "www.google.com", 80, ct, TimeSpan.FromSeconds(3)))
+            if (await SocksProbe.ProbeConnectAsync(socksPort, "www.google.com", 80, ct, TimeSpan.FromSeconds(3), user, pass))
+            {
+                return true;
+            }
+        }
+        catch { }
+
+        if (ct.IsCancellationRequested) return false;
+
+        try
+        {
+            if (await SocksProbe.ProbeHttpsAsync(
+                    socksPort, "https://cp.cloudflare.com/generate_204", ct, user, pass))
             {
                 return true;
             }
@@ -298,30 +390,47 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     private async Task HandleConnectionDropAsync()
     {
-        
-        
-        
-        
         await _lifecycleGate.WaitAsync();
         try
         {
+            if (!_settings.Settings.AutoReconnect)
+            {
+                _logger.LogInformation("Connection drop detected; auto reconnect is off");
+                OnEngineLogLineAppended(_active, "[Health] Connection dropped. Auto reconnect is off.");
+                Interlocked.Exchange(ref _reconnectInProgress, 1);
+                try
+                {
+                    await StopAllEnginesAsync();
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _reconnectInProgress, 0);
+                }
+                ClearSystemProxyIfApplied();
+                lock (_sync) _stateOverride = ConnectionState.Error;
+                StateChanged?.Invoke(this, ConnectionState.Error);
+                return;
+            }
+
             _logger.LogWarning("Connection drop detected; switching state to reconnecting...");
             OnEngineLogLineAppended(_active, "[Health] Connection drop detected. Reconnecting...");
 
-            _stateOverride = ConnectionState.Connecting;
+            Interlocked.Exchange(ref _reconnectInProgress, 1);
+            lock (_sync) _stateOverride = ConnectionState.Connecting;
             StateChanged?.Invoke(this, ConnectionState.Connecting);
 
             await StopAllEnginesAsync();
             ClearSystemProxyIfApplied();
 
             bool reconnected = false;
+            var attemptBudget = ReconnectAttemptBudget(ResolveMethod());
             for (int attempt = 1; attempt <= 2; attempt++)
             {
-                
-                
                 if (!IsUserStillWantsConnection())
                 {
-                    _stateOverride = null;
+                    lock (_sync) _stateOverride = null;
+                    Interlocked.Exchange(ref _reconnectInProgress, 0);
+                    Interlocked.Exchange(ref _isHandlingDrop, 0);
                     StateChanged?.Invoke(this, ConnectionState.Disconnected);
                     return;
                 }
@@ -332,15 +441,34 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
                     var desired = SelectEngineForCurrentSettings();
                     SwitchActiveTo(desired);
-                    await _active.StartAsync();
 
-                    if (_active.State == ConnectionState.Connected)
+                    var outcome = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    EventHandler<ConnectionState> handler = (sender, state) =>
                     {
-                        reconnected = true;
-                        _stateOverride = null;
-                        StateChanged?.Invoke(this, ConnectionState.Connected);
-                        OnEngineLogLineAppended(_active, "[Health] Successfully reconnected.");
-                        break;
+                        if (!ReferenceEquals(sender, _active)) return;
+                        if (state == ConnectionState.Connected) outcome.TrySetResult(true);
+                        else if (state is ConnectionState.Error or ConnectionState.Disconnected) outcome.TrySetResult(false);
+                    };
+                    _active.StateChanged += handler;
+                    try
+                    {
+                        await _active.StartAsync();
+                        if (_active.State == ConnectionState.Connected) outcome.TrySetResult(true);
+
+                        var settled = await Task.WhenAny(outcome.Task, Task.Delay(attemptBudget));
+                        if (settled == outcome.Task && outcome.Task.Result)
+                        {
+                            reconnected = true;
+                            lock (_sync) _stateOverride = null;
+                            Interlocked.Exchange(ref _reconnectInProgress, 0);
+                            Interlocked.Exchange(ref _isHandlingDrop, 0);
+                            OnEngineLogLineAppended(_active, "[Health] Successfully reconnected.");
+                            break;
+                        }
+                    }
+                    finally
+                    {
+                        _active.StateChanged -= handler;
                     }
                 }
                 catch (Exception ex)
@@ -348,9 +476,13 @@ public sealed class ConnectionManager : ITunnelCoreManager
                     _logger.LogWarning(ex, "[Health] Reconnect attempt {Attempt} failed", attempt);
                 }
 
+                await StopAllEnginesAsync();
+
                 if (!IsUserStillWantsConnection())
                 {
-                    _stateOverride = null;
+                    lock (_sync) _stateOverride = null;
+                    Interlocked.Exchange(ref _reconnectInProgress, 0);
+                    Interlocked.Exchange(ref _isHandlingDrop, 0);
                     StateChanged?.Invoke(this, ConnectionState.Disconnected);
                     return;
                 }
@@ -359,22 +491,27 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
             if (!reconnected)
             {
-                _stateOverride = ConnectionState.Error;
+                await StopAllEnginesAsync();
+                lock (_sync) _stateOverride = ConnectionState.Error;
                 ClearSystemProxyIfApplied();
                 OnEngineLogLineAppended(_active, "[Health] Reconnection failed. Tunnel disconnected with error.");
+                Interlocked.Exchange(ref _reconnectInProgress, 0);
+                Interlocked.Exchange(ref _isHandlingDrop, 0);
                 StateChanged?.Invoke(this, ConnectionState.Error);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[Health] Error handling connection drop");
-            _stateOverride = ConnectionState.Error;
+            lock (_sync) _stateOverride = ConnectionState.Error;
             ClearSystemProxyIfApplied();
+            Interlocked.Exchange(ref _reconnectInProgress, 0);
+            Interlocked.Exchange(ref _isHandlingDrop, 0);
             StateChanged?.Invoke(this, ConnectionState.Error);
         }
         finally
         {
-            _stateOverride = null;
+            Interlocked.Exchange(ref _reconnectInProgress, 0);
             Interlocked.Exchange(ref _isHandlingDrop, 0);
             _lifecycleGate.Release();
         }
@@ -387,6 +524,11 @@ public sealed class ConnectionManager : ITunnelCoreManager
             return _userWantsConnection;
         }
     }
+
+    private static TimeSpan ReconnectAttemptBudget(ConnectionMethod method) =>
+        method.IsChained() ? TimeSpan.FromSeconds(300)
+        : method.IsAether() ? TimeSpan.FromSeconds(180)
+        : TimeSpan.FromSeconds(90);
 
     private bool _statsFailureLogged;
 
@@ -432,6 +574,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
     public async Task StartAsync()
     {
         _stateOverride = null;
+        Volatile.Write(ref _identityRecoveryStarted, 0);
         RaiseConnectionIntent(wantsConnection: true);
         CancellationTokenSource inFlightCts;
         CancellationTokenSource? previousCts;
@@ -517,6 +660,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
     {
         _stateOverride = null;
         StopStatsMonitor();
+        Volatile.Write(ref _everConnected, 0);
         RaiseConnectionIntent(wantsConnection: false);
         CancelInFlightConnection();
 
@@ -557,7 +701,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
         try
         {
             var desired = SelectEngineForCurrentSettings();
-            var running = _active.State is ConnectionState.Connecting or ConnectionState.Connected;
+            var currentState = State;
+            var running = currentState is ConnectionState.Connecting or ConnectionState.Connected;
 
             if (!running)
             {
@@ -568,20 +713,28 @@ public sealed class ConnectionManager : ITunnelCoreManager
             _logger.LogInformation("Switching engine {From} -> {To}",
                 _active.Method, desired.Method);
 
-            await StopAllEnginesAsync();
-            
-            
-            desired = SelectEngineForCurrentSettings();
-            SwitchActiveTo(desired);
+            Interlocked.Exchange(ref _reconnectInProgress, 1);
+            lock (_sync) _stateOverride = ConnectionState.Connecting;
+            StateChanged?.Invoke(this, ConnectionState.Connecting);
+            try
+            {
+                await StopAllEnginesAsync();
+                desired = SelectEngineForCurrentSettings();
+                SwitchActiveTo(desired);
+            }
+            finally
+            {
+                lock (_sync) _stateOverride = null;
+                Interlocked.Exchange(ref _reconnectInProgress, 0);
+            }
+
             await _active.StartAsync();
         }
         catch (Exception ex)
         {
-            
-            
-            
             _logger.LogError(ex, "Restart failed");
             ClearSystemProxyIfApplied();
+            lock (_sync) _stateOverride = ConnectionState.Error;
             StateChanged?.Invoke(this, ConnectionState.Error);
         }
         finally
@@ -598,12 +751,22 @@ public sealed class ConnectionManager : ITunnelCoreManager
             SafeStopAsync(_aether),
             SafeStopAsync(_tor),
             SafeStopAsync(_v2ray),
-            SafeStopAsync(_shard)
+            SafeStopAsync(_shard),
+            SafeStopAsync(_foxy),
+            SafeStopAsync(_lantern),
+            SafeStopAsync(_veep)
         };
         if (_psiphonOverWarp is not null) tasks.Add(SafeStopAsync(_psiphonOverWarp));
         if (_torOverWarp is not null) tasks.Add(SafeStopAsync(_torOverWarp));
         if (_psiphonOverV2Ray is not null) tasks.Add(SafeStopAsync(_psiphonOverV2Ray));
         if (_torOverV2Ray is not null) tasks.Add(SafeStopAsync(_torOverV2Ray));
+        if (_warpOverV2Ray is not null) tasks.Add(SafeStopAsync(_warpOverV2Ray));
+        if (_foxyOverWarp is not null) tasks.Add(SafeStopAsync(_foxyOverWarp));
+        if (_foxyOverV2Ray is not null) tasks.Add(SafeStopAsync(_foxyOverV2Ray));
+        if (_psiphonOverFoxy is not null) tasks.Add(SafeStopAsync(_psiphonOverFoxy));
+        if (_psiphonOverLantern is not null) tasks.Add(SafeStopAsync(_psiphonOverLantern));
+        if (_lanternOverWarp is not null) tasks.Add(SafeStopAsync(_lanternOverWarp));
+        if (_veepOverWarp is not null) tasks.Add(SafeStopAsync(_veepOverWarp));
 
         await Task.WhenAll(tasks);
 
@@ -614,8 +777,13 @@ public sealed class ConnectionManager : ITunnelCoreManager
         TorEngine.Socks5ProxyOverride = null;
         AetherEngine.SocksPortOverride = null;
         AetherEngine.MethodOverride = null;
+        AetherEngine.UpstreamProxyOverride = null;
         V2RayEngine.ClearSocksPortOverride();
         V2RayEngine.ClearUserUpstreamOverride();
+        FoxyEngine.UpstreamProxyOverride = null;
+        FoxyEngine.PreferDualSessionPool = false;
+        LanternEngine.UpstreamProxyOverride = null;
+        VeepEngine.UpstreamProxyOverride = null;
     }
 
     private static async Task SafeStopAsync(IConnectionEngine engine)
@@ -637,14 +805,11 @@ public sealed class ConnectionManager : ITunnelCoreManager
     {
         try
         {
-            var isTunActive = _settings.Settings.SystemWideTunneling && AdminElevation.IsAdministrator();
-            if (!_settings.Settings.SetSystemProxy || isTunActive)
-            {
-                ClearSystemProxyIfApplied();
-                return;
-            }
+            var s = _settings.Settings;
+            var isTunActive = s.SystemWideTunneling && AdminElevation.IsAdministrator();
+            var wantProxy = state == ConnectionState.Connected && s.SetSystemProxy && !isTunActive;
 
-            if (state == ConnectionState.Connected)
+            if (wantProxy)
             {
                 var port = _active.HttpProxyPort;
                 if (port <= 0)
@@ -654,14 +819,48 @@ public sealed class ConnectionManager : ITunnelCoreManager
                         _active.Method);
                     return;
                 }
-                _systemProxy.Set(port);
+
+                List<string>? bypassList = null;
+                if (s.SplitTunnelEnabled && string.Equals(s.SplitTunnelMode ?? "exclude", "exclude", StringComparison.OrdinalIgnoreCase))
+                {
+                    SplitRules.ClassifySplitEntries(s, out var domains, out var ipCidrs, out _, out _);
+                    bypassList = new List<string>();
+                    foreach (var d in domains)
+                    {
+                        if (d.Contains('.'))
+                        {
+                            var clean = d.TrimStart('*', '.');
+                            bypassList.Add($"*.{clean}");
+                            bypassList.Add(clean);
+                        }
+                        else
+                        {
+                            bypassList.Add($"*.{d}");
+                        }
+                    }
+                    foreach (var ip in ipCidrs)
+                    {
+                        var slash = ip.IndexOf('/');
+                        bypassList.Add(slash > 0 ? ip[..slash] : ip);
+                    }
+                }
+
+                var splitSig = bypassList is not null ? string.Join(",", bypassList) : "";
+                var plan = $"set:{port}:{splitSig}";
+                if (plan == _appliedProxyPlan) return;
+                _appliedProxyPlan = plan;
+
+                _systemProxy.Set(port, bypassList);
                 _systemProxyApplied = true;
-                WintunRouteApi.ResetLocalLoopbackConnections(port, _active.SocksProxyPort, 1819, 1820, 1821, 1824, 1825);
+                WintunRouteApi.ResetStaleLoopbackConnections(port, _active.SocksProxyPort, 1819, 1820, 1821, 1824, 1825);
                 OnEngineLogLineAppended(_active,
                     $"System proxy pointed at 127.0.0.1:{port} — apps that honor it now go "
                   + "through the tunnel.");
+                return;
             }
-            else if (state is ConnectionState.Disconnected or ConnectionState.Error)
+
+            if (state is ConnectionState.Disconnected or ConnectionState.Error
+                || !s.SetSystemProxy || isTunActive)
             {
                 ClearSystemProxyIfApplied();
             }
@@ -674,8 +873,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     private void ClearSystemProxyIfApplied()
     {
-        if (!_systemProxyApplied) return;
+        if (!_systemProxyApplied && !_systemProxy.IsApplied) return;
         _systemProxyApplied = false;
+        _appliedProxyPlan = "";
         try { _systemProxy.Clear(); }
         catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear the Windows system proxy"); }
     }
@@ -696,14 +896,31 @@ public sealed class ConnectionManager : ITunnelCoreManager
             ConnectionMethod.Tor => _tor,
             var m when m.IsAether() => _aether,
             ConnectionMethod.PsiphonOverWarp => _psiphonOverWarp ??= new ChainedEngine(
-                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, ConnectionMethod.PsiphonOverWarp),
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.PsiphonOverWarp),
             ConnectionMethod.TorOverWarp => _torOverWarp ??= new ChainedEngine(
-                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, ConnectionMethod.TorOverWarp),
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.TorOverWarp),
             ConnectionMethod.PsiphonOverV2Ray => _psiphonOverV2Ray ??= new ChainedEngine(
-                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, ConnectionMethod.PsiphonOverV2Ray),
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.PsiphonOverV2Ray),
             ConnectionMethod.TorOverV2Ray => _torOverV2Ray ??= new ChainedEngine(
-                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, ConnectionMethod.TorOverV2Ray),
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.TorOverV2Ray),
+            ConnectionMethod.WarpOverV2Ray => _warpOverV2Ray ??= new ChainedEngine(
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.WarpOverV2Ray),
+            ConnectionMethod.Foxy => _foxy,
+            ConnectionMethod.Lantern => _lantern,
+            ConnectionMethod.LanternOverWarp => _lanternOverWarp ??= new ChainedEngine(
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.LanternOverWarp),
+            ConnectionMethod.Veep => _veep,
+            ConnectionMethod.VeepOverWarp => _veepOverWarp ??= new ChainedEngine(
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.VeepOverWarp),
+            ConnectionMethod.FoxyOverWarp => _foxyOverWarp ??= new ChainedEngine(
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.FoxyOverWarp),
+            ConnectionMethod.FoxyOverV2Ray => _foxyOverV2Ray ??= new ChainedEngine(
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.FoxyOverV2Ray),
             ConnectionMethod.Shard => _shard,
+            ConnectionMethod.PsiphonOverFoxy => _psiphonOverFoxy ??= new ChainedEngine(
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.PsiphonOverFoxy),
+            ConnectionMethod.PsiphonOverLantern => _psiphonOverLantern ??= new ChainedEngine(
+                _loggerFactory.CreateLogger<ChainedEngine>(), _settings, _aether, _psiphon, _tor, _v2ray, _foxy, _shard, _lantern, _veep, ConnectionMethod.PsiphonOverLantern),
             _ => _psiphon,
         };
     }
@@ -725,7 +942,10 @@ public sealed class ConnectionManager : ITunnelCoreManager
         LogCleared?.Invoke(this, EventArgs.Empty);
 
         
-        StateChanged?.Invoke(this, _active.State);
+        if (Volatile.Read(ref _reconnectInProgress) == 0)
+        {
+            StateChanged?.Invoke(this, _active.State);
+        }
         BytesTransferredChanged?.Invoke(this, EventArgs.Empty);
         RouteChanged?.Invoke(this, EventArgs.Empty);
         ConnectProgressChanged?.Invoke(this, EventArgs.Empty);
@@ -762,14 +982,28 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private void OnEngineStateChanged(object? sender, ConnectionState state)
     {
         if (!ReferenceEquals(sender, _active)) return;
-        _stateOverride = null;
-        if (!_userWantsConnection && (state == ConnectionState.Connecting || state == ConnectionState.Connected))
+
+        if (Volatile.Read(ref _reconnectInProgress) != 0)
+        {
+            if (state is ConnectionState.Disconnected or ConnectionState.Disconnecting or ConnectionState.Error)
+            {
+                return;
+            }
+            if (state != ConnectionState.Connected)
+            {
+                return;
+            }
+        }
+
+        lock (_sync) _stateOverride = null;
+        if (!IsUserStillWantsConnection() && (state == ConnectionState.Connecting || state == ConnectionState.Connected))
         {
             _logger.LogInformation("Ignoring engine state {State} because user has disconnected", state);
             return;
         }
         if (state == ConnectionState.Connected)
         {
+            Volatile.Write(ref _everConnected, 1);
             StartStatsMonitor();
             TopUpIdentityPoolInBackground();
         }
@@ -779,11 +1013,79 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }
         ApplySystemProxy(state);
         StateChanged?.Invoke(this, state);
+
+        if (state == ConnectionState.Error)
+        {
+            if (Volatile.Read(ref _everConnected) != 0)
+            {
+                if (_settings.Settings.AutoReconnect
+                    && IsUserStillWantsConnection()
+                    && Interlocked.CompareExchange(ref _isHandlingDrop, 1, 0) == 0)
+                {
+                    _ = Task.Run(HandleConnectionDropAsync);
+                }
+            }
+            else
+            {
+                _ = TryRecoverIdentityAfterErrorAsync();
+            }
+        }
     }
 
-    /// <summary>
-    /// Replenishes the Cloudflare identity pool in the background when connected.
-    /// </summary>
+    private async Task TryRecoverIdentityAfterErrorAsync()
+    {
+        if (!IsUserStillWantsConnection()) return;
+        if (Interlocked.Exchange(ref _identityRecoveryStarted, 1) != 0) return;
+
+        var engine = _active;
+        CancellationToken? attemptToken;
+        lock (_sync) attemptToken = _inFlightStartCts?.Token;
+        if (attemptToken is null)
+        {
+            Volatile.Write(ref _identityRecoveryStarted, 0);
+            return;
+        }
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken.Value);
+            cts.CancelAfter(TimeSpan.FromMinutes(3));
+            if (!await engine.RecoverFromMissingPrerequisitesAsync(cts.Token))
+            {
+                Volatile.Write(ref _identityRecoveryStarted, 0);
+                return;
+            }
+
+            _logger.LogInformation(
+                "Second-chance prerequisites acquired after {Method} failed; retrying the engine", engine.Method);
+
+            await _lifecycleGate.WaitAsync(cts.Token);
+            try
+            {
+                if (cts.IsCancellationRequested || !IsUserStillWantsConnection()
+                    || !ReferenceEquals(_active, engine) || engine.State != ConnectionState.Error) return;
+
+                await SafeStopAsync(engine);
+
+                if (cts.IsCancellationRequested || !IsUserStillWantsConnection()
+                    || !ReferenceEquals(_active, engine)) return;
+
+                await engine.StartAsync();
+                AetherExtras.ResetEchFallback();
+            }
+            finally
+            {
+                _lifecycleGate.Release();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Volatile.Write(ref _identityRecoveryStarted, 0);
+            _logger.LogError(ex, "Second-chance retry failed for {Method}", engine.Method);
+        }
+    }
+
     private void TopUpIdentityPoolInBackground()
     {
         var method = ConnectionMethodExtensions.ParseConnectionMethod(_settings.Settings.ConnectionMethod);

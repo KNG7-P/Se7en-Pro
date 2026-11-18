@@ -1,0 +1,782 @@
+<UserControl x:Class="Se7enPro.Views.Settings.ChainedSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:conv="clr-namespace:Se7enPro.Converters"
+             xmlns:svc="clr-namespace:Se7enPro.Services"
+             xmlns:vm="clr-namespace:Se7enPro.ViewModels"
+             xmlns:controls="clr-namespace:Se7enPro.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+            <StackPanel>
+                    <StackPanel Visibility="{Binding IsChainedTab, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                        
+                        <Border Style="{StaticResource Settings.Card}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                        <materialDesign:PackIcon Kind="SwapHorizontal" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_ChainedArchitecture2}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_Routeyourtrafficthroughmultihopcha}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_chainedMode}" Margin="0,0,0,6" />
+                                <ComboBox Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding ChainedSubModes}" SelectedValue="{Binding SelectedChainedSubMode}" SelectedValuePath="Key" Height="38" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource Loc_chainedMode}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="2,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <materialDesign:PackIcon Grid.Column="0" Kind="{Binding IconKind}" Width="14" Height="14" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <Border Grid.Column="1" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="4" Padding="5,1.5" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Category}" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                                </Border>
+                                                <TextBlock Grid.Column="2" Text="{Binding Display}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsChainedPsiphonWarp, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                        <materialDesign:PackIcon Kind="LayersOutline" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_methodPsiphonOverWarp}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_RoutesPsiphonthroughanouterCloudfl}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_OUTERWARPTRANSPORT}" Margin="0,10,0,6" />
+                                <ComboBox Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding ChainedOuterTransports}" SelectedValue="{Binding SelectedChainedPsiphonOuterTransport}" SelectedValuePath="Key" DisplayMemberPath="Display" Height="38" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource Loc_OUTERWARPTRANSPORT}" />
+
+                                
+                                <Border Margin="0,10,0,0" Padding="0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="{DynamicResource Loc_TransportDetails}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                                        <TextBlock Text="{DynamicResource Loc_AutoTryMASQUEthenWireGuardthenWoWr}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_MASQUEHTTP3fallingbacktoHTTP2withT}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WireGuardSingleWARPtunnelblockedon}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WoWWARPonWARPslowestforthemostfilt}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsChainedTorWarp, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                        <materialDesign:PackIcon Kind="ShieldMoon" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_methodTorOverWarp}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_RoutesTorthroughanouterWARPtunnelf}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_OUTERWARPTRANSPORT}" Margin="0,10,0,6" />
+                                <ComboBox Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding ChainedOuterTransports}" SelectedValue="{Binding SelectedChainedTorOuterTransport}" SelectedValuePath="Key" DisplayMemberPath="Display" Height="38" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource Loc_OUTERWARPTRANSPORT}" />
+
+                                
+                                <Border Margin="0,10,0,0" Padding="0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="{DynamicResource Loc_TransportDetails}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                                        <TextBlock Text="{DynamicResource Loc_AutoTryMASQUEthenWireGuardthenWoWr}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_MASQUEHTTP3fallingbacktoHTTP2withT}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WireGuardSingleWARPtunnelblockedon}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WoWWARPonWARPslowestforthemostfilt}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsChainedFoxyWarp, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}" Background="{DynamicResource Status.FoxySoft}" BorderBrush="{DynamicResource Status.FoxyBorder}">
+                                        <materialDesign:PackIcon Kind="Firefox" Width="16" Height="16" Foreground="{DynamicResource Status.Foxy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_methodFoxyOverWarp}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_RoutesFoxythroughanouterWARPtunnel}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_OUTERWARPTRANSPORT}" Margin="0,10,0,6" />
+                                <ComboBox Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding ChainedOuterTransports}" SelectedValue="{Binding SelectedChainedFoxyOuterTransport}" SelectedValuePath="Key" DisplayMemberPath="Display" Height="38" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource Loc_OUTERWARPTRANSPORT}" />
+
+                                <Border Margin="0,10,0,0" Padding="0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="{DynamicResource Loc_TransportDetails}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                                        <TextBlock Text="{DynamicResource Loc_AutoTryMASQUEthenWireGuardthenWoWr}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_MASQUEHTTP3fallingbacktoHTTP2withT}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WireGuardSingleWARPtunnelblockedon}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WoWWARPonWARPslowestforthemostfilt}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsChainedLanternWarp, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}" Background="#1AE11D48" BorderBrush="#40E11D48">
+                                        <materialDesign:PackIcon Kind="RadioTower" Width="16" Height="16" Foreground="#E11D48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_methodLanternOverWarp}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_RoutesLanternthroughanouterWARPtunne}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_OUTERWARPTRANSPORT}" Margin="0,10,0,6" />
+                                <ComboBox Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding ChainedOuterTransports}" SelectedValue="{Binding SelectedChainedLanternOuterTransport}" SelectedValuePath="Key" DisplayMemberPath="Display" Height="38" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource Loc_OUTERWARPTRANSPORT}" />
+
+                                <Border Margin="0,10,0,0" Padding="0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="{DynamicResource Loc_TransportDetails}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                                        <TextBlock Text="{DynamicResource Loc_AutoTryMASQUEthenWireGuardthenWoWr}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_MASQUEHTTP3fallingbacktoHTTP2withT}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WireGuardSingleWARPtunnelblockedon}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WoWWARPonWARPslowestforthemostfilt}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsChainedVeepWarp, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}" Background="#1A3B82F6" BorderBrush="#403B82F6">
+                                        <materialDesign:PackIcon Kind="ShieldCheck" Width="16" Height="16" Foreground="#3B82F6" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_methodVeepOverWarp}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_RoutesVeepthroughanouterWARPtunne}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_OUTERWARPTRANSPORT}" Margin="0,10,0,6" />
+                                <ComboBox Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding ChainedOuterTransports}" SelectedValue="{Binding SelectedChainedVeepOuterTransport}" SelectedValuePath="Key" DisplayMemberPath="Display" Height="38" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource Loc_OUTERWARPTRANSPORT}" />
+
+                                <Border Margin="0,10,0,0" Padding="0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="{DynamicResource Loc_TransportDetails}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6" />
+                                        <TextBlock Text="{DynamicResource Loc_AutoTryMASQUEthenWireGuardthenWoWr}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_MASQUEHTTP3fallingbacktoHTTP2withT}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WireGuardSingleWARPtunnelblockedon}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                        <TextBlock Text="{DynamicResource Loc_WoWWARPonWARPslowestforthemostfilt}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsChainedPsiphonFoxy, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}" Background="#1AFF7139" BorderBrush="#40FF7139">
+                                        <materialDesign:PackIcon Kind="Firefox" Width="16" Height="16" Foreground="#FF7139" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_methodPsiphonOverFoxy}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_RoutesPsiphonthroughanouterFoxytun}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="{DynamicResource Loc_FoxyPsiphonChainHint}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Settings.Card}" Visibility="{Binding IsChainedPsiphonLantern, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Stretch">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}" Background="#1AE11D48" BorderBrush="#40E11D48">
+                                        <materialDesign:PackIcon Kind="RadioTower" Width="16" Height="16" Foreground="#E11D48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_methodPsiphonOverLantern}" />
+                                        <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_RoutesPsiphonthroughanouterLant}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="{DynamicResource Loc_PsiphonLanternHint}" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2" />
+                            </StackPanel>
+                        </Border>
+
+                        
+                        <StackPanel Visibility="{Binding IsChainedV2Ray, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                            
+                            <Border Style="{StaticResource Settings.Card}">
+                                <StackPanel HorizontalAlignment="Stretch">
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                            <materialDesign:PackIcon Kind="Cpu64Bit" Width="16" Height="16" Foreground="#06B6D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_v2rayCoreAndBridge}" />
+                                            <TextBlock Style="{StaticResource Settings.SectionSubtitle}" Text="{DynamicResource Loc_Configureloopbackproxybridgeandant}" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                        <Border Grid.Column="2" Padding="8,3" CornerRadius="6" Background="#2006B6D4" BorderBrush="#6006B6D4" BorderThickness="1" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <materialDesign:PackIcon Kind="CheckCircle" Width="12" Height="12" Foreground="{DynamicResource SuccessBrush}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding V2RayCoreActiveBadge}" FontSize="11" FontWeight="SemiBold" Foreground="#06B6D4" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        
+                                        <RadioButton Grid.Column="0" Style="{StaticResource UI.CardSelector}" IsChecked="{Binding IsXrayCoreSelected, Mode=OneWay}" Command="{Binding SelectXrayCoreCommand}" AutomationProperties.Name="{DynamicResource Loc_XrayCore}">
+                                        <Border Padding="14,12" CornerRadius="10">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
+                                                    <Setter Property="BorderThickness" Value="1" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsXrayCoreSelected}" Value="True">
+                                                            <Setter Property="Background" Value="#1A06B6D4" />
+                                                            <Setter Property="BorderBrush" Value="#B006B6D4" />
+                                                            <Setter Property="BorderThickness" Value="1.5" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Width="36" Height="36" CornerRadius="8" Background="#2606B6D4" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon Kind="Flash" Width="18" Height="18" Foreground="#06B6D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{DynamicResource Loc_XrayCore}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                                    <Border HorizontalAlignment="Left" Margin="0,2,0,0" Padding="6,1.5" CornerRadius="4" Background="#2606B6D4">
+                                                        <TextBlock Text="Xray" FontSize="9.5" FontWeight="Bold" Foreground="#06B6D4" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <materialDesign:PackIcon Grid.Column="2" Kind="CheckCircle" Width="18" Height="18" Foreground="#06B6D4" VerticalAlignment="Center" Visibility="{Binding IsXrayCoreSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            </Grid>
+                                        </Border>
+                                        </RadioButton>
+
+                                        
+                                        <RadioButton Grid.Column="2" Style="{StaticResource UI.CardSelector}" IsChecked="{Binding IsSingBoxCoreSelected, Mode=OneWay}" Command="{Binding SelectSingBoxCoreCommand}" AutomationProperties.Name="{DynamicResource Loc_SingBoxCore}">
+                                        <Border Padding="14,12" CornerRadius="10">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
+                                                    <Setter Property="BorderThickness" Value="1" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSingBoxCoreSelected}" Value="True">
+                                                            <Setter Property="Background" Value="#1AA855F7" />
+                                                            <Setter Property="BorderBrush" Value="#B0A855F7" />
+                                                            <Setter Property="BorderThickness" Value="1.5" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Width="36" Height="36" CornerRadius="8" Background="#26A855F7" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon Kind="Shield" Width="18" Height="18" Foreground="#A855F7" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{DynamicResource Loc_SingBoxCore}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                                    <Border HorizontalAlignment="Left" Margin="0,2,0,0" Padding="6,1.5" CornerRadius="4" Background="#26A855F7">
+                                                        <TextBlock Text="Sing-Box" FontSize="9.5" FontWeight="Bold" Foreground="#A855F7" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <materialDesign:PackIcon Grid.Column="2" Kind="CheckCircle" Width="18" Height="18" Foreground="#A855F7" VerticalAlignment="Center" Visibility="{Binding IsSingBoxCoreSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            </Grid>
+                                        </Border>
+                                        </RadioButton>
+                                    </Grid>
+
+                                    <Border Height="1" Margin="0,16,0,14" Background="{DynamicResource Surface.SubtleBorder}" />
+
+                                    <StackPanel Visibility="{Binding IsXrayCoreSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Border Margin="0,0,0,10" Height="50" Padding="14,0" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                            <Grid VerticalAlignment="Center">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <materialDesign:PackIcon Grid.Column="0" Kind="Dns" Width="16" Height="16" Foreground="#06B6D4" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                <TextBlock Grid.Column="1" Text="{DynamicResource Loc_RouteDNSthroughV2Ray}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                                <ToggleButton Grid.Column="2" IsChecked="{Binding V2RayRouteDnsThroughV2Ray, Mode=TwoWay}" AutomationProperties.Name="{DynamicResource Loc_RouteDNSthroughV2Ray}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0" Padding="12,10" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="#1F06B6D4" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                        <materialDesign:PackIcon Kind="ShuffleVariant" Width="15" Height="15" Foreground="#06B6D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{DynamicResource Loc_EnableMultiplexingMux}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{DynamicResource Loc_ReducesTCPhandshakelatencyandbandw}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <ToggleButton Grid.Column="2" IsChecked="{Binding V2RayEnableMux, Mode=TwoWay}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="{DynamicResource Loc_EnableMultiplexingMux}" />
+                                                </Grid>
+                                            </Border>
+
+                                            <Border Grid.Column="2" Padding="12,10" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="#1FA855F7" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                        <materialDesign:PackIcon Kind="CallSplit" Width="15" Height="15" Foreground="#A855F7" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{DynamicResource Loc_TLSFragmentation}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" ToolTip="tlshello / 100-200 / 10-20" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{DynamicResource Loc_FragmentstheTLSClientHellopacketto}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <ToggleButton Grid.Column="2" IsChecked="{Binding V2RayEnableFragment, Mode=TwoWay}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="{DynamicResource Loc_TLSFragmentation}" />
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+
+                                        <Border Margin="0,10,0,0" Padding="12,10" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" Visibility="{Binding V2RayEnableFragment, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="10" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="10" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_v2rayFragmentPacketsLabel}" Margin="0,0,0,4" />
+                                                    <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding V2RayFragmentPackets, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="tlshello" Height="36" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_v2rayFragmentPacketsLabel}" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_v2rayFragmentLengthLabel}" Margin="0,0,0,4" />
+                                                    <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding V2RayFragmentLength, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="100-200" Height="36" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_v2rayFragmentLengthLabel}" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="4">
+                                                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_v2rayFragmentIntervalLabel}" Margin="0,0,0,4" />
+                                                    <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding V2RayFragmentInterval, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="10-20" Height="36" FontFamily="{StaticResource UI.MonoFontFamily}" AutomationProperties.Name="{DynamicResource Loc_v2rayFragmentIntervalLabel}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <StackPanel Visibility="{Binding IsSingBoxCoreSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Border Margin="0,0,0,10" Height="50" Padding="14,0" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                            <Grid VerticalAlignment="Center">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <materialDesign:PackIcon Grid.Column="0" Kind="Dns" Width="16" Height="16" Foreground="#A855F7" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                <TextBlock Grid.Column="1" Text="{DynamicResource Loc_singboxRouteDns}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                                <ToggleButton Grid.Column="2" IsChecked="{Binding SingBoxRouteDnsThroughCore, Mode=TwoWay}" AutomationProperties.Name="{DynamicResource Loc_singboxRouteDns}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0" Padding="12,10" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="#1F06B6D4" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                        <materialDesign:PackIcon Kind="ShuffleVariant" Width="15" Height="15" Foreground="#06B6D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{DynamicResource Loc_EnableMultiplexingMux}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{DynamicResource Loc_singboxMuxDesc}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <ToggleButton Grid.Column="2" IsChecked="{Binding SingBoxEnableMux, Mode=TwoWay}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="{DynamicResource Loc_EnableMultiplexingMux}" />
+                                                </Grid>
+                                            </Border>
+
+                                            <Border Grid.Column="2" Padding="12,10" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="#1FA855F7" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                        <materialDesign:PackIcon Kind="CallSplit" Width="15" Height="15" Foreground="#A855F7" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{DynamicResource Loc_singboxFragmentLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{DynamicResource Loc_singboxFragmentDesc}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <ToggleButton Grid.Column="2" IsChecked="{Binding SingBoxEnableFragment, Mode=TwoWay}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="{DynamicResource Loc_singboxFragmentLabel}" />
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+
+                                        <Border Margin="0,10,0,0" Padding="12,10" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" Visibility="{Binding SingBoxEnableMux, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="10" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_singboxMuxProtocolLabel}" Margin="0,0,0,4" />
+                                                    <ComboBox ItemsSource="{Binding SingBoxMuxProtocols}" SelectedItem="{Binding SingBoxMuxProtocol, Mode=TwoWay}" Height="36" FontFamily="{StaticResource UI.MonoFontFamily}" />
+                                                </StackPanel>
+                                                <Border Grid.Column="2" Padding="12,0" Height="36" VerticalAlignment="Bottom" CornerRadius="8" Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="{DynamicResource Loc_singboxMuxPaddingLabel}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                        <ToggleButton IsChecked="{Binding SingBoxMuxPadding, Mode=TwoWay}" Style="{StaticResource MaterialDesignSwitchToggleButton}" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+
+                                        <Border Margin="0,10,0,0" Padding="12,10" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" Visibility="{Binding SingBoxEnableFragment, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource UI.FieldLabel}" Text="{DynamicResource Loc_singboxFragmentFallbackDelayLabel}" Margin="0,0,0,4" />
+                                                <TextBox Style="{StaticResource UI.CustomTextBox}" Text="{Binding SingBoxFragmentFallbackDelay, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="500ms" Height="36" FontFamily="{StaticResource UI.MonoFontFamily}" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <TextBlock Text="{DynamicResource Loc_singboxNoteXhttpAuto}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="2,10,2,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            
+                            <Border Style="{StaticResource Settings.Card}">
+                                <StackPanel HorizontalAlignment="Stretch">
+                                    
+                                    <Grid Margin="0,0,0,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Style="{StaticResource Settings.SectionIconBadge}">
+                                            <materialDesign:PackIcon Kind="Dns" Width="16" Height="16" Foreground="#06B6D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Settings.SectionTitle}" Text="{DynamicResource Loc_V2RayConfigProfiles}" VerticalAlignment="Center" />
+                                                <Border Margin="8,0,0,0" Padding="6,1.5" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding V2RayConfigsCount}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                                </Border>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            
+                                            <Button Style="{StaticResource UI.GhostButton}" MinWidth="0" Width="26" Height="26" Padding="0" Margin="0,0,4,0" Command="{Binding CycleV2RaySortCommand}" Visibility="{Binding HasV2RayConfigs, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{Binding V2RaySortTooltip}" AutomationProperties.Name="{Binding V2RaySortTooltip}">
+                                                <materialDesign:PackIcon Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <materialDesign:PackIcon.Style>
+                                                        <Style TargetType="materialDesign:PackIcon">
+                                                            <Setter Property="Kind" Value="Sort" />
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding V2RaySortMode}" Value="latency">
+                                                                    <Setter Property="Kind" Value="SortNumericAscending" />
+                                                                    <Setter Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding V2RaySortMode}" Value="name">
+                                                                    <Setter Property="Kind" Value="SortAlphabeticalAscending" />
+                                                                    <Setter Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </materialDesign:PackIcon.Style>
+                                                </materialDesign:PackIcon>
+                                            </Button>
+
+                                            <Button Style="{StaticResource UI.Btn.Danger}" MinWidth="0" Width="26" Height="26" Padding="0" Margin="0,0,4,0" Command="{Binding RemoveTimedOutV2RayConfigsCommand}" IsEnabled="{Binding HasTimedOutV2RayConfigs}" Visibility="{Binding HasV2RayConfigs, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{DynamicResource Loc_configListRemoveTimedOut}" AutomationProperties.Name="{DynamicResource Loc_configListRemoveTimedOut}">
+                                                <materialDesign:PackIcon Kind="TimerOffOutline" Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                            </Button>
+
+                                            <Button Style="{StaticResource UI.Btn.Danger}" MinWidth="0" Width="26" Height="26" Padding="0" Margin="0,0,4,0" Command="{Binding OpenClearAllConfigsDialogCommand}" Visibility="{Binding HasV2RayConfigs, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{DynamicResource Loc_clearAllRules}" AutomationProperties.Name="{DynamicResource Loc_clearAllRules}">
+                                                <materialDesign:PackIcon Kind="DeleteSweep" Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                            </Button>
+
+                                            
+                                            <Button Style="{StaticResource UI.Btn.Success}" MinWidth="0" Width="26" Height="26" Padding="0" Margin="0,0,4,0" Command="{Binding PingAllV2RayConfigsCommand}" Visibility="{Binding HasV2RayConfigs, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{DynamicResource Loc_configListPingAll}" AutomationProperties.Name="{DynamicResource Loc_configListPingAll}">
+                                                <materialDesign:PackIcon Kind="Speedometer" Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                            </Button>
+
+                                            
+                                            <Button Style="{StaticResource UI.Btn.Accent}" MinWidth="0" Width="26" Height="26" Padding="0" Margin="0,0,4,0" Command="{Binding OpenImportDialogCommand}" ToolTip="{DynamicResource Loc_configListImportLink}" AutomationProperties.Name="{DynamicResource Loc_configListImportLink}">
+                                                <materialDesign:PackIcon Kind="Link" Width="14" Height="14" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                            </Button>
+
+                                            
+                                            <Button Style="{StaticResource UI.PrimaryButton}" MinWidth="0" Height="26" Padding="8,0" Command="{Binding OpenAddConfigDialogCommand}" AutomationProperties.Name="{DynamicResource Loc_configListAddConfig}">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <materialDesign:PackIcon Kind="Plus" Width="12" Height="12" Margin="0,0,3,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{DynamicResource Loc_configListAddConfig}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    
+                                    <Border Margin="0,10,0,10" Padding="0,32" Visibility="{Binding HasNoV2RayConfigs, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource Surface.SubtleBg}" HorizontalAlignment="Center" Margin="0,0,0,12">
+                                                <materialDesign:PackIcon Kind="EthernetCable" Width="28" Height="28" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock Text="{DynamicResource Loc_NoProxyConfigurations}" FontSize="13.5" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
+                                            <TextBlock Text="{DynamicResource Loc_ImportasubscriptionlinkoraddaVLESS}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,4,0,16" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <Button Style="{StaticResource UI.Btn.Accent.Solid}" MinWidth="0" Height="28" Padding="10,0" Margin="0,0,6,0" Command="{Binding OpenImportDialogCommand}" AutomationProperties.Name="{DynamicResource Loc_configListImportFromLink}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <materialDesign:PackIcon Kind="ContentPaste" Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{DynamicResource Loc_configListImportFromLink}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource UI.GhostButton}" MinWidth="0" Height="28" Padding="10,0" Command="{Binding OpenAddConfigDialogCommand}" AutomationProperties.Name="{DynamicResource Loc_configListManualEntry}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <materialDesign:PackIcon Kind="Plus" Width="13" Height="13" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{DynamicResource Loc_configListManualEntry}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    
+                                    <ListBox ItemsSource="{Binding V2RayConfigs}"
+                                             MaxHeight="480"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             Padding="0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                             ScrollViewer.CanContentScroll="True"
+                                             VirtualizingStackPanel.IsVirtualizing="True"
+                                             VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                             VirtualizingStackPanel.ScrollUnit="Pixel"
+                                             Visibility="{Binding HasV2RayConfigs, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="0" />
+                                                <Setter Property="Margin" Value="0" />
+                                                <Setter Property="BorderThickness" Value="0" />
+                                                <Setter Property="Background" Value="Transparent" />
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <ContentPresenter />
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:V2RayConfigItemViewModel}">
+                                                <RadioButton Margin="0,0,0,8" Style="{StaticResource UI.CardSelector}" IsChecked="{Binding IsActive, Mode=OneWay}" Command="{Binding DataContext.SelectActiveV2RayConfigCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name}" AutomationProperties.HelpText="{Binding Subtitle}">
+                                                <Border Padding="12,10" CornerRadius="10">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
+                                                            <Setter Property="BorderThickness" Value="1" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                    <Setter Property="Background" Value="#1406B6D4" />
+                                                                    <Setter Property="BorderBrush" Value="#8006B6D4" />
+                                                                    <Setter Property="BorderThickness" Value="1.4" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        
+                                                        <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+                                                                    <Setter Property="BorderThickness" Value="1.5" />
+                                                                    <Setter Property="Background" Value="Transparent" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                            <Setter Property="BorderBrush" Value="#06B6D4" />
+                                                                            <Setter Property="BorderThickness" Value="2" />
+                                                                            <Setter Property="Background" Value="#2606B6D4" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <Border Width="8" Height="8" CornerRadius="4" Background="#06B6D4" Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        </Border>
+
+                                                        
+                                                        <Border Grid.Column="1" Padding="7,3" CornerRadius="6" Margin="0,0,10,0" VerticalAlignment="Center" Background="{Binding ProtocolBgColor, Converter={StaticResource HexToBrush}}" BorderBrush="{Binding ProtocolColor, Converter={StaticResource HexToBrush}}" BorderThickness="1">
+                                                            <TextBlock Text="{Binding ProtocolBadge}" FontSize="10" FontWeight="Bold" Foreground="{Binding ProtocolColor, Converter={StaticResource HexToBrush}}" />
+                                                        </Border>
+
+                                                        
+                                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <controls:CountryFlag CountryCode="{Binding CountryCode}" FlagWidth="16" FlagHeight="12" FlagCornerRadius="2" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="{Binding HasCountryFlag, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                                <Border Margin="6,0,0,0" Padding="5,1" CornerRadius="4" Background="#2606B6D4" Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{DynamicResource Loc_activeBadge}" FontSize="9" FontWeight="Bold" Foreground="#06B6D4" />
+                                                                </Border>
+                                                            </StackPanel>
+                                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                                <TextBlock Text="{Binding AddressPort}" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                                                <Border Margin="6,0,0,0" Padding="5,1" CornerRadius="4" Background="{DynamicResource Surface.CardElevated}" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding NetworkBadge}" FontSize="9" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                                                </Border>
+                                                                <Border Margin="4,0,0,0" Padding="5,1" CornerRadius="4" Background="#20A855F7" Visibility="{Binding HasSecurity, Converter={StaticResource BooleanToVisibilityConverter}}" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding SecurityBadge}" FontSize="9" FontWeight="SemiBold" Foreground="#A855F7" />
+                                                                </Border>
+                                                            </StackPanel>
+                                                        </StackPanel>
+
+                                                        
+                                                        <Button Grid.Column="3" Style="{StaticResource UI.GhostButton}" MinWidth="46" Height="24" Padding="7,0" Margin="4,0" Background="{Binding LatencyBgColor, Converter={StaticResource HexToBrush}}" BorderBrush="{Binding LatencyColor, Converter={StaticResource HexToBrush}}" BorderThickness="1" Foreground="{Binding LatencyColor, Converter={StaticResource HexToBrush}}" Command="{Binding DataContext.TestV2RayLatencyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" ToolTip="{DynamicResource Loc_Clicktotestlatency}" AutomationProperties.Name="{DynamicResource Loc_Clicktotestlatency}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <materialDesign:PackIcon Kind="Speedometer" Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                                <TextBlock Text="{Binding LatencyDisplay}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
+                                                            </StackPanel>
+                                                        </Button>
+
+                                                        
+                                                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            
+                                                            <Button Style="{StaticResource UI.RowIconButton}" MinWidth="0" Width="24" Height="24" Margin="0,0,2,0" ToolTip="{DynamicResource Loc_configListCopyLink}" Command="{Binding DataContext.CopyV2RayShareLinkCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" AutomationProperties.Name="{DynamicResource Loc_configListCopyLink}">
+                                                                <materialDesign:PackIcon Kind="ContentCopy" Width="12" Height="12" Foreground="{DynamicResource TextMutedBrush}" />
+                                                            </Button>
+                                                            
+                                                            <Button Style="{StaticResource UI.RowIconButton}" MinWidth="0" Width="24" Height="24" Margin="0,0,2,0" ToolTip="{DynamicResource Loc_v2rayEditConfig}" Command="{Binding DataContext.OpenEditConfigDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" AutomationProperties.Name="{DynamicResource Loc_v2rayEditConfig}">
+                                                                <materialDesign:PackIcon Kind="PencilOutline" Width="12" Height="12" Foreground="{DynamicResource TextMutedBrush}" />
+                                                            </Button>
+                                                            
+                                                            <Button Style="{StaticResource UI.ModalCloseButton}" MinWidth="0" Width="24" Height="24" ToolTip="{DynamicResource Loc_v2rayDeletePrompt}" Command="{Binding DataContext.DeleteV2RayConfigCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" AutomationProperties.Name="{DynamicResource Loc_v2rayDeletePrompt}">
+                                                                <materialDesign:PackIcon Kind="DeleteOutline" Width="12" Height="12" Foreground="{DynamicResource DangerBrush}" />
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                                </RadioButton>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+
+                    </StackPanel>
+            </StackPanel>
+</UserControl>

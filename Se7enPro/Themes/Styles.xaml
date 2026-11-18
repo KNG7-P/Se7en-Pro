@@ -51,7 +51,9 @@
         <Setter Property="FontFamily" Value="{StaticResource UI.FontFamily}" />
         <Setter Property="FontSize" Value="11.5" />
         <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
-        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
         <Setter Property="Margin" Value="0,2,0,0" />
     </Style>
 
@@ -338,10 +340,10 @@
                 <ControlTemplate TargetType="Button">
                     <Grid>
                         <Border x:Name="Bd" CornerRadius="9" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" Margin="{TemplateBinding Padding}" />
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" TextElement.Foreground="{TemplateBinding Foreground}" Margin="{TemplateBinding Padding}" />
                         </Border>
                         
-                        <Border x:Name="FocusRing" CornerRadius="11" Margin="-2" BorderBrush="{DynamicResource Btn.FocusRing}" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False" />
+                        <Border x:Name="FocusRing" CornerRadius="9" Margin="0" BorderBrush="{DynamicResource Btn.FocusRing}" BorderThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" SnapsToDevicePixels="True" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocused" Value="True">
@@ -543,6 +545,7 @@
 
     
     <Style x:Key="UI.PrimaryButton" TargetType="Button" BasedOn="{StaticResource UI.Btn.Primary.Solid}">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Padding" Value="16,0" />
         <Setter Property="MinWidth" Value="92" />
         <Setter Property="FontWeight" Value="Bold" />
@@ -550,10 +553,13 @@
     </Style>
 
     
-    <Style x:Key="UI.GhostButton" TargetType="Button" BasedOn="{StaticResource UI.Btn.Neutral}" />
+    <Style x:Key="UI.GhostButton" TargetType="Button" BasedOn="{StaticResource UI.Btn.Neutral}">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    </Style>
 
     
     <Style x:Key="UI.DialogCancelButton" TargetType="Button" BasedOn="{StaticResource UI.Btn.Danger}">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Padding" Value="16,0" />
     </Style>
 
@@ -602,6 +608,40 @@
     </Style>
 
     <Style x:Key="UI.ThemeToggleButton" TargetType="Button" BasedOn="{StaticResource UI.TitleBarButton}" />
+
+    <Style x:Key="UI.SidebarToggleButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="Width" Value="30" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="materialDesign:RippleAssist.IsDisabled" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Surface.CardBorderStrong}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.SelectedBg}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Brand.AccentBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <Style x:Key="UI.TitleBarCloseButton" TargetType="Button" BasedOn="{StaticResource UI.TitleBarButton}">
         <Setter Property="Template">
@@ -809,11 +849,6 @@
                             </Trigger.ExitActions>
                             <Setter TargetName="SwitchTrackOn" Property="Opacity" Value="1" />
                             <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="Transparent" />
-                            <Setter TargetName="SwitchThumb" Property="RenderTransform">
-                                <Setter.Value>
-                                    <TranslateTransform X="18" />
-                                </Setter.Value>
-                            </Setter>
                             <Setter TargetName="SwitchThumb" Property="Fill" Value="{DynamicResource TextOnAccentBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -1166,7 +1201,7 @@
                 <ControlTemplate TargetType="Button">
                     <Grid>
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-                        <Border x:Name="FocusRing" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource AccentCyanBrush}" Visibility="Collapsed" />
+                        <Border x:Name="FocusRing" CornerRadius="12" BorderThickness="2" BorderBrush="{DynamicResource Btn.FocusRing}" Visibility="Collapsed" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocused" Value="True">
@@ -1195,7 +1230,7 @@
                 <ControlTemplate TargetType="RadioButton">
                     <Grid>
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-                        <Border x:Name="FocusRing" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource AccentCyanBrush}" Visibility="Collapsed" />
+                        <Border x:Name="FocusRing" CornerRadius="12" BorderThickness="2" BorderBrush="{DynamicResource Btn.FocusRing}" Visibility="Collapsed" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocused" Value="True">
@@ -1267,6 +1302,7 @@
         <Setter Property="Padding" Value="12,12" />
         <Setter Property="Margin" Value="10,3" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
         
@@ -1278,7 +1314,7 @@
                     <Grid>
                         <Border x:Name="HoverBd" CornerRadius="12" Opacity="0" Background="{DynamicResource Surface.HoverBg}" BorderBrush="{DynamicResource Surface.CardBorderStrong}" BorderThickness="1" />
                         <Border x:Name="Bd" CornerRadius="12" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
                         </Border>
                     </Grid>
                     <ControlTemplate.Triggers>
@@ -1321,9 +1357,9 @@
     
     
     <Style x:Key="UI.TelegramButton" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource Brand.TelegramSoftBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.TelegramSoftBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource Brand.TelegramBorderBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface.TelegramBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="12,9" />
         <Setter Property="Cursor" Value="Hand" />
@@ -1333,15 +1369,15 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bd" CornerRadius="12" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Brand.TelegramHoverBrush}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Brand.TelegramBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.TelegramHoverBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Surface.TelegramBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Brand.TelegramGradient}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brand.TelegramGradient}" />
                             <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>

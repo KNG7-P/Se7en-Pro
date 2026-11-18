@@ -37,7 +37,19 @@
                 <TextBox Grid.Column="0" Style="{StaticResource UI.CustomTextBox}" Height="38" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="{Binding SearchPlaceholder}" materialDesign:TextFieldAssist.HasLeadingIcon="True" materialDesign:TextFieldAssist.LeadingIcon="Magnify" AutomationProperties.Name="{Binding SearchPlaceholder}" VerticalAlignment="Center" />
 
                 
-                <Button Grid.Column="2" Command="{Binding ToggleAutoScrollCommand}" Height="38" Padding="12,0" VerticalAlignment="Center" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_Autoscroll}" FocusVisualStyle="{x:Null}">
+                <ComboBox Grid.Column="2" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding EngineFilterOptions}" SelectedItem="{Binding SelectedEngineFilterItem, Mode=TwoWay}" Height="38" MinWidth="160" MaxDropDownHeight="420" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_Filterlogsbysubsystemorengine}" ToolTip="{DynamicResource Loc_Filterlogsbysubsystemorengine}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1">
+                                <materialDesign:PackIcon Kind="{Binding Icon}" Width="15" Height="15" Foreground="{StaticResource Brand.AccentBrush}" Margin="0,0,9,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                
+                <Button Grid.Column="4" Command="{Binding ToggleAutoScrollCommand}" Height="38" Padding="12,0" VerticalAlignment="Center" Cursor="Hand" AutomationProperties.Name="{DynamicResource Loc_Autoscroll}" FocusVisualStyle="{x:Null}">
                     <Button.Style>
                         <Style TargetType="Button">
                             <Setter Property="Template">
@@ -79,18 +91,6 @@
                 </Button>
 
                 
-                <ComboBox Grid.Column="4" Style="{StaticResource UI.CustomComboBox}" ItemsSource="{Binding EngineFilterOptions}" SelectedItem="{Binding SelectedEngineFilterItem, Mode=TwoWay}" Height="38" MinWidth="160" MaxDropDownHeight="320" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc_Filterlogsbysubsystemorengine}" ToolTip="{DynamicResource Loc_Filterlogsbysubsystemorengine}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1">
-                                <materialDesign:PackIcon Kind="{Binding Icon}" Width="15" Height="15" Foreground="{StaticResource Brand.AccentBrush}" Margin="0,0,9,0" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-
-                
                 <Button Grid.Column="6" Style="{StaticResource UI.GhostButton}" Width="38" Height="38" Padding="0" VerticalAlignment="Center" Command="{Binding CopyCommand}" ToolTip="{DynamicResource Loc_Copyallvisiblelogstoclipboard}" AutomationProperties.Name="{DynamicResource Loc_Copyallvisiblelogstoclipboard}">
                     <materialDesign:PackIcon Kind="ContentCopy" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Button>
@@ -114,9 +114,9 @@
                 <Border Grid.Row="0" Margin="14,8,14,0" Padding="0,0,0,6" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Surface.LogBoxBorder}">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="56" />
+                            <ColumnDefinition Width="64" />
                             <ColumnDefinition Width="8" />
-                            <ColumnDefinition Width="62" />
+                            <ColumnDefinition Width="76" />
                             <ColumnDefinition Width="9" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
@@ -130,10 +130,10 @@
                 <TextBlock Grid.Row="1" Text="{DynamicResource Loc_Nologentriescapturedyet}" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding HasFilteredLines, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
 
                 
-                <ListBox Grid.Row="1" x:Name="LogListBox" ItemsSource="{Binding FilteredLines}" Background="Transparent" BorderThickness="0" Padding="14,10" Visibility="{Binding HasFilteredLines, Converter={StaticResource BooleanToVisibilityConverter}}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel">
+                <ListBox Grid.Row="1" x:Name="LogListBox" ItemsSource="{Binding FilteredLines}" Background="Transparent" BorderThickness="0" Padding="14,10" Visibility="{Binding HasFilteredLines, Converter={StaticResource BooleanToVisibilityConverter}}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Item" VirtualizingPanel.IsContainerVirtualizable="True">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
-                            <Setter Property="Padding" Value="0,2.5" />
+                            <Setter Property="Padding" Value="4,2.5" />
                             <Setter Property="Margin" Value="0" />
                             <Setter Property="Background" Value="Transparent" />
                             <Setter Property="BorderThickness" Value="0" />
@@ -142,7 +142,15 @@
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
-                                        <ContentPresenter />
+                                        <Border x:Name="ItemBd" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                                            <ContentPresenter />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="ItemBd" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                                <Setter TargetName="ItemBd" Property="BorderBrush" Value="{DynamicResource Btn.FocusRing}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Setter.Value>
                             </Setter>
@@ -153,9 +161,9 @@
                             
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="8" />
-                                    <ColumnDefinition Width="62" />
+                                    <ColumnDefinition Width="76" />
                                     <ColumnDefinition Width="9" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>

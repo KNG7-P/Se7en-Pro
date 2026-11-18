@@ -7,6 +7,7 @@ namespace Se7enPro.Services;
 
 public interface ITunnelCoreManager
 {
+    ConnectionMethod ActiveMethod { get; }
     ConnectionState State { get; }
     int SocksProxyPort { get; }
     int HttpProxyPort { get; }
@@ -18,6 +19,10 @@ public interface ITunnelCoreManager
     string CurrentRouteIp { get; }
 
     string CurrentRouteSni { get; }
+
+    string ServerEndpointAddress { get; }
+
+    IReadOnlyList<string> ServerEndpointAddresses { get; }
 
     event EventHandler? RouteChanged;
 

@@ -1,10 +1,14 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 
 namespace Se7enPro.Models;
 
 public sealed class UserSettings
 {
+    [JsonIgnore]
+    public object SyncRoot { get; } = new();
+
     [JsonPropertyName("theme")]
     public string Theme { get; set; } = "dark";
 
@@ -15,7 +19,7 @@ public sealed class UserSettings
     public string VisualEffects { get; set; } = "auto";
 
     [JsonPropertyName("egressRegion")]
-    public string EgressRegion { get; set; } = "";
+    public string EgressRegion { get; set; } = "auto";
 
     [JsonPropertyName("disableTimeouts")]
     public bool DisableTimeouts { get; set; }
@@ -45,7 +49,7 @@ public sealed class UserSettings
     public bool StartWithWindows { get; set; }
 
     [JsonPropertyName("minimizeToTray")]
-    public bool MinimizeToTray { get; set; } = true;
+    public bool MinimizeToTray { get; set; }
 
     [JsonPropertyName("onCloseAction")]
     public string OnCloseAction { get; set; } = "ask";
@@ -72,8 +76,14 @@ public sealed class UserSettings
     [JsonPropertyName("systemWideTunneling")]
     public bool SystemWideTunneling { get; set; }
 
+    [JsonPropertyName("tunMethod")]
+    public string TunMethod { get; set; } = "wintun";
+
     [JsonPropertyName("killSwitchEnabled")]
     public bool KillSwitchEnabled { get; set; }
+
+    [JsonPropertyName("autoReconnect")]
+    public bool AutoReconnect { get; set; } = true;
 
     [JsonPropertyName("protocolMode")]
     public string ProtocolMode { get; set; } = "auto";
@@ -137,24 +147,33 @@ public sealed class UserSettings
 
     
     
+    [JsonPropertyName("lanternRegion")]
+    public string LanternRegion { get; set; } = "auto";
+
+    [JsonPropertyName("veepRegion")]
+    public string VeepRegion { get; set; } = "auto";
+
+    [JsonPropertyName("aetherIdentityAcquisitionMethod")]
+    public string AetherIdentityAcquisitionMethod { get; set; } = "lantern";
+
     [JsonPropertyName("aetherProtocol")]
     public string AetherProtocol { get; set; } = "masque";
 
     
     [JsonPropertyName("aetherScanMode")]
-    public string AetherScanMode { get; set; } = "balanced";
+    public string AetherScanMode { get; set; } = "turbo";
 
     [JsonPropertyName("aetherScanModeMasque")]
-    public string AetherScanModeMasque { get; set; } = "balanced";
+    public string AetherScanModeMasque { get; set; } = "turbo";
 
     [JsonPropertyName("aetherScanModeMim")]
     public string AetherScanModeMim { get; set; } = "turbo";
 
     [JsonPropertyName("aetherScanModeWireguard")]
-    public string AetherScanModeWireguard { get; set; } = "balanced";
+    public string AetherScanModeWireguard { get; set; } = "turbo";
 
     [JsonPropertyName("aetherScanModeWarp")]
-    public string AetherScanModeWarp { get; set; } = "balanced";
+    public string AetherScanModeWarp { get; set; } = "turbo";
 
     
     
@@ -162,10 +181,10 @@ public sealed class UserSettings
     public string AetherNoize { get; set; } = "balanced";
 
     [JsonPropertyName("aetherNoizeMasque")]
-    public string AetherNoizeMasque { get; set; } = "balanced";
+    public string AetherNoizeMasque { get; set; } = "firewall";
 
     [JsonPropertyName("aetherNoizeMim")]
-    public string AetherNoizeMim { get; set; } = "balanced";
+    public string AetherNoizeMim { get; set; } = "firewall";
 
     [JsonPropertyName("aetherNoizeWireguard")]
     public string AetherNoizeWireguard { get; set; } = "balanced";
@@ -194,86 +213,74 @@ public sealed class UserSettings
     [JsonPropertyName("aetherManualPeer")]
     public string AetherManualPeer { get; set; } = "";
 
-    // ---- Aether 2.3.0: --gool changed meaning ----
-    //
-    // In aether 2.1.x "--gool" was WARP-in-WARP. In 2.3.0 it carries a WireGuard WARP
-    // identity inside the MASQUE tunnel and registers it THROUGH that tunnel, so the exit
-    // is foreign; the old behaviour moved to "--gool-classic".
-    //
-    // "masque" is the default because it is the one that solves the blocked-registration
-    // problem. Choosing "classic" keeps the manual wiw peers meaningful.
     [JsonPropertyName("aetherGoolMode")]
     public string AetherGoolMode { get; set; } = "masque";
 
-    // ---- Aether 2.3.0: optional capabilities ----
-    //
-    // Every one of these is withheld unless the bundled aether.exe advertises the flag, so
-    // a missing or older binary degrades to the previous behaviour instead of failing to
-    // start. See AetherCapabilities.
-    //
-    // Note: aetherEch, aetherExitLocSecs and aetherFragmentWireguard already existed in this
-    // model but were never read by anything. They are wired now rather than redeclared.
 
-    /// <summary>Certificate verification. aether leaves it off by default.</summary>
     [JsonPropertyName("aetherTlsVerify")]
     public bool AetherTlsVerify { get; set; } = false;
 
-    // ---- TLS fingerprint shaping ----
-    //
-    // Aether writes Chrome's ClientHello by default. Deep packet inspection does not match
-    // on "is this TLS", it matches on "does this look exactly like the browser I claim to
-    // be", so the cipher list, the group order and the GREASE values are all part of the
-    // fingerprint and all of them are levers. They exist because some mobile operators'
-    // middleboxes are known to fingerprint rather than simply block.
 
-    /// <summary>
-    /// TLS 1.2 cipher suites, ':' separated, e.g. "ECDHE-ECDSA-AES128-GCM-SHA256".
-    /// Blank keeps Chrome's default. TLS 1.3 suites cannot be changed and are ignored.
-    /// </summary>
     [JsonPropertyName("aetherTlsCiphers")]
     public string AetherTlsCiphers { get; set; } = "";
 
-    /// <summary>
-    /// TLS groups in preference order; the first with a usable key share wins.
-    /// Blank keeps Chrome's "P-256:X25519:P-384".
-    /// </summary>
     [JsonPropertyName("aetherTlsGroups")]
     public string AetherTlsGroups { get; set; } = "";
 
-    /// <summary>Drop the GREASE values in TLS handshake.</summary>
     [JsonPropertyName("aetherDisableGrease")]
     public bool AetherDisableGrease { get; set; } = false;
 
-    /// <summary>Domain for ECH key lookup. Defaults to cloudflare-ech.com.</summary>
+    [JsonPropertyName("aetherTlsSigalgs")]
+    public string AetherTlsSigalgs { get; set; } = "";
+
+    [JsonPropertyName("aetherTlsAlps")]
+    public string AetherTlsAlps { get; set; } = "";
+
+    [JsonPropertyName("aetherTlsFingerprint")]
+    public string AetherTlsFingerprint { get; set; } = "";
+
+    [JsonPropertyName("aetherTls13Ciphers")]
+    public string AetherTls13Ciphers { get; set; } = "";
+
+    [JsonPropertyName("aetherTlsKeyShares")]
+    public string AetherTlsKeyShares { get; set; } = "";
+
+    [JsonPropertyName("aetherDisableOcspStapling")]
+    public bool AetherDisableOcspStapling { get; set; } = false;
+
+    [JsonPropertyName("aetherDisableSct")]
+    public bool AetherDisableSct { get; set; } = false;
+
+    [JsonPropertyName("aetherDisableSessionTicket")]
+    public bool AetherDisableSessionTicket { get; set; } = false;
+
+    [JsonPropertyName("aetherDisableExtensionPermutation")]
+    public bool AetherDisableExtensionPermutation { get; set; } = false;
+
+    [JsonPropertyName("aetherEnableEchGrease")]
+    public bool AetherEnableEchGrease { get; set; } = false;
+
+    [JsonPropertyName("aetherMasqueSni")]
+    public string AetherMasqueSni { get; set; } = "";
+
+    [JsonPropertyName("aetherUpstreamProxy")]
+    public string AetherUpstreamProxy { get; set; } = "";
+
     [JsonPropertyName("aetherEchDomain")]
     public string AetherEchDomain { get; set; } = "";
 
-    /// <summary>Resolver for ECH key lookup. Defaults to Custom DNS.</summary>
     [JsonPropertyName("aetherEchDns")]
     public string AetherEchDns { get; set; } = "";
 
-    /// <summary>Carry Tor inside the tunnel; bridges are then fetched through it.</summary>
     [JsonPropertyName("aetherTor")]
     public bool AetherTor { get; set; } = false;
 
-    /// <summary>Use running onionoo relays as plain bridges, for a network that blocks Tor outright.</summary>
     [JsonPropertyName("aetherTorRelays")]
     public bool AetherTorRelays { get; set; } = false;
 
-    /// <summary>
-    /// Fragment the TLS ClientHello on the WireGuard carrier too, not just HTTP/2.
-    ///
-    /// WireGuard mode opens a plain UDP socket with no TLS, so this only has an effect on
-    /// the transports that actually negotiate TLS; the flag is therefore gated on those.
-    /// </summary>
     [JsonPropertyName("aetherFragmentWireguard")]
     public bool AetherFragmentWireguard { get; set; } = false;
 
-    /// <summary>
-    /// How often the exit country is rechecked, in seconds. 0 keeps aether's own default.
-    ///
-    /// Only sent alongside --exit-loc, since there is nothing to recheck without it.
-    /// </summary>
     [JsonPropertyName("aetherExitLocSecs")]
     public int AetherExitLocSecs { get; set; } = 0;
 
@@ -334,6 +341,15 @@ public sealed class UserSettings
     [JsonPropertyName("chainedTorOuterTransport")]
     public string ChainedTorOuterTransport { get; set; } = "auto";
 
+    [JsonPropertyName("chainedFoxyOuterTransport")]
+    public string ChainedFoxyOuterTransport { get; set; } = "auto";
+
+    [JsonPropertyName("chainedLanternOuterTransport")]
+    public string ChainedLanternOuterTransport { get; set; } = "auto";
+
+    [JsonPropertyName("chainedVeepOuterTransport")]
+    public string ChainedVeepOuterTransport { get; set; } = "auto";
+
     
     [JsonPropertyName("chainedSubMode")]
     public string ChainedSubMode { get; set; } = "psiphon_warp";
@@ -363,7 +379,7 @@ public sealed class UserSettings
             _aetherMasqueQuic = string.Equals(value, "h3", System.StringComparison.OrdinalIgnoreCase);
         }
     }
-    private string _aetherMasqueTransport = "h3";
+    private string _aetherMasqueTransport = "h2";
 
     [JsonPropertyName("aetherMasqueQuic")]
     public bool AetherMasqueQuic
@@ -375,11 +391,11 @@ public sealed class UserSettings
             _aetherMasqueTransport = value ? "h3" : "h2";
         }
     }
-    private bool _aetherMasqueQuic = true;
+    private bool _aetherMasqueQuic = false;
 
     
     [JsonPropertyName("aetherFragment")]
-    public bool AetherFragment { get; set; } = true;
+    public bool AetherFragment { get; set; } = false;
 
     
     [JsonPropertyName("aetherFragmentSize")]
@@ -388,30 +404,9 @@ public sealed class UserSettings
     [JsonPropertyName("aetherFragmentDelay")]
     public string AetherFragmentDelay { get; set; } = "2-10";
 
-    [JsonPropertyName("aetherUpstreamProxy")]
-    public string AetherUpstreamProxy { get; set; } = "";
-
-    [JsonPropertyName("aetherUpstreamProxyEnabled")]
-    public bool AetherUpstreamProxyEnabled { get; set; } = false;
-
-    [JsonPropertyName("aetherUpstreamProxyScheme")]
-    public string AetherUpstreamProxyScheme { get; set; } = "socks5";
-
-    [JsonPropertyName("aetherUpstreamProxyHost")]
-    public string AetherUpstreamProxyHost { get; set; } = "";
-
-    [JsonPropertyName("aetherUpstreamProxyPort")]
-    public string AetherUpstreamProxyPort { get; set; } = "";
-
-    [JsonPropertyName("aetherUpstreamProxyUsername")]
-    public string AetherUpstreamProxyUsername { get; set; } = "";
-
-    [JsonPropertyName("aetherUpstreamProxyPassword")]
-    public string AetherUpstreamProxyPassword { get; set; } = "";
-
     
     [JsonPropertyName("torExitCountry")]
-    public string TorExitCountry { get; set; } = "";
+    public string TorExitCountry { get; set; } = "auto";
 
     
     
@@ -447,16 +442,57 @@ public sealed class UserSettings
     [JsonPropertyName("shardRotateIp")]
     public bool ShardRotateIp { get; set; } = true;
 
+    [JsonPropertyName("shardMtu")]
+    public int ShardMtu { get; set; } = 1280;
+
+    [JsonPropertyName("shardAutoScanMtu")]
+    public bool ShardAutoScanMtu { get; set; } = true;
+
     [JsonPropertyName("shadowsocksMethod")]
     public string ShadowsocksMethod { get; set; } = "2022-blake3-aes-128-gcm";
+
+    
+
+    [JsonPropertyName("firefoxAccounts")]
+    public ObservableCollection<FirefoxAccountInfo> FirefoxAccounts { get; set; } = new();
+
+    [JsonPropertyName("firefoxActiveAccountId")]
+    public string FirefoxActiveAccountId { get; set; } = "";
+
+    [JsonPropertyName("firefoxServerCountry")]
+    public string FirefoxServerCountry { get; set; } = "REC";
+
+    [JsonPropertyName("firefoxServerCity")]
+    public string FirefoxServerCity { get; set; } = "";
+
+    [JsonPropertyName("firefoxLastEdgeHost")]
+    public string FirefoxLastEdgeHost { get; set; } = "";
+
+    [JsonPropertyName("firefoxLastEdgePort")]
+    public int FirefoxLastEdgePort { get; set; }
+
+    [JsonPropertyName("firefoxCustomProxyEnabled")]
+    public bool FirefoxCustomProxyEnabled { get; set; }
+
+    [JsonPropertyName("firefoxCustomProxyType")]
+    public string FirefoxCustomProxyType { get; set; } = "socks5";
+
+    [JsonPropertyName("firefoxCustomProxyHost")]
+    public string FirefoxCustomProxyHost { get; set; } = "";
+
+    [JsonPropertyName("firefoxCustomProxyPort")]
+    public int FirefoxCustomProxyPort { get; set; } = 1080;
+
+    [JsonPropertyName("firefoxCustomProxyUsername")]
+    public string FirefoxCustomProxyUsername { get; set; } = "";
+
+    [JsonPropertyName("firefoxCustomProxyPassword")]
+    public string FirefoxCustomProxyPassword { get; set; } = "";
 
     
     [JsonPropertyName("v2rayCore")]
     public string V2RayCore { get; set; } = "xray";
 
-    // ---- Custom DNS resolvers (tab: Network) ----
-    // Blank means "automatic": the tunnel keeps using the resolvers it picks today.
-    // Populated lists take precedence over those defaults, in the order typed.
 
     [JsonPropertyName("customDnsUdp")]
     public string CustomDnsUdp { get; set; } = "";
@@ -467,18 +503,12 @@ public sealed class UserSettings
     [JsonPropertyName("customDnsDoh")]
     public string CustomDnsDoh { get; set; } = "";
 
-    /// <summary>
-    /// When true the tunnel refuses to fall back to any resolver the user did not list.
-    /// Off by default: a typo in a list should degrade to working DNS, not to none.
-    /// </summary>
     [JsonPropertyName("customDnsStrict")]
     public bool CustomDnsStrict { get; set; } = false;
 
-    /// <summary>Target number of pre-provisioned Cloudflare identities in pool.</summary>
     [JsonPropertyName("identityPoolTarget")]
     public int IdentityPoolTarget { get; set; } = 3;
 
-    /// <summary>Base URLs of bootstrap relays for identity provisioning.</summary>
     [JsonPropertyName("identityRelayUrls")]
     public string IdentityRelayUrls { get; set; } = "";
 
@@ -492,7 +522,7 @@ public sealed class UserSettings
     public bool V2RayRouteDnsThroughV2Ray { get; set; } = true;
 
     [JsonPropertyName("v2rayEnableFragment")]
-    public bool V2RayEnableFragment { get; set; } = true;
+    public bool V2RayEnableFragment { get; set; } = false;
 
     [JsonPropertyName("v2rayFragmentPackets")]
     public string V2RayFragmentPackets { get; set; } = "tlshello";
@@ -503,6 +533,27 @@ public sealed class UserSettings
     [JsonPropertyName("v2rayFragmentInterval")]
     public string V2RayFragmentInterval { get; set; } = "10-20";
 
+    [JsonPropertyName("singBoxInboundPort")]
+    public int SingBoxInboundPort { get; set; } = 10808;
+
+    [JsonPropertyName("singBoxRouteDnsThroughCore")]
+    public bool SingBoxRouteDnsThroughCore { get; set; } = true;
+
+    [JsonPropertyName("singBoxEnableMux")]
+    public bool SingBoxEnableMux { get; set; } = false;
+
+    [JsonPropertyName("singBoxMuxProtocol")]
+    public string SingBoxMuxProtocol { get; set; } = "h2mux";
+
+    [JsonPropertyName("singBoxMuxPadding")]
+    public bool SingBoxMuxPadding { get; set; } = false;
+
+    [JsonPropertyName("singBoxEnableFragment")]
+    public bool SingBoxEnableFragment { get; set; } = false;
+
+    [JsonPropertyName("singBoxFragmentFallbackDelay")]
+    public string SingBoxFragmentFallbackDelay { get; set; } = "500ms";
+
     [JsonPropertyName("v2rayActiveConfigId")]
     public string V2RayActiveConfigId { get; set; } = "";
 
@@ -512,6 +563,77 @@ public sealed class UserSettings
     {
         get => _v2rayConfigs ??= new();
         set => _v2rayConfigs = value ?? new();
+    }
+
+    [JsonPropertyName("settingsSchemaVersion")]
+    public int SettingsSchemaVersion { get; set; }
+
+    [JsonPropertyName("aetherMtuMasque")]
+    public int AetherMtuMasque { get; set; } = 1280;
+
+    [JsonPropertyName("aetherMtuWireguard")]
+    public int AetherMtuWireguard { get; set; } = 1280;
+
+    [JsonPropertyName("aetherMtuWarp")]
+    public int AetherMtuWarp { get; set; } = 1280;
+
+    [JsonPropertyName("aetherMtuMim")]
+    public int AetherMtuMim { get; set; } = 1280;
+
+    [JsonPropertyName("aetherMtuAutoLadder")]
+    public bool AetherMtuAutoLadder { get; set; } = true;
+
+    [JsonPropertyName("aetherGoolPeer")]
+    public string AetherGoolPeer { get; set; } = "";
+
+    public int GetAetherMtu(Se7enPro.Services.ConnectionMethod method)
+    {
+        var configured = method switch
+        {
+            Se7enPro.Services.ConnectionMethod.WireGuard => AetherMtuWireguard,
+            Se7enPro.Services.ConnectionMethod.WarpOnWarp => AetherMtuWarp,
+            Se7enPro.Services.ConnectionMethod.MasqueInMasque => AetherMtuMim,
+            _ => AetherMtuMasque,
+        };
+        if (configured <= 0) return 1280;
+        return System.Math.Clamp(configured, 576, 1380);
+    }
+
+    public void SetAetherMtu(Se7enPro.Services.ConnectionMethod method, int value)
+    {
+        value = System.Math.Clamp(value, 576, 1380);
+        switch (method)
+        {
+            case Se7enPro.Services.ConnectionMethod.WireGuard:
+                AetherMtuWireguard = value;
+                break;
+            case Se7enPro.Services.ConnectionMethod.WarpOnWarp:
+                AetherMtuWarp = value;
+                break;
+            case Se7enPro.Services.ConnectionMethod.MasqueInMasque:
+                AetherMtuMim = value;
+                break;
+            default:
+                AetherMtuMasque = value;
+                break;
+        }
+    }
+
+    public void ApplyAetherPreset(bool fast)
+    {
+        var scan = fast ? "turbo" : "balanced";
+        var masqueNoize = fast ? "firewall" : "balanced";
+        AetherScanMode = scan;
+        AetherScanModeMasque = scan;
+        AetherScanModeMim = scan;
+        AetherScanModeWireguard = scan;
+        AetherScanModeWarp = scan;
+        AetherNoize = "balanced";
+        AetherNoizeMasque = masqueNoize;
+        AetherNoizeMim = masqueNoize;
+        AetherNoizeWireguard = "balanced";
+        AetherNoizeWarp = "balanced";
+        AetherFragment = !fast;
     }
 }
 

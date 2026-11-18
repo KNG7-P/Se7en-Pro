@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Se7enPro.Models;
 using Se7enPro.Services;
+using Se7enPro.Services.Foxy;
 
 namespace Se7enPro.ViewModels;
 
@@ -24,7 +26,8 @@ public enum SettingsTab
     Aether,
     Tor,
     Shard,
-    Chained
+    Chained,
+    Foxy
 }
 
 public sealed record SettingOptionItem : LocalizedItem
@@ -63,14 +66,9 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 {
     private readonly ISettingsService _settingsService;
 
-    /// <summary>
-    /// Custom DNS resolvers, shown on the Network tab.
-    ///
-    /// A separate object rather than more properties here: the parsing, the per-transport
-    /// validation and the probe loop are a self-contained concern, and keeping them out of
-    /// this already 3.4k-line view model is what stops it growing past comprehension.
-    /// </summary>
     public DnsSettingsViewModel Dns { get; }
+
+    public FoxySettingsViewModel Foxy { get; }
     private readonly IThemeService _themeService;
     private readonly ITunnelCoreManager _tunnel;
     private readonly IStartupRegistration _startup;
@@ -94,6 +92,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [NotifyPropertyChangedFor(nameof(IsTorTab))]
     [NotifyPropertyChangedFor(nameof(IsShardTab))]
     [NotifyPropertyChangedFor(nameof(IsChainedTab))]
+    [NotifyPropertyChangedFor(nameof(IsFoxyTab))]
     private SettingsTab _selectedTab = SettingsTab.General;
 
     public bool IsGeneralTab => SelectedTab == SettingsTab.General;
@@ -103,6 +102,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     public bool IsTorTab => SelectedTab == SettingsTab.Tor;
     public bool IsShardTab => SelectedTab == SettingsTab.Shard;
     public bool IsChainedTab => SelectedTab == SettingsTab.Chained;
+    public bool IsFoxyTab => SelectedTab == SettingsTab.Foxy;
 
     [RelayCommand]
     public void SelectTab(object? parameter)
@@ -117,6 +117,14 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         }
     }
 
+    partial void OnSelectedTabChanged(SettingsTab value)
+    {
+        if (value != SettingsTab.Foxy) return;
+        _ = Foxy.RefreshIfStaleAsync();
+    }
+
+    private readonly IdentityProvisioner _identityProvisioner;
+
     public SettingsViewModel(
         ISettingsService settingsService,
         IThemeService themeService,
@@ -125,7 +133,9 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         ICoreUpdateService coreUpdateService,
         IAppUpdateService appUpdateService,
         ShardEngine shardEngine,
-        V2RayEngine v2rayEngine)
+        V2RayEngine v2rayEngine,
+        FoxyAccountService foxyAccountService,
+        IdentityProvisioner identityProvisioner)
     {
         _settingsService = settingsService;
         _themeService = themeService;
@@ -135,26 +145,38 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _appUpdate = appUpdateService;
         _shardEngine = shardEngine;
         _v2rayEngine = v2rayEngine;
+        _identityProvisioner = identityProvisioner;
 
-        
-        
-        
         _aetherInstalledVersion = "v1.7.0";
         _aetherLatestVersion = _aetherInstalledVersion;
         _torInstalledVersion = "v0.4.9.11";
         _torLatestVersion = _torInstalledVersion;
-        _ = RefreshInstalledVersionsAsync();
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            _ = RefreshInstalledVersionsAsync();
+        }
+        else
+        {
+            dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                new Action(() => _ = RefreshInstalledVersionsAsync()));
+        }
 
         var s = _settingsService.Settings;
         _selectedTheme = s.Theme;
-        
-        
         _selectedLanguage = s.Language switch { "ru" => "ru", "zh" => "zh", _ => "en" };
         _appInstalledVersion = _appUpdate.InstalledVersion;
         _appLatestVersion = _appInstalledVersion;
         _selectedRegion = string.IsNullOrEmpty(s.EgressRegion) ? "auto" : s.EgressRegion;
         _setSystemProxy = s.SetSystemProxy;
         _disableTimeouts = s.DisableTimeouts;
+        if (s.UseCustomProxyPorts && s.LocalSocksProxyPort <= 0 && s.LocalHttpProxyPort <= 0)
+        {
+            s.LocalSocksProxyPort = FindFreePort(10808);
+            s.LocalHttpProxyPort = FindFreePort(s.LocalSocksProxyPort + 1, s.LocalSocksProxyPort);
+            _settingsService.Save();
+        }
         _socksPort = FormatListenPort(s.LocalSocksProxyPort);
         _httpPort = FormatListenPort(s.LocalHttpProxyPort);
         _useCustomProxyPorts = s.UseCustomProxyPorts;
@@ -168,11 +190,20 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         }
         _minimizeToTray = s.MinimizeToTray;
         _killSwitchEnabled = s.KillSwitchEnabled;
+        _autoReconnect = s.AutoReconnect;
         Dns = new DnsSettingsViewModel(settingsService);
+        Foxy = new FoxySettingsViewModel(settingsService, foxyAccountService);
         _selectedCloseAction = ResolveCloseAction(s.OnCloseAction);
+        _selectedTunMethod = NormalizeTunMethod(s.TunMethod);
         _allowLanConnections = s.AllowLanConnections;
         _lanProxyUsername = s.LanProxyUsername;
         _lanProxyPassword = s.LanProxyPassword;
+        if (_allowLanConnections &&
+            (!_lanAuthEnabled || string.IsNullOrWhiteSpace(_lanProxyUsername) || string.IsNullOrEmpty(_lanProxyPassword)))
+        {
+            EnsureLanCredentials();
+            _settingsService.Save();
+        }
         _ = DetectLanIpAsync();
 
         ParseUpstreamProxy(
@@ -245,6 +276,9 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         LoadAetherProtocolProfile(_selectedAetherProtocol);
         _aetherFragment = s.AetherFragment;
         _aetherGoolMode = s.AetherGoolMode ?? "masque";
+        _aetherIdentityAcquisitionMethod = NormalizeIdentityAcquisitionMethod(s.AetherIdentityAcquisitionMethod);
+        s.AetherIdentityAcquisitionMethod = _aetherIdentityAcquisitionMethod;
+        RefreshAetherIdentityStatus();
         _aetherEch = s.AetherEch;
         _aetherTlsVerify = s.AetherTlsVerify;
         _aetherTor = s.AetherTor;
@@ -253,6 +287,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _aetherFragmentWireguard = s.AetherFragmentWireguard;
         _aetherTlsCiphers = s.AetherTlsCiphers;
         _aetherTlsGroups = s.AetherTlsGroups;
+        _aetherTlsSigalgs = s.AetherTlsSigalgs ?? "";
+        _aetherTlsAlps = s.AetherTlsAlps ?? "";
+        _aetherMasqueSni = s.AetherMasqueSni ?? "";
+        _aetherUpstreamProxy = s.AetherUpstreamProxy ?? "";
         _aetherDisableGrease = s.AetherDisableGrease;
         _aetherEchDomain = s.AetherEchDomain;
         _aetherEchDns = s.AetherEchDns;
@@ -265,17 +303,46 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _selectedChainedOuterTransport = NormalizeChainedOuter(s.ChainedOuterTransport);
         _selectedChainedPsiphonOuterTransport = NormalizeChainedOuter(s.ChainedPsiphonOuterTransport);
         _selectedChainedTorOuterTransport = NormalizeChainedOuter(s.ChainedTorOuterTransport);
-        _selectedChainedSubMode = string.IsNullOrEmpty(s.ChainedSubMode) ? "psiphon_warp" : s.ChainedSubMode;
+        _selectedChainedFoxyOuterTransport = NormalizeChainedOuter(s.ChainedFoxyOuterTransport);
+        _selectedChainedLanternOuterTransport = NormalizeChainedOuter(s.ChainedLanternOuterTransport);
+        _selectedChainedVeepOuterTransport = NormalizeChainedOuter(s.ChainedVeepOuterTransport);
+        _selectedChainedSubMode = ConnectionMethodExtensions.ParseConnectionMethod(s.ConnectionMethod) switch
+        {
+            ConnectionMethod.PsiphonOverV2Ray => "psiphon_v2ray",
+            ConnectionMethod.TorOverWarp => "tor_warp",
+            ConnectionMethod.TorOverV2Ray => "tor_v2ray",
+            ConnectionMethod.WarpOverV2Ray => "warp_v2ray",
+            ConnectionMethod.FoxyOverWarp => "foxy_warp",
+            ConnectionMethod.FoxyOverV2Ray => "foxy_v2ray",
+            ConnectionMethod.PsiphonOverWarp => "psiphon_warp",
+            ConnectionMethod.PsiphonOverFoxy => "psiphon_foxy",
+            ConnectionMethod.PsiphonOverLantern => "psiphon_lantern",
+            ConnectionMethod.LanternOverWarp => "lantern_warp",
+            ConnectionMethod.VeepOverWarp => "veep_warp",
+            _ => s.ChainedSubMode is "psiphon_tor" or null or "" ? "psiphon_warp" : s.ChainedSubMode,
+        };
         _selectedV2RayCore = s.V2RayCore == "sing_box" ? "sing_box" : "xray";
         _v2RayInboundPort = (s.V2RayInboundPort > 0 ? s.V2RayInboundPort : 10808).ToString();
         _v2RayRouteDnsThroughV2Ray = s.V2RayRouteDnsThroughV2Ray;
         _v2RayEnableMux = s.V2RayEnableMux;
         _v2RayEnableFragment = s.V2RayEnableFragment;
+        _v2RayFragmentPackets = !string.IsNullOrWhiteSpace(s.V2RayFragmentPackets) ? s.V2RayFragmentPackets : "tlshello";
+        _v2RayFragmentLength = !string.IsNullOrWhiteSpace(s.V2RayFragmentLength) ? s.V2RayFragmentLength : "100-200";
+        _v2RayFragmentInterval = !string.IsNullOrWhiteSpace(s.V2RayFragmentInterval) ? s.V2RayFragmentInterval : "10-20";
+        _singBoxInboundPort = (s.SingBoxInboundPort > 0 ? s.SingBoxInboundPort : 10808).ToString();
+        _singBoxRouteDnsThroughCore = s.SingBoxRouteDnsThroughCore;
+        _singBoxEnableMux = s.SingBoxEnableMux;
+        _singBoxMuxProtocol = NormalizeSingBoxMuxProtocol(s.SingBoxMuxProtocol);
+        _singBoxMuxPadding = s.SingBoxMuxPadding;
+        _singBoxEnableFragment = s.SingBoxEnableFragment;
+        _singBoxFragmentFallbackDelay = !string.IsNullOrWhiteSpace(s.SingBoxFragmentFallbackDelay) ? s.SingBoxFragmentFallbackDelay : "500ms";
         LoadV2RayConfigsFromSettings();
 
         _shardCustomCfIp = s.ShardCustomCfIp ?? "";
         _shardSmartSplit = s.ShardSmartSplit;
         _shardRotateIp = s.ShardRotateIp;
+        _shardMtu = (s.ShardMtu is >= 576 and <= 1460 ? s.ShardMtu : 1280).ToString();
+        _shardAutoScanMtu = s.ShardAutoScanMtu;
         InitializeShardPoolStats();
 
         _settingsService.SettingsChanged += OnSettingsServiceChanged;
@@ -287,8 +354,11 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         Loc.Changed += () =>
         {
             InitCdnProviders(_settingsService.Settings.FrontedMeekCDNScanBuiltInSets);
-            
-            
+            foreach (var c in V2RayConfigs) c.RefreshLocale();
+            if (IsAddEditConfigDialogOpen)
+            {
+                AddEditConfigDialogTitle = IsEditingConfig ? Loc.Of("Edit Configuration") : Loc.Of("Add Configuration");
+            }
             if (!AppUpdateChecked) AppUpdateStatusText = Loc.Of("Click check to verify the latest version");
         };
         RefreshLanProxyInfo();
@@ -329,7 +399,11 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         try
         {
-            var aetherTask = Task.Run(() => _coreUpdateService.GetInstalledVersion("aether"));
+            var aetherTask = Task.Run(() =>
+            {
+                AetherExtras.RefreshStagedCoreIfStale();
+                return _coreUpdateService.GetInstalledVersion("aether");
+            });
             var torTask = Task.Run(() => _coreUpdateService.GetInstalledVersion("tor"));
             await Task.WhenAll(aetherTask, torTask);
 
@@ -448,6 +522,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         new() { Key = "dark", English = "Midnight Dark" },
         new() { Key = "light", English = "Frost Light" },
+        new() { Key = "system", English = "System Default" },
     };
 
     
@@ -460,8 +535,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     };
 
     [ObservableProperty] private string _selectedLanguage = "en";
-    partial void OnSelectedLanguageChanged(string value)
-    {
+    partial void OnSelectedLanguageChanged(string value)    {
         _settingsService.Settings.Language = value;
         _settingsService.Save();
 
@@ -477,8 +551,8 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private string _maintenanceToastMessage = "";
 
     
-    [ObservableProperty] private string _appInstalledVersion = "1.0.5";
-    [ObservableProperty] private string _appLatestVersion = "1.0.5";
+    [ObservableProperty] private string _appInstalledVersion = "1.0.7";
+    [ObservableProperty] private string _appLatestVersion = "1.0.7";
     [ObservableProperty] private bool _hasAppUpdate;
     [ObservableProperty] private bool _isCheckingAppUpdate;
     [ObservableProperty] private bool _appUpdateChecked;
@@ -543,7 +617,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.EgressRegion = value == "auto" ? "" : value;
         _settingsService.Save();
 
-        _ = _tunnel.RestartAsync();
+        RestartInBackground();
     }
 
     [ObservableProperty] private bool _setSystemProxy;
@@ -570,36 +644,92 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     partial void OnUseCustomProxyPortsChanged(bool value)
     {
         _settingsService.Settings.UseCustomProxyPorts = value;
+        if (value) FillStablePorts();
         _settingsService.Save();
         OnPropertyChanged(nameof(HasPortCollision));
+        RefreshPortIssue();
         OnPropertyChanged(nameof(DisplaySocksPort));
         OnPropertyChanged(nameof(DisplayHttpPort));
         RefreshLanProxyEndpoints();
-        _ = _tunnel.RestartAsync();
+        DebouncedRestartIfActive();
+    }
+
+    private void FillStablePorts()
+    {
+        var socks = ParseListenPort(SocksPort);
+        if (socks <= 0) socks = FindFreePort(10808);
+        var http = ParseListenPort(HttpPort);
+        if (http <= 0 || http == socks) http = FindFreePort(socks + 1, socks);
+
+        if (!string.Equals(SocksPort, socks.ToString(), StringComparison.Ordinal)) SocksPort = socks.ToString();
+        if (!string.Equals(HttpPort, http.ToString(), StringComparison.Ordinal)) HttpPort = http.ToString();
+
+        _settingsService.Settings.LocalSocksProxyPort = socks;
+        _settingsService.Settings.LocalHttpProxyPort = http;
+    }
+
+    private static int FindFreePort(int start, params int[] avoid)
+    {
+        for (var port = Math.Clamp(start, 1, 65535); port <= 65535 && port < start + 200; port++)
+        {
+            if (avoid.Contains(port)) continue;
+            try
+            {
+                var listener = new TcpListener(IPAddress.Loopback, port);
+                listener.Start();
+                listener.Stop();
+                return port;
+            }
+            catch { }
+        }
+        return Math.Clamp(start, 1, 65535);
     }
 
     [ObservableProperty] private bool _lanAuthEnabled;
     partial void OnLanAuthEnabledChanged(bool value)
     {
         _settingsService.Settings.LanAuthEnabled = value;
+        if (_applyingLanCredentials) return;
         _settingsService.Save();
         RefreshLanProxyEndpoints();
-        _ = _tunnel.RestartAsync();
+        RestartInBackground();
     }
 
     [ObservableProperty] private bool _allowLanConnections;
     partial void OnAllowLanConnectionsChanged(bool value)
     {
         _settingsService.Settings.AllowLanConnections = value;
+        if (value) EnsureLanCredentials();
         _settingsService.Save();
         RefreshLanProxyEndpoints();
-        _ = _tunnel.RestartAsync();
+        RestartInBackground();
+    }
+
+    private bool _applyingLanCredentials;
+
+    private static string NewLanSecret() =>
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(12)).ToLowerInvariant();
+
+    private void EnsureLanCredentials()
+    {
+        _applyingLanCredentials = true;
+        try
+        {
+            LanAuthEnabled = true;
+            if (string.IsNullOrWhiteSpace(LanProxyUsername)) LanProxyUsername = "se7en";
+            if (string.IsNullOrEmpty(LanProxyPassword)) LanProxyPassword = NewLanSecret();
+        }
+        finally
+        {
+            _applyingLanCredentials = false;
+        }
     }
 
     [ObservableProperty] private string _lanProxyUsername = "";
     partial void OnLanProxyUsernameChanged(string value)
     {
         _settingsService.Settings.LanProxyUsername = (value ?? "").Trim();
+        if (_applyingLanCredentials) return;
         DebouncedSave();
         RefreshLanProxyEndpoints();
         DebouncedRestartIfActive();
@@ -609,6 +739,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     partial void OnLanProxyPasswordChanged(string value)
     {
         _settingsService.Settings.LanProxyPassword = value ?? "";
+        if (_applyingLanCredentials) return;
         DebouncedSave();
         RefreshLanProxyEndpoints();
         DebouncedRestartIfActive();
@@ -651,7 +782,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             if (hasUser || hasPass)
             {
                 var u = hasUser ? LanProxyUsername : "none";
-                var p = hasPass ? LanProxyPassword : "none";
+                var p = hasPass ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "none";
                 return $"{u} : {p}";
             }
             return Loc.Of("None (Open Access)");
@@ -700,6 +831,16 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [RelayCommand]
     private async Task CopyAuthAsync()
     {
+        if (!string.IsNullOrEmpty(LanProxyPassword))
+        {
+            var confirmed = await Ui.ConfirmAsync(
+                Loc.T("CopyCredentialsTitle", "Copy credentials"),
+                Loc.T("CopyCredentialsWarning",
+                    "The username and password will be placed on the Windows clipboard, " +
+                    "where other applications can read them until it is cleared. Continue?"));
+            if (!confirmed) return;
+        }
+
         var text = $"{LanProxyUsername}:{LanProxyPassword}";
         SetClipboardSafe(text);
         IsAuthCopied = true;
@@ -714,7 +855,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         await Task.Run(() =>
         {
             var ip = DetectLocalIPv4();
-            Ui.Invoke(() =>
+            Ui.Post(() =>
             {
                 HostLanIp = ip;
                 RefreshLanProxyEndpoints();
@@ -730,7 +871,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             {
                 if (ni.OperationalStatus != OperationalStatus.Up ||
                     ni.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                    ni.Name.Equals("se7en_tun", StringComparison.OrdinalIgnoreCase) ||
                     ni.Description.Contains("Wintun", StringComparison.OrdinalIgnoreCase) ||
+                    ni.Description.Contains("Zeptun", StringComparison.OrdinalIgnoreCase) ||
+                    ni.Description.Contains("Mihomo", StringComparison.OrdinalIgnoreCase) ||
                     ni.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -774,6 +918,27 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         if (v == "minimize") v = "tray";
         return CloseActions.FirstOrDefault(o => o.Value == v) ?? CloseActions[0];
     }
+
+    public ObservableCollection<SettingOptionItem> TunMethodOptions { get; } = new()
+    {
+        new() { Key = "wintun", English = "Wintun", Localizable = false },
+        new() { Key = "zeptun", English = "Zeptun", Localizable = false },
+        new() { Key = "mihomo", English = "Mihomo", Localizable = false },
+    };
+
+    [ObservableProperty] private string _selectedTunMethod = "wintun";
+    partial void OnSelectedTunMethodChanged(string value)
+    {
+        var normalized = NormalizeTunMethod(value);
+        if (!string.Equals(_settingsService.Settings.TunMethod, normalized, StringComparison.Ordinal))
+        {
+            _settingsService.Settings.TunMethod = normalized;
+            _settingsService.Save();
+        }
+    }
+
+    public static string NormalizeTunMethod(string? value) =>
+        WintunTunManager.NormalizeTunMethod(value);
 
     [RelayCommand]
     private async Task ClearNetworkCacheAsync()
@@ -838,6 +1003,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         try
         {
             var def = new UserSettings();
+            _settingsService.ResetToDefaults();
             _settingsService.Settings.Theme = def.Theme;
             _settingsService.Settings.Language = def.Language;
             _settingsService.Settings.VisualEffects = def.VisualEffects;
@@ -845,7 +1011,9 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             _settingsService.Settings.StartWithWindows = def.StartWithWindows;
             _settingsService.Settings.MinimizeToTray = def.MinimizeToTray;
             _settingsService.Settings.OnCloseAction = def.OnCloseAction;
+            _settingsService.Settings.TunMethod = def.TunMethod;
             _settingsService.Settings.KillSwitchEnabled = def.KillSwitchEnabled;
+            _settingsService.Settings.AutoReconnect = def.AutoReconnect;
             _settingsService.Settings.CustomDnsUdp = def.CustomDnsUdp;
             _settingsService.Settings.CustomDnsDot = def.CustomDnsDot;
             _settingsService.Settings.CustomDnsDoh = def.CustomDnsDoh;
@@ -900,6 +1068,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             _settingsService.Settings.AetherFragmentWireguard = def.AetherFragmentWireguard;
             _settingsService.Settings.AetherTlsCiphers = def.AetherTlsCiphers;
             _settingsService.Settings.AetherTlsGroups = def.AetherTlsGroups;
+            _settingsService.Settings.AetherTlsSigalgs = def.AetherTlsSigalgs;
+            _settingsService.Settings.AetherTlsAlps = def.AetherTlsAlps;
+            _settingsService.Settings.AetherMasqueSni = def.AetherMasqueSni;
+            _settingsService.Settings.AetherUpstreamProxy = def.AetherUpstreamProxy;
             _settingsService.Settings.AetherDisableGrease = def.AetherDisableGrease;
             _settingsService.Settings.AetherEchDomain = def.AetherEchDomain;
             _settingsService.Settings.AetherEchDns = def.AetherEchDns;
@@ -907,6 +1079,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             _settingsService.Settings.AetherFragmentDelay = def.AetherFragmentDelay;
             _settingsService.Settings.AetherMasqueTransport = def.AetherMasqueTransport;
             _settingsService.Settings.AetherMasqueQuic = def.AetherMasqueQuic;
+            _settingsService.Settings.AetherIdentityAcquisitionMethod = def.AetherIdentityAcquisitionMethod;
+            _settingsService.Settings.V2RayFragmentPackets = def.V2RayFragmentPackets;
+            _settingsService.Settings.V2RayFragmentLength = def.V2RayFragmentLength;
+            _settingsService.Settings.V2RayFragmentInterval = def.V2RayFragmentInterval;
             _settingsService.Save();
 
             SelectedTheme = def.Theme;
@@ -915,7 +1091,9 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             StartWithWindows = def.StartWithWindows;
             MinimizeToTray = def.MinimizeToTray;
             SelectedCloseAction = ResolveCloseAction(def.OnCloseAction);
+            SelectedTunMethod = NormalizeTunMethod(def.TunMethod);
             KillSwitchEnabled = def.KillSwitchEnabled;
+            AutoReconnect = def.AutoReconnect;
             UseCustomProxyPorts = def.UseCustomProxyPorts;
             LanAuthEnabled = def.LanAuthEnabled;
             SocksPort = FormatListenPort(def.LocalSocksProxyPort);
@@ -947,10 +1125,86 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             _settingsService.Settings.ShardCustomCfIp = def.ShardCustomCfIp;
             _settingsService.Settings.ShardSmartSplit = def.ShardSmartSplit;
             _settingsService.Settings.ShardRotateIp = def.ShardRotateIp;
+            _settingsService.Settings.ShardMtu = def.ShardMtu;
+            _settingsService.Settings.ShardAutoScanMtu = def.ShardAutoScanMtu;
 
             ShardCustomCfIp = def.ShardCustomCfIp;
             ShardSmartSplit = def.ShardSmartSplit;
             ShardRotateIp = def.ShardRotateIp;
+            ShardMtu = def.ShardMtu.ToString();
+            ShardAutoScanMtu = def.ShardAutoScanMtu;
+
+            LanProxyUsername = "";
+            LanProxyPassword = "";
+            ProxyHost = "";
+            ProxyPort = "";
+            ProxyUsername = "";
+            ProxyPassword = "";
+            SelectedProxyScheme = "http";
+            UpstreamProxyEnabled = true;
+            SelectedTorExitCountry = "auto";
+            TorBridges = "";
+
+            SetSystemProxy = def.SetSystemProxy;
+            DisableTimeouts = def.DisableTimeouts;
+
+            SelectedChainedOuterTransport = NormalizeChainedOuter(def.ChainedOuterTransport);
+            SelectedChainedPsiphonOuterTransport = NormalizeChainedOuter(def.ChainedPsiphonOuterTransport);
+            SelectedChainedTorOuterTransport = NormalizeChainedOuter(def.ChainedTorOuterTransport);
+            SelectedChainedFoxyOuterTransport = NormalizeChainedOuter(def.ChainedFoxyOuterTransport);
+            SelectedChainedLanternOuterTransport = NormalizeChainedOuter(def.ChainedLanternOuterTransport);
+            SelectedChainedVeepOuterTransport = NormalizeChainedOuter(def.ChainedVeepOuterTransport);
+            SelectedChainedSubMode = string.IsNullOrEmpty(def.ChainedSubMode) ? "psiphon_warp" : def.ChainedSubMode;
+
+            SelectedV2RayCore = def.V2RayCore == "sing_box" ? "sing_box" : "xray";
+            V2RayInboundPort = (def.V2RayInboundPort > 0 ? def.V2RayInboundPort : 10808).ToString();
+            V2RayRouteDnsThroughV2Ray = def.V2RayRouteDnsThroughV2Ray;
+            V2RayEnableMux = def.V2RayEnableMux;
+            V2RayEnableFragment = def.V2RayEnableFragment;
+            V2RayFragmentPackets = def.V2RayFragmentPackets ?? "tlshello";
+            V2RayFragmentLength = def.V2RayFragmentLength ?? "100-200";
+            V2RayFragmentInterval = def.V2RayFragmentInterval ?? "10-20";
+            SingBoxInboundPort = (def.SingBoxInboundPort > 0 ? def.SingBoxInboundPort : 10808).ToString();
+            SingBoxRouteDnsThroughCore = def.SingBoxRouteDnsThroughCore;
+            SingBoxEnableMux = def.SingBoxEnableMux;
+            SingBoxMuxProtocol = NormalizeSingBoxMuxProtocol(def.SingBoxMuxProtocol);
+            SingBoxMuxPadding = def.SingBoxMuxPadding;
+            SingBoxEnableFragment = def.SingBoxEnableFragment;
+            SingBoxFragmentFallbackDelay = def.SingBoxFragmentFallbackDelay ?? "500ms";
+            AetherIdentityAcquisitionMethod = NormalizeIdentityAcquisitionMethod(def.AetherIdentityAcquisitionMethod);
+            LoadV2RayConfigsFromSettings();
+            Foxy.LoadFromSettings();
+
+            _suppressAetherSideEffects = true;
+            try
+            {
+                AetherGoolMode = def.AetherGoolMode ?? "masque";
+                AetherEch = def.AetherEch;
+                AetherTlsVerify = def.AetherTlsVerify;
+                AetherTor = def.AetherTor;
+                AetherTorRelays = def.AetherTorRelays;
+                AetherExitLocSecs = def.AetherExitLocSecs > 0 ? def.AetherExitLocSecs.ToString() : "";
+                AetherFragmentWireguard = def.AetherFragmentWireguard;
+                AetherTlsCiphers = def.AetherTlsCiphers;
+                AetherTlsGroups = def.AetherTlsGroups;
+                AetherTlsSigalgs = def.AetherTlsSigalgs ?? "";
+                AetherTlsAlps = def.AetherTlsAlps ?? "";
+                AetherMasqueSni = def.AetherMasqueSni ?? "";
+                AetherUpstreamProxy = def.AetherUpstreamProxy ?? "";
+                AetherDisableGrease = def.AetherDisableGrease;
+                AetherEchDomain = def.AetherEchDomain;
+                AetherEchDns = def.AetherEchDns;
+            }
+            finally
+            {
+                _suppressAetherSideEffects = false;
+                RaiseAetherProtocolVisibility();
+            }
+
+            RefreshLanProxyEndpoints();
+            _settingsService.Save();
+
+            DebouncedRestartIfActive();
 
             ShowMaintenanceToast(Loc.Of("Settings restored to factory defaults"));
         }
@@ -1084,22 +1338,37 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         AppUpdateStatusText = Loc.Of("Installing... Se7en Pro will restart by itself.");
         AppUpdateStatusColor = "#F59E0B";
 
+        var wasConnected = _tunnel.State != ConnectionState.Disconnected;
         try
         {
             
             
-            if (_tunnel.State != ConnectionState.Disconnected) await _tunnel.StopAsync();
+            if (wasConnected) await _tunnel.StopAsync();
 
-            await _appUpdate.InstallAsync(_appDownloadedFile, release.Version);
+            var helperStarted = await _appUpdate.InstallAsync(_appDownloadedFile, release.Version);
+            if (!helperStarted)
+            {
+                AppUpdatePhase = UpdatePhase.ReadyToInstall;
+                AppUpdateStatusText = Loc.Of("The update helper did not start. Nothing was installed.");
+                AppUpdateStatusColor = "#EF4444";
+                await RestartTunnelAfterUpdateAsync(wasConnected);
+                return;
+            }
             await Task.Delay(600);
-            ForceExitCurrentInstance();
-        }
+            ForceExitCurrentInstance();        }
         catch (Exception ex)
         {
             AppUpdatePhase = UpdatePhase.ReadyToInstall;
             AppUpdateStatusText = ex.Message;
             AppUpdateStatusColor = "#EF4444";
+            await RestartTunnelAfterUpdateAsync(wasConnected);
         }
+    }
+
+    private async Task RestartTunnelAfterUpdateAsync(bool wasConnected)
+    {
+        if (!wasConnected || _tunnel.State != ConnectionState.Disconnected) return;
+        try { await _tunnel.StartAsync(); } catch { }
     }
 
     private static void ForceExitCurrentInstance() => Ui.ExitWithoutPrompt();
@@ -1128,8 +1397,15 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         try
         {
-            var instParts = installed.Split('.').Select(p => int.TryParse(p, out var n) ? n : 0).ToList();
-            var latParts = latest.Split('.').Select(p => int.TryParse(p, out var n) ? n : 0).ToList();
+            static int Segment(string p)
+            {
+                p = p.Trim();
+                var i = 0;
+                while (i < p.Length && char.IsDigit(p[i])) i++;
+                return int.TryParse(p[..i], out var n) ? n : 0;
+            }
+            var instParts = installed.Trim().TrimStart('v', 'V').Split('.').Select(Segment).ToList();
+            var latParts = latest.Trim().TrimStart('v', 'V').Split('.').Select(Segment).ToList();
             var len = Math.Max(instParts.Count, latParts.Count);
             while (instParts.Count < len) instParts.Add(0);
             while (latParts.Count < len) latParts.Add(0);
@@ -1214,15 +1490,18 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
         private void DebouncedSave() => _saveDebouncer.Schedule(() => _settingsService.Save());
 
-        private void DebouncedRestartIfActive()
+    public void FlushPendingWrites()
     {
-        if (_tunnel.State is not (Se7enPro.Models.ConnectionState.Connected or Se7enPro.Models.ConnectionState.Connecting))
-        {
-            
-            return;
-        }
+        _saveDebouncer.Flush();
+        Dns.Flush();
+    }
 
-        _restartDebouncer.Schedule(() => _ = _tunnel.RestartAsync());
+    private void RestartInBackground()
+    {
+    }
+
+    private void DebouncedRestartIfActive()
+    {
     }
 
         [ObservableProperty] private bool _upstreamProxyEnabled = true;
@@ -1290,8 +1569,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private string _socksPort = "";
     partial void OnSocksPortChanged(string value)
     {
-        _settingsService.Settings.LocalSocksProxyPort = ParseListenPort(value);
-        DebouncedSave();
+        ApplyPortEdit(value, isSocks: true);
         OnPropertyChanged(nameof(DisplaySocksPort));
         OnPropertyChanged(nameof(HasPortCollision));
         RefreshLanProxyEndpoints();
@@ -1300,11 +1578,68 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private string _httpPort = "";
     partial void OnHttpPortChanged(string value)
     {
-        _settingsService.Settings.LocalHttpProxyPort = ParseListenPort(value);
-        DebouncedSave();
+        ApplyPortEdit(value, isSocks: false);
         OnPropertyChanged(nameof(DisplayHttpPort));
         OnPropertyChanged(nameof(HasPortCollision));
         RefreshLanProxyEndpoints();
+    }
+
+    private void ApplyPortEdit(string? text, bool isSocks)
+    {
+        if (!IsValidPortText(text))
+        {
+            RefreshPortIssue();
+            return;
+        }
+
+        if (isSocks) _settingsService.Settings.LocalSocksProxyPort = ParseListenPort(text);
+        else _settingsService.Settings.LocalHttpProxyPort = ParseListenPort(text);
+
+        DebouncedSave();
+        RefreshPortIssue();
+    }
+
+    private static bool IsValidPortText(string? text)
+        => string.IsNullOrWhiteSpace(text)
+           || string.Equals(text.Trim(), "0", StringComparison.Ordinal)
+           || ParseListenPort(text) > 0;
+
+    [ObservableProperty] private string _portIssue = "";
+
+    public bool HasPortIssue => PortIssue.Length > 0;
+
+    public bool HasPortProblem => HasPortCollision || HasPortIssue;
+
+    public string PortProblemText =>
+        HasPortIssue ? PortIssue : Loc.Of("SOCKS and HTTP ports cannot be the same");
+
+    private void RefreshPortIssue()
+    {
+        if (!UseCustomProxyPorts)
+        {
+            PortIssue = "";
+        }
+        else if (!IsValidPortText(SocksPort))
+        {
+            PortIssue = Loc.Of("SOCKS port must be a number between 1 and 65535");
+        }
+        else if (!IsValidPortText(HttpPort))
+        {
+            PortIssue = Loc.Of("HTTP port must be a number between 1 and 65535");
+        }
+        else
+        {
+            PortIssue = "";
+        }
+
+        OnPropertyChanged(nameof(HasPortProblem));
+        OnPropertyChanged(nameof(PortProblemText));
+    }
+
+    partial void OnPortIssueChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasPortIssue));
+        OnPropertyChanged(nameof(HasPortProblem));
     }
 
     public bool HasPortCollision
@@ -1360,14 +1695,20 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
     [ObservableProperty] private string _saveButtonText = Loc.Of("Save Settings");
 
+    private bool _suppressSyncSaves;
+
     private void OnSettingsServiceChanged(object? sender, EventArgs e)
     {
+        if (_suppressSyncSaves) return;
         if (!Ui.CheckAccess())
         {
             Ui.Post(() => OnSettingsServiceChanged(sender, e));
             return;
         }
 
+        _suppressSyncSaves = true;
+        try
+        {
         var s = _settingsService.Settings;
         if (!string.Equals(SelectedTheme, s.Theme, StringComparison.Ordinal))
         {
@@ -1510,6 +1851,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             TorBridges = s.TorBridges ?? "";
         }
         finally { _suppressTorSideEffects = false; }
+        RefreshTorExitWarning();
 
         if (!string.Equals(ShardCustomCfIp, s.ShardCustomCfIp ?? "", StringComparison.Ordinal))
         {
@@ -1523,6 +1865,18 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         {
             ShardRotateIp = s.ShardRotateIp;
         }
+        var shardMtuText = (s.ShardMtu is >= 576 and <= 1460 ? s.ShardMtu : 1280).ToString();
+        if (ShardMtu != shardMtuText)
+        {
+            ShardMtu = shardMtuText;
+        }
+        if (ShardAutoScanMtu != s.ShardAutoScanMtu)
+        {
+            ShardAutoScanMtu = s.ShardAutoScanMtu;
+        }
+        Foxy.LoadFromSettings();
+        }
+        finally { _suppressSyncSaves = false; }
     }
 
     private bool _suppressCdnIpListSideEffects;
@@ -1531,6 +1885,15 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [RelayCommand]
     private async Task SaveAsync()
     {
+        RefreshPortIssue();
+        if (HasPortProblem)
+        {
+            SaveButtonText = Loc.Of("Fix the highlighted fields first");
+            await Task.Delay(2500);
+            SaveButtonText = Loc.Of("Save Settings");
+            return;
+        }
+
         var scheme = NormalizeScheme(SelectedProxyScheme);
         var user = (ProxyUsername ?? "").Trim();
 
@@ -1554,9 +1917,9 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         ProxyUsername = user;
         ProxyPassword = pass;
 
-        _settingsService.Save();
-
-        SaveButtonText = Loc.Of("Saved!");
+        SaveButtonText = _settingsService.Save()
+            ? Loc.Of("Saved!")
+            : Loc.Of("Could not save settings");
         await Task.Delay(2000);
         SaveButtonText = Loc.Of("Save Settings");
     }
@@ -1675,6 +2038,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private string _conduitMode = "auto";
     partial void OnConduitModeChanged(string value)
     {
+        if (_suppressSyncSaves) return;
         _settingsService.Settings.ConduitMode = value ?? "auto";
         _settingsService.Save();
         OnPropertyChanged(nameof(IsConduitPeerMode));
@@ -1700,6 +2064,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private bool _beastMode;
     partial void OnBeastModeChanged(bool value)
     {
+        if (_suppressSyncSaves) return;
         _settingsService.Settings.BeastMode = value;
         _settingsService.Save();
     }
@@ -1921,7 +2286,15 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private bool _killSwitchEnabled;
     partial void OnKillSwitchEnabledChanged(bool value)
     {
+        if (_suppressSyncSaves) return;
         _settingsService.Settings.KillSwitchEnabled = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _autoReconnect;
+    partial void OnAutoReconnectChanged(bool value)
+    {
+        _settingsService.Settings.AutoReconnect = value;
         _settingsService.Save();
     }
 
@@ -1931,34 +2304,28 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private string _selectedConnectionMethod = "masque";
     partial void OnSelectedConnectionMethodChanged(string value)
     {
-        RaiseMethodVisibility();
-        if (_suppressMethodSideEffects) return;
-        var token = ConnectionMethodExtensions.ParseConnectionMethod(value).ToToken();
-        _settingsService.Settings.ConnectionMethod = token;
-        _settingsService.Save();
-
-        if (token is "masque" or "wireguard" or "warp_on_warp" or "masque_in_masque")
+        if (!_suppressMethodSideEffects)
         {
-            var targetProto = token switch
+            var token = ConnectionMethodExtensions.ParseConnectionMethod(value).ToToken();
+            _settingsService.Settings.ConnectionMethod = token;
+            _settingsService.Save();
+
+            if (token is "masque" or "wireguard" or "warp_on_warp" or "masque_in_masque")
             {
-                "wireguard" => "wireguard",
-                "warp_on_warp" => "warp",
-                "masque_in_masque" => "mim",
-                _ => "masque",
-            };
-            if (SelectedAetherProtocol != targetProto)
-            {
-                SelectedAetherProtocol = targetProto;
+                var targetProto = token switch
+                {
+                    "wireguard" => "wireguard",
+                    "warp_on_warp" => "warp",
+                    "masque_in_masque" => "mim",
+                    _ => "masque",
+                };
+                if (SelectedAetherProtocol != targetProto)
+                {
+                    SelectedAetherProtocol = targetProto;
+                }
             }
         }
-
-        if (_tunnel.State == ConnectionState.Connected)
-        {
-            _ = Task.Run(async () =>
-            {
-                try { await _tunnel.RestartAsync(); } catch { }
-            });
-        }
+        RaiseMethodVisibility();
     }
 
     private void RaiseMethodVisibility()
@@ -1969,6 +2336,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsMasqueMethod));
         OnPropertyChanged(nameof(IsTorMethod));
         OnPropertyChanged(nameof(IsChainedMethod));
+        OnPropertyChanged(nameof(IsChainedV2Ray));
         OnPropertyChanged(nameof(SelectedProtocolMode));
         OnPropertyChanged(nameof(IsAutoProtocolMode));
         OnPropertyChanged(nameof(IsDirectMode));
@@ -1983,6 +2351,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         OnPropertyChanged(nameof(DisplaySocksPort));
         OnPropertyChanged(nameof(DisplayHttpPort));
         RaiseAetherProtocolVisibility();
+        Foxy.RefreshMethodAvailability();
     }
 
     public void RaiseAetherProtocolVisibility()
@@ -1991,22 +2360,27 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsAetherWireguardSelected));
         OnPropertyChanged(nameof(IsAetherWiwSelected));
         OnPropertyChanged(nameof(IsAetherMimSelected));
+        OnPropertyChanged(nameof(ShowsMasqueOptions));
+        OnPropertyChanged(nameof(ShowsTlsExtras));
+        OnPropertyChanged(nameof(AetherModeTitle));
         OnPropertyChanged(nameof(ManualEndpointHint));
         OnPropertyChanged(nameof(ManualEndpointDescription));
         OnPropertyChanged(nameof(CanShapeTls));
         OnPropertyChanged(nameof(CanShapeTls12));
         OnPropertyChanged(nameof(NoTlsSurfaceHint));
+        OnPropertyChanged(nameof(IsAetherFastMode));
+        OnPropertyChanged(nameof(IsAetherBalancedMode));
     }
 
     private ConnectionMethod CurrentMethod =>
         ConnectionMethodExtensions.ParseConnectionMethod(SelectedConnectionMethod);
 
     public bool IsStandalonePsiphon => CurrentMethod == ConnectionMethod.Psiphon;
-    public bool IsPsiphonMethod => CurrentMethod is ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray;
-    public bool IsAetherMethod => CurrentMethod.IsAether() || CurrentMethod is ConnectionMethod.PsiphonOverWarp or ConnectionMethod.TorOverWarp;
+    public bool IsPsiphonMethod => CurrentMethod is ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.PsiphonOverFoxy or ConnectionMethod.PsiphonOverLantern;
+    public bool IsAetherMethod => CurrentMethod.IsAether() || CurrentMethod is ConnectionMethod.PsiphonOverWarp or ConnectionMethod.TorOverWarp or ConnectionMethod.FoxyOverWarp or ConnectionMethod.LanternOverWarp or ConnectionMethod.VeepOverWarp or ConnectionMethod.WarpOverV2Ray;
     public bool IsMasqueMethod =>
         CurrentMethod == ConnectionMethod.Masque ||
-        (CurrentMethod is ConnectionMethod.PsiphonOverWarp or ConnectionMethod.TorOverWarp && SelectedChainedOuterTransport is "auto" or "masque");
+        (CurrentMethod is ConnectionMethod.PsiphonOverWarp or ConnectionMethod.TorOverWarp or ConnectionMethod.FoxyOverWarp or ConnectionMethod.LanternOverWarp or ConnectionMethod.VeepOverWarp && SelectedChainedOuterTransport is "auto" or "masque");
     public bool IsTorMethod => CurrentMethod is ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray;
     public bool IsChainedMethod => CurrentMethod.IsChained();
     public bool SupportsCustomProxyPorts => true;
@@ -2015,32 +2389,6 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
     private void RestartIfActive(ConnectionMethod owner)
     {
-        if (_tunnel.State is not (ConnectionState.Connected or ConnectionState.Connecting))
-            return;
-
-        var activeMethod = ConnectionMethodExtensions.ParseConnectionMethod(_settingsService.Settings.ConnectionMethod);
-        bool isAffected = false;
-        if (owner == ConnectionMethod.Psiphon)
-        {
-            isAffected = activeMethod is ConnectionMethod.Psiphon or ConnectionMethod.PsiphonOverWarp or ConnectionMethod.PsiphonOverV2Ray;
-        }
-        else if (owner.IsAether())
-        {
-            isAffected = activeMethod == owner || (activeMethod.IsAether() && (owner is ConnectionMethod.Masque or ConnectionMethod.WireGuard or ConnectionMethod.WarpOnWarp or ConnectionMethod.MasqueInMasque));
-        }
-        else if (owner == ConnectionMethod.Tor)
-        {
-            isAffected = activeMethod is ConnectionMethod.Tor or ConnectionMethod.TorOverWarp or ConnectionMethod.TorOverV2Ray;
-        }
-        else
-        {
-            isAffected = activeMethod == owner;
-        }
-
-        if (isAffected)
-        {
-            _ = _tunnel.RestartAsync();
-        }
     }
 
     
@@ -2049,7 +2397,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         new("masque", "MASQUE"),
         new("wireguard", "WireGuard"),
-        new("warp", "Warp (WARP-on-WARP)"),
+        new("warp", "Gool"),
         new("mim", "MASQUE on MASQUE (MiM)"),
     };
 
@@ -2100,10 +2448,73 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
-    public bool IsAetherMasqueSelected => SelectedAetherProtocol is "masque";
+    public bool IsAetherFastMode
+    {
+        get =>
+            string.Equals(AetherScanMode, "turbo", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(AetherNoize, ShowsMasqueOptions ? "firewall" : "balanced", StringComparison.OrdinalIgnoreCase)
+            && (!ShowsMasqueOptions || !AetherFragment);
+        set
+        {
+            if (value && !IsAetherFastMode)
+                ApplyAetherPresetMode(fast: true);
+        }
+    }
+
+    public bool IsAetherBalancedMode
+    {
+        get =>
+            string.Equals(AetherScanMode, "balanced", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(AetherNoize, "balanced", StringComparison.OrdinalIgnoreCase)
+            && (!ShowsMasqueOptions || AetherFragment);
+        set
+        {
+            if (value && !IsAetherBalancedMode)
+                ApplyAetherPresetMode(fast: false);
+        }
+    }
+
+    [RelayCommand]
+    private void SelectAetherPresetMode(string? mode) =>
+        ApplyAetherPresetMode(!string.Equals(mode, "balanced", StringComparison.OrdinalIgnoreCase));
+
+    private void ApplyAetherPresetMode(bool fast)
+    {
+        var s = _settingsService.Settings;
+        s.ApplyAetherPreset(fast);
+
+        _suppressAetherSideEffects = true;
+        try
+        {
+            AetherFragment = s.AetherFragment;
+        }
+        finally
+        {
+            _suppressAetherSideEffects = false;
+        }
+
+        LoadAetherProtocolProfile(SelectedAetherProtocol);
+        _settingsService.Save();
+        RaiseAetherProtocolVisibility();
+        RestartIfActive(ConnectionMethod.Masque);
+    }
+
+    public bool IsAetherMasqueSelected => SelectedAetherProtocol is "masque" or "mim" or "masque_in_masque" || (IsAetherWiwSelected && !IsClassicGool);
     public bool IsAetherWireguardSelected => SelectedAetherProtocol is "wireguard";
     public bool IsAetherWiwSelected => SelectedAetherProtocol is "warp" or "warp_on_warp";
     public bool IsAetherMimSelected => SelectedAetherProtocol is "mim" or "masque_in_masque";
+
+    public bool ShowsMasqueOptions => SelectedAetherProtocol is "masque" or "mim" or "masque_in_masque";
+
+    public bool ShowsTlsExtras => ShowsMasqueOptions || (IsAetherWiwSelected && !IsClassicGool);
+
+    public string AetherModeTitle => SelectedAetherProtocol switch
+    {
+        "wireguard" => "WireGuard options",
+        "warp" or "warp_on_warp" => "gool options",
+        "mim" or "masque_in_masque" => "MASQUE on MASQUE options",
+        _ => "MASQUE options",
+    };
 
     public string ManualEndpointHint => SelectedAetherProtocol switch
     {
@@ -2158,6 +2569,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                     AetherExitLoc = !string.IsNullOrWhiteSpace(s.AetherExitLocMasque) ? s.AetherExitLocMasque : s.AetherExitLoc;
                     break;
             }
+
+            AetherMtu = s.GetAetherMtu(MethodForAetherProtocol(proto)).ToString();
+            AetherMtuStatus = "";
+            OnPropertyChanged(nameof(HasAetherExitLoc));
         }
         finally
         {
@@ -2219,7 +2634,9 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
-    [ObservableProperty] private string _aetherExitLoc = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAetherExitLoc))]
+    private string _aetherExitLoc = "";
     partial void OnAetherExitLocChanged(string value)
     {
         if (_suppressAetherSideEffects) return;
@@ -2245,7 +2662,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         new("ironclad", "Ironclad (Ultra Resilient)"),
     };
 
-    [ObservableProperty] private string _aetherScanMode = "balanced";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAetherFastMode))]
+    [NotifyPropertyChangedFor(nameof(IsAetherBalancedMode))]
+    private string _aetherScanMode = "turbo";
     partial void OnAetherScanModeChanged(string value)
     {
         if (_suppressAetherSideEffects) return;
@@ -2273,7 +2693,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         new("aggressive", "Aggressive (Deep DPI Bypass)"),
     };
 
-    [ObservableProperty] private string _aetherNoize = "balanced";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAetherFastMode))]
+    [NotifyPropertyChangedFor(nameof(IsAetherBalancedMode))]
+    private string _aetherNoize = "balanced";
     partial void OnAetherNoizeChanged(string value)
     {
         if (_suppressAetherSideEffects) return;
@@ -2316,6 +2739,67 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
+    private static ConnectionMethod MethodForAetherProtocol(string? proto) => proto switch
+    {
+        "wireguard" => ConnectionMethod.WireGuard,
+        "warp" or "warp_on_warp" => ConnectionMethod.WarpOnWarp,
+        "mim" or "masque_in_masque" => ConnectionMethod.MasqueInMasque,
+        _ => ConnectionMethod.Masque,
+    };
+
+    private bool _normalizingAetherMtu;
+
+    [ObservableProperty] private string _aetherMtu = "1280";
+    partial void OnAetherMtuChanged(string value)
+    {
+        if (_suppressAetherSideEffects || _normalizingAetherMtu) return;
+        var parsed = int.TryParse((value ?? "").Trim(), out var mtu);
+        mtu = Math.Clamp(parsed ? mtu : 1280, 576, 1380);
+        _settingsService.Settings.SetAetherMtu(MethodForAetherProtocol(SelectedAetherProtocol), mtu);
+
+        if ((value ?? "").Trim() != mtu.ToString())
+        {
+            _normalizingAetherMtu = true;
+            try { AetherMtu = mtu.ToString(); }
+            finally { _normalizingAetherMtu = false; }
+        }
+
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.Masque);
+    }
+
+    [ObservableProperty] private bool _isScanningAetherMtu;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAetherMtuStatus))]
+    private string _aetherMtuStatus = "";
+    public bool HasAetherMtuStatus => AetherMtuStatus.Length > 0;
+
+    [RelayCommand]
+    private async Task ScanAetherMtuAsync()
+    {
+        if (IsScanningAetherMtu) return;
+        IsScanningAetherMtu = true;
+        AetherMtuStatus = "";
+        try
+        {
+            var overhead = MethodForAetherProtocol(SelectedAetherProtocol) switch
+            {
+                ConnectionMethod.WireGuard => 60,
+                ConnectionMethod.WarpOnWarp => 280,
+                ConnectionMethod.MasqueInMasque => 392,
+                _ => 196,
+            };
+            var best = await MtuProbe.FindBestTunnelMtuAsync(overhead, 576, 1380);
+            if (best is int mtu) AetherMtu = mtu.ToString();
+            else AetherMtuStatus = Loc.Of("No reply — ICMP may be blocked. Enter the MTU manually.");
+        }
+        finally
+        {
+            IsScanningAetherMtu = false;
+        }
+    }
+
     [ObservableProperty] private bool _aetherCacheEdges = true;
     partial void OnAetherCacheEdgesChanged(bool value)
     {
@@ -2324,15 +2808,13 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.Masque);
     }
-
-    
     
     
     
     public ObservableCollection<SettingOptionItem> AetherMasqueTransports { get; } = new()
     {
-        new("h2", "HTTP/2 (TCP fallback - Default)"),
-        new("h3", "HTTP/3 (QUIC / UDP)"),
+        new("h2", "HTTP/2 (TCP)"),
+        new("h3", "HTTP/3 (QUIC)"),
     };
 
     [ObservableProperty] private string _aetherMasqueTransport = "h2";
@@ -2368,7 +2850,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         ? Loc.Of("Split ClientHello to bypass SNI filters")
         : Loc.Of("Available on HTTP/2 only (QUIC disabled)");
 
-    [ObservableProperty] private bool _aetherFragment;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAetherFastMode))]
+    [NotifyPropertyChangedFor(nameof(IsAetherBalancedMode))]
+    private bool _aetherFragment;
     partial void OnAetherFragmentChanged(bool value)
     {
         if (_suppressAetherSideEffects) return;
@@ -2377,26 +2862,272 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Masque);
     }
 
-    // ---- aether 2.3.0 ----
 
-    /// <summary>
-    /// Which gool to run: the new MASQUE-carried one, or the classic WARP-in-WARP.
-    /// </summary>
-    /// <remarks>
-    /// This setting exists because aether 2.3.0 gave "--gool" a NEW meaning without
-    /// renaming the old one to nothing - the old behaviour just moved to "--gool-classic".
-    /// Without an explicit choice here, simply upgrading aether.exe would silently change
-    /// what WiW does for every user.
-    /// </remarks>
+    public ObservableCollection<SettingOptionItem> AetherIdentityAcquisitionMethods { get; } = new()
+    {
+        new("default", "Default (Relays / Direct / SHARD)"),
+        new("lantern", "Lantern"),
+        new("veep", "Veep"),
+        new("v2ray", "V2Ray"),
+        new("shard", "SHARD"),
+        new("foxy", "Foxy"),
+    };
+
+    [ObservableProperty]
+    private string _aetherIdentityAcquisitionMethod = "lantern";
+
+    private static string NormalizeIdentityAcquisitionMethod(string? value)
+    {
+        var normalized = (value ?? "").Trim().ToLowerInvariant();
+        return normalized is "default" or "lantern" or "veep" or "v2ray" or "shard" or "foxy"
+            ? normalized
+            : "default";
+    }
+
+    partial void OnAetherIdentityAcquisitionMethodChanged(string value)
+    {
+        var normalized = NormalizeIdentityAcquisitionMethod(value);
+        if (!string.Equals(normalized, value, StringComparison.Ordinal))
+        {
+            AetherIdentityAcquisitionMethod = normalized;
+            return;
+        }
+        if (normalized == "foxy")
+        {
+            var accounts = _settingsService.Settings.FirefoxAccounts;
+            if (accounts == null || accounts.Count == 0)
+            {
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    if (Views.FoxyAccountRequiredDialog.Show())
+                    {
+                        SelectedTab = SettingsTab.Foxy;
+                    }
+                });
+            }
+        }
+        _settingsService.Settings.AetherIdentityAcquisitionMethod = normalized;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _hasAetherWgIdentity;
+    [ObservableProperty] private bool _hasAetherWarpOnWarpIdentity;
+    [ObservableProperty] private bool _hasAetherMasqueIdentity;
+    [ObservableProperty] private bool _hasAetherMasqueInMasqueIdentity;
+    [ObservableProperty] private bool _isFetchingAetherIdentities;
+    [ObservableProperty] private string _aetherIdentityFetchStatusText = "";
+    [ObservableProperty] private string _aetherIdentityFetchStatusColor = "#8B93A7";
+    private CancellationTokenSource? _identityFetchCts;
+
+    [RelayCommand]
+    private void CancelFetchAetherIdentities()
+    {
+        try
+        {
+            _identityFetchCts?.Cancel();
+            AetherIdentityFetchStatusText = Loc.Of("Canceling identity fetch...");
+            AetherIdentityFetchStatusColor = "#F59E0B";
+        }
+        catch
+        {
+        }
+    }
+
+    [RelayCommand]
+    public void RefreshAetherIdentityStatus()
+    {
+        try
+        {
+            var workDir = IdentityProvisioner.GetAetherWorkDirectory();
+            var status = _identityProvisioner.CheckAetherIdentitiesStatus(workDir);
+            HasAetherWgIdentity = status.WireGuard;
+            HasAetherWarpOnWarpIdentity = status.WarpOnWarp;
+            HasAetherMasqueIdentity = status.Masque;
+            HasAetherMasqueInMasqueIdentity = status.MasqueInMasque;
+        }
+        catch
+        {
+        }
+    }
+
+    [RelayCommand]
+    public async Task FetchAetherIdentitiesAsync()
+    {
+        if (IsFetchingAetherIdentities) return;
+        IsFetchingAetherIdentities = true;
+        _identityFetchCts?.Dispose();
+        _identityFetchCts = new CancellationTokenSource();
+        var ct = _identityFetchCts.Token;
+        AetherIdentityFetchStatusText = Loc.Of("Fetching Aether identities...");
+        AetherIdentityFetchStatusColor = "#0EA5E9";
+
+        try
+        {
+            var method = AetherIdentityAcquisitionMethod;
+            if (string.Equals(method, "foxy", StringComparison.OrdinalIgnoreCase))
+            {
+                var accounts = _settingsService.Settings.FirefoxAccounts;
+                if (accounts == null || accounts.Count == 0)
+                {
+                    bool goToSettings = false;
+                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        goToSettings = Views.FoxyAccountRequiredDialog.Show();
+                    });
+                    if (goToSettings)
+                    {
+                        SelectedTab = SettingsTab.Foxy;
+                    }
+                    AetherIdentityFetchStatusText = Loc.Of("Firefox account is required for Foxy provisioning.");
+                    AetherIdentityFetchStatusColor = "#EF4444";
+                    return;
+                }
+            }
+
+            var (success, message) = await Task.Run(() => _identityProvisioner.FetchAllAetherIdentitiesAsync(
+                method,
+                p =>
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        RefreshAetherIdentityStatus();
+                        AetherIdentityFetchStatusText = Loc.Of(p.Text);
+                    });
+                },
+                ct), ct);
+
+            RefreshAetherIdentityStatus();
+            if (success)
+            {
+                AetherIdentityFetchStatusText = Loc.Of("Identities received and saved successfully.");
+                AetherIdentityFetchStatusColor = "#10B981";
+            }
+            else
+            {
+                AetherIdentityFetchStatusText = string.Format(Loc.Of("Failed to receive all identities: {0}"), message);
+                AetherIdentityFetchStatusColor = "#EF4444";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            RefreshAetherIdentityStatus();
+            AetherIdentityFetchStatusText = Loc.Of("Identity fetch canceled.");
+            AetherIdentityFetchStatusColor = "#F59E0B";
+        }
+        catch (Exception ex)
+        {
+            RefreshAetherIdentityStatus();
+            AetherIdentityFetchStatusText = string.Format(Loc.Of("Error: {0}"), ex.Message);
+            AetherIdentityFetchStatusColor = "#EF4444";
+        }
+        finally
+        {
+            _identityFetchCts?.Dispose();
+            _identityFetchCts = null;
+            IsFetchingAetherIdentities = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task FetchSingleAetherIdentityAsync(string? identityType)
+    {
+        if (IsFetchingAetherIdentities || string.IsNullOrWhiteSpace(identityType)) return;
+        IsFetchingAetherIdentities = true;
+        _identityFetchCts?.Dispose();
+        _identityFetchCts = new CancellationTokenSource();
+        var ct = _identityFetchCts.Token;
+        var name = identityType.ToLowerInvariant() switch
+        {
+            "wireguard" => "WireGuard",
+            "warp" => "WARP-on-WARP",
+            "masque" => "MASQUE",
+            "mim" => "MASQUE-in-MASQUE",
+            _ => identityType
+        };
+        AetherIdentityFetchStatusText = string.Format(Loc.Of("Fetching {0} identity..."), name);
+        AetherIdentityFetchStatusColor = "#0EA5E9";
+
+        try
+        {
+            var method = AetherIdentityAcquisitionMethod;
+            if (string.Equals(method, "foxy", StringComparison.OrdinalIgnoreCase))
+            {
+                var accounts = _settingsService.Settings.FirefoxAccounts;
+                if (accounts == null || accounts.Count == 0)
+                {
+                    bool goToSettings = false;
+                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        goToSettings = Views.FoxyAccountRequiredDialog.Show();
+                    });
+                    if (goToSettings)
+                    {
+                        SelectedTab = SettingsTab.Foxy;
+                    }
+                    AetherIdentityFetchStatusText = Loc.Of("Firefox account is required for Foxy provisioning.");
+                    AetherIdentityFetchStatusColor = "#EF4444";
+                    return;
+                }
+            }
+
+            var (success, message) = await Task.Run(() => _identityProvisioner.FetchSingleAetherIdentityAsync(
+                identityType,
+                method,
+                p =>
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        RefreshAetherIdentityStatus();
+                        AetherIdentityFetchStatusText = Loc.Of(p.Text);
+                    });
+                },
+                ct), ct);
+
+            RefreshAetherIdentityStatus();
+            if (success)
+            {
+                AetherIdentityFetchStatusText = string.Format(Loc.Of("{0} identity received and saved successfully."), name);
+                AetherIdentityFetchStatusColor = "#10B981";
+            }
+            else
+            {
+                AetherIdentityFetchStatusText = string.Format(Loc.Of("Failed to receive {0} identity: {1}"), name, message);
+                AetherIdentityFetchStatusColor = "#EF4444";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            RefreshAetherIdentityStatus();
+            AetherIdentityFetchStatusText = Loc.Of("Identity fetch canceled.");
+            AetherIdentityFetchStatusColor = "#F59E0B";
+        }
+        catch (Exception ex)
+        {
+            RefreshAetherIdentityStatus();
+            AetherIdentityFetchStatusText = string.Format(Loc.Of("Error: {0}"), ex.Message);
+            AetherIdentityFetchStatusColor = "#EF4444";
+        }
+        finally
+        {
+            _identityFetchCts?.Dispose();
+            _identityFetchCts = null;
+            IsFetchingAetherIdentities = false;
+        }
+    }
+
     public ObservableCollection<SettingOptionItem> AetherGoolModes { get; } = new()
     {
-        new("masque", "WARP inside MASQUE (foreign exit)"),
+        new("masque", "WARP inside MASQUE"),
         new("classic", "Classic WARP-in-WARP"),
     };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsClassicGool))]
     [NotifyPropertyChangedFor(nameof(GoolHint))]
+    [NotifyPropertyChangedFor(nameof(CanEditWiwPeers))]
+    [NotifyPropertyChangedFor(nameof(IsAetherMasqueSelected))]
+    [NotifyPropertyChangedFor(nameof(CanShapeTls))]
+    [NotifyPropertyChangedFor(nameof(CanShapeTls12))]
     private string _aetherGoolMode = "masque";
 
     public bool IsClassicGool => string.Equals(AetherGoolMode, "classic", StringComparison.OrdinalIgnoreCase);
@@ -2404,19 +3135,19 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     partial void OnAetherGoolModeChanged(string value)
     {
         if (_suppressAetherSideEffects) return;
-        var normalized = string.Equals(value, "classic", StringComparison.OrdinalIgnoreCase) ? "classic" : "masque";
+        var normalized = string.Equals(value, "classic", StringComparison.OrdinalIgnoreCase) ? "classic" : string.Equals(value, "masque_h2", StringComparison.OrdinalIgnoreCase) ? "masque_h2" : "masque";
         _settingsService.Settings.AetherGoolMode = normalized;
         _settingsService.Save();
 
-        // The manual WiW peers only mean anything on the classic path, so the toggle for
-        // them follows this choice rather than staying visible and misleading.
         OnPropertyChanged(nameof(CanEditWiwPeers));
+        OnPropertyChanged(nameof(ShowsTlsExtras));
         RestartIfActive(ConnectionMethod.WarpOnWarp);
+        RestartIfActive(ConnectionMethod.WireGuard);
     }
 
     public string GoolHint => IsClassicGool
-        ? Loc.Of("WARP tunneled inside WARP. The outer and inner hops are configured below.")
-        : Loc.Of("WARP carried inside MASQUE and registered through that tunnel, so the exit address is foreign. The manual hops below are not used.");
+        ? Loc.Of("WARP tunneled inside WARP (outer and inner hops configured below).")
+        : Loc.Of("WARP inside MASQUE (HTTP/2) for foreign IP without sanctions.");
 
     public bool CanEditWiwPeers => IsClassicGool;
 
@@ -2430,6 +3161,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.AetherEch = value;
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.WarpOnWarp);
+        RestartIfActive(ConnectionMethod.WireGuard);
     }
 
     [ObservableProperty]
@@ -2442,6 +3174,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.AetherTlsVerify = value;
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.WarpOnWarp);
+        RestartIfActive(ConnectionMethod.WireGuard);
     }
 
     [ObservableProperty] private bool _aetherTor;
@@ -2451,6 +3184,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.AetherTor = value;
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.WarpOnWarp);
+        RestartIfActive(ConnectionMethod.WireGuard);
     }
 
     [ObservableProperty] private bool _aetherTorRelays;
@@ -2460,6 +3194,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.AetherTorRelays = value;
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.WarpOnWarp);
+        RestartIfActive(ConnectionMethod.WireGuard);
     }
 
     [ObservableProperty] private string _aetherExitLocSecs = "";
@@ -2477,29 +3212,21 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.AetherFragmentWireguard = value;
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.WarpOnWarp);
+        RestartIfActive(ConnectionMethod.WireGuard);
     }
 
-    /// <summary>
-    /// Explains that these switches only take effect if the bundled aether supports them.
-    ///
-    /// Worth saying out loud: the log line records which flags were actually applied, so a
-    /// switch that was withheld is explainable rather than mysterious.
-    /// </summary>
     public string OptionalFlagsHint => Loc.Of(
         "Applied only when the bundled Aether build supports them; the connection log records what was sent.");
 
-    /// <summary>The recheck interval only means something with an exit filter set.</summary>
     public bool HasAetherExitLoc => !string.IsNullOrWhiteSpace(AetherExitLoc);
 
     public string GoolLabel => Loc.Of("gool mode");
     public string GoolFragmentLabel => Loc.Of("Split ClientHello on gool");
-    public string GoolFragmentHint => Loc.Of(
-        "The gool hops ride MASQUE, so a fragmented ClientHello can help where the server name is dropped.");
+    public string GoolFragmentHint => Loc.Of("Split handshake packets to bypass DPI on gool.");
 
     public string OptionalCapsTitle => Loc.Of("Additional capabilities");
     public string EchLabel => Loc.Of("Encrypted ClientHello (ECH)");
-    public string EchHint => Loc.Of(
-        "Hides the server name from filtering that inspects it. With ECH on, Aether registers its own WARP identity over the encrypted handshake, and SHARD is used only if that fails.");
+    public string EchHint => Loc.Of("Encrypt TLS SNI using Cloudflare ECH to bypass DPI.");
     public string TlsVerifyLabel => Loc.Of("Verify TLS certificates");
     public string TlsVerifyHint => Loc.Of(
         "Aether leaves this off by default. Turning it on may prevent connecting where its certificate does not validate.");
@@ -2514,9 +3241,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     public string ExitLocSecsHint => Loc.Of(
         "A tunnel that moves to a rejected country is dropped and replaced. Blank keeps Aether's own interval.");
 
-    // ---- TLS fingerprint shaping ----
 
-    /// <summary>Which TLS surface the selected Aether protocol puts on the wire.</summary>
     public bool CanShapeTls =>
         AetherExtras.TlsSurfaceFor(_settingsService.Settings, SelectedAetherMethod)
             != AetherExtras.TlsSurface.None;
@@ -2530,7 +3255,6 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             _ => ConnectionMethod.Masque,
         };
 
-    /// <summary>False on QUIC, which negotiates TLS 1.3 and takes no TLS 1.2 cipher list.</summary>
     public bool CanShapeTls12 =>
         AetherExtras.TlsSurfaceFor(_settingsService.Settings, SelectedAetherMethod)
             == AetherExtras.TlsSurface.Http2;
@@ -2595,7 +3319,6 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         OnPropertyChanged(nameof(EchDnsEffective));
     }
 
-    /// <summary>Shows which resolver the ECH key lookup will actually use.</summary>
     public string EchDnsEffective =>
         Loc.Of("Currently: ") + (AetherExtras.BuildEchDnsField(_settingsService.Settings) is { Length: > 0 } v
             ? v
@@ -2625,22 +3348,138 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     public string EchDnsHint => Loc.Of(
         "Blank uses your Custom DNS list, preferring an encrypted resolver. The key lookup happens before the tunnel exists, so it is the one query the tunnel cannot help with.");
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TlsSigalgsHint))]
+    private string _aetherTlsSigalgs = "";
+
+    partial void OnAetherTlsSigalgsChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherTlsSigalgs = value?.Trim() ?? "";
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.Masque);
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TlsAlpsHint))]
+    private string _aetherTlsAlps = "";
+
+    partial void OnAetherTlsAlpsChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        var normalized = (value ?? "").Trim().ToLowerInvariant();
+        if (normalized is not ("" or "new" or "old")) normalized = "";
+        _settingsService.Settings.AetherTlsAlps = normalized;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.Masque);
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MasqueSniHint))]
+    private string _aetherMasqueSni = "";
+
+    partial void OnAetherMasqueSniChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherMasqueSni = value?.Trim() ?? "";
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.Masque);
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AetherUpstreamProxyHint))]
+    private string _aetherUpstreamProxy = "";
+
+    partial void OnAetherUpstreamProxyChanged(string value)
+    {
+        if (_suppressAetherSideEffects) return;
+        _settingsService.Settings.AetherUpstreamProxy = value?.Trim() ?? "";
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.Masque);
+    }
+
+    public string AetherUpstreamProxyLabel => Loc.Of("Upstream Proxy / Exit Node");
+    public string AetherUpstreamProxyHint => Loc.Of(
+        "Dial Aether tunnels and identity registration through an intermediate proxy, e.g. socks5://127.0.0.1:10808 or http://127.0.0.1:8080.");
+
+    public ObservableCollection<SettingOptionItem> TlsAlpsModes { get; } = new()
+    {
+        new("", "Default (off)"),
+        new("new", "New codepoint"),
+        new("old", "Old codepoint"),
+    };
+
+    public string TlsSigalgsLabel => Loc.Of("TLS signature algorithms, in order");
+    public string TlsSigalgsHint => HasTlsSurface
+        ? Loc.Of("BoringSSL names separated by ':', e.g. ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256. Blank keeps Chrome's order.")
+        : Loc.Of("This protocol carries no TLS, so there is no handshake to change.");
+
+    public string TlsAlpsLabel => Loc.Of("TLS ALPS");
+    public string TlsAlpsHint => HasTlsSurface
+        ? Loc.Of("Application-Layer Protocol Settings. Chrome 121 moved the codepoint; 'old' pretends to be Chrome 120. Off by default.")
+        : Loc.Of("This protocol carries no TLS, so there is no handshake to change.");
+
+    public string MasqueSniLabel => Loc.Of("MASQUE server name (SNI)");
+    public string MasqueSniHint => Loc.Of(
+        "Blank keeps www.cloudflare.com. The WARP client itself sends consumer-masque.cloudflareclient.com, which some networks treat differently.");
+
+    private bool HasTlsSurface =>
+        AetherExtras.TlsSurfaceFor(_settingsService.Settings, SelectedAetherMethod) != AetherExtras.TlsSurface.None;
+
+    private static string NormalizeRangeOrNumber(string? raw, int minVal, int maxVal, string defaultVal)
+    {
+        var s = (raw ?? "").Trim();
+        if (s.Length == 0) return defaultVal;
+
+        var dash = s.IndexOf('-');
+        if (dash < 0)
+        {
+            if (int.TryParse(s, out var single) && single >= minVal && single <= maxVal)
+                return single.ToString();
+            return defaultVal;
+        }
+
+        var leftPart = s[..dash].Trim();
+        var rightPart = s[(dash + 1)..].Trim();
+        if (int.TryParse(leftPart, out var a) && int.TryParse(rightPart, out var b))
+        {
+            a = Math.Clamp(a, minVal, maxVal);
+            b = Math.Clamp(b, minVal, maxVal);
+            if (a > b) (a, b) = (b, a);
+            return $"{a}-{b}";
+        }
+
+        return defaultVal;
+    }
+
     [ObservableProperty] private string _aetherFragmentSize = "";
     partial void OnAetherFragmentSizeChanged(string value)
     {
         if (_suppressAetherSideEffects) return;
-        _settingsService.Settings.AetherFragmentSize = value?.Trim() ?? "";
+        var normalized = NormalizeRangeOrNumber(value, 1, 1400, "16-32");
+        if (!string.Equals(value, normalized, StringComparison.Ordinal))
+        {
+            _suppressAetherSideEffects = true;
+            try { AetherFragmentSize = normalized; }
+            finally { _suppressAetherSideEffects = false; }
+        }
+        _settingsService.Settings.AetherFragmentSize = normalized;
         _settingsService.Save();
-        RestartIfActive(ConnectionMethod.Masque);
     }
 
     [ObservableProperty] private string _aetherFragmentDelay = "";
     partial void OnAetherFragmentDelayChanged(string value)
     {
         if (_suppressAetherSideEffects) return;
-        _settingsService.Settings.AetherFragmentDelay = value?.Trim() ?? "";
+        var normalized = NormalizeRangeOrNumber(value, 0, 5000, "2-10");
+        if (!string.Equals(value, normalized, StringComparison.Ordinal))
+        {
+            _suppressAetherSideEffects = true;
+            try { AetherFragmentDelay = normalized; }
+            finally { _suppressAetherSideEffects = false; }
+        }
+        _settingsService.Settings.AetherFragmentDelay = normalized;
         _settingsService.Save();
-        RestartIfActive(ConnectionMethod.Masque);
     }
 
 
@@ -2648,11 +3487,13 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
     
     
-    public ObservableCollection<Country> TorExitCountries => Regions;
+    public ObservableCollection<Country> TorExitCountries { get; } = CountryHelper.BuildTorExitRegions();
+    public string TorExitCountryLabel => Loc.Of("Tor exit country");
 
     [ObservableProperty] private string _selectedTorExitCountry = "auto";
     partial void OnSelectedTorExitCountryChanged(string value)
     {
+        RefreshTorExitWarning();
         if (_suppressTorSideEffects) return;
         _settingsService.Settings.TorExitCountry =
             (value == "auto" || string.IsNullOrWhiteSpace(value))
@@ -2662,26 +3503,46 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         RestartIfActive(ConnectionMethod.Tor);
     }
 
+    public string TorExitWarning { get; private set; } = "";
+    public bool HasTorExitWarning => TorExitWarning.Length > 0;
+
+    private void RefreshTorExitWarning()
+    {
+        var code = SelectedTorExitCountry;
+        TorExitWarning = code is "auto" or "" || CountryHelper.HasTorExit(code)
+            ? ""
+            : string.Format(Loc.Of("{0} has no known Tor exit relays; strict exit is off, "
+                + "so Tor will fall back to another country if it has to."),
+                CountryHelper.FullName(code));
+        OnPropertyChanged(nameof(TorExitWarning));
+        OnPropertyChanged(nameof(HasTorExitWarning));
+    }
+
     [ObservableProperty] private string _torBridges = "";
     partial void OnTorBridgesChanged(string value)
     {
         if (_suppressTorSideEffects) return;
         _settingsService.Settings.TorBridges = value ?? "";
-        _settingsService.Save();
-        RestartIfActive(ConnectionMethod.Tor);
+        DebouncedSave();
+        _torBridgeRestartDebouncer.Schedule(() => RestartIfActive(ConnectionMethod.Tor));
     }
 
-    [RelayCommand]
-    private void ApplyMeekCdn77() => TorBridges = Services.TorBridges.MeekCdn77;
+    private readonly Debouncer _torBridgeRestartDebouncer = new(TimeSpan.FromSeconds(1.5));
+
+    private void ApplyBridgeLines(IEnumerable<string> lines) =>
+        TorBridges = string.Join(Environment.NewLine, lines.Select(l => l.Trim()).Where(l => l.Length > 0));
 
     [RelayCommand]
-    private void ApplySnowflakeCdn77() => TorBridges = Services.TorBridges.SnowflakeCdn77;
+    private void ApplyMeekCdn77() => ApplyBridgeLines(new[] { Services.TorBridges.MeekCdn77 });
 
     [RelayCommand]
-    private void ApplyObfs4Iat() => TorBridges = string.Join(Environment.NewLine, Services.TorBridges.Obfs4Iat);
+    private void ApplySnowflakeCdn77() => ApplyBridgeLines(new[] { Services.TorBridges.SnowflakeCdn77 });
 
     [RelayCommand]
-    private void ApplyObfs4Public() => TorBridges = string.Join(Environment.NewLine, Services.TorBridges.Obfs4Public);
+    private void ApplyObfs4Iat() => ApplyBridgeLines(Services.TorBridges.Obfs4Iat);
+
+    [RelayCommand]
+    private void ApplyObfs4Public() => ApplyBridgeLines(Services.TorBridges.Obfs4Public);
 
     [RelayCommand]
     private void ClearTorBridges() => TorBridges = "";
@@ -2716,6 +3577,57 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     {
         _settingsService.Settings.ShardRotateIp = value;
         _settingsService.Save();
+    }
+
+    private bool _normalizingShardMtu;
+
+    [ObservableProperty] private string _shardMtu = "1280";
+    partial void OnShardMtuChanged(string value)
+    {
+        if (_normalizingShardMtu) return;
+        var parsed = int.TryParse((value ?? "").Trim(), out var mtu);
+        mtu = Math.Clamp(parsed ? mtu : 1280, 576, 1460);
+        _settingsService.Settings.ShardMtu = mtu;
+        if ((value ?? "").Trim() != mtu.ToString())
+        {
+            _normalizingShardMtu = true;
+            try { ShardMtu = mtu.ToString(); }
+            finally { _normalizingShardMtu = false; }
+        }
+        if (!_suppressSyncSaves) _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _shardAutoScanMtu = true;
+    partial void OnShardAutoScanMtuChanged(bool value)
+    {
+        if (_suppressSyncSaves) return;
+        _settingsService.Settings.ShardAutoScanMtu = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _isScanningShardMtu;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasShardMtuStatus))]
+    private string _shardMtuStatus = "";
+    public bool HasShardMtuStatus => ShardMtuStatus.Length > 0;
+
+    [RelayCommand]
+    private async Task ScanShardMtuAsync()
+    {
+        if (IsScanningShardMtu) return;
+        IsScanningShardMtu = true;
+        ShardMtuStatus = "";
+        try
+        {
+            var best = await MtuProbe.FindBestTunnelMtuAsync(0, 576, 1460);
+            if (best is int mtu) ShardMtu = mtu.ToString();
+            else ShardMtuStatus = Loc.Of("No reply — ICMP may be blocked. Enter the MTU manually.");
+        }
+        finally
+        {
+            IsScanningShardMtu = false;
+        }
     }
 
     public bool IsShardFullTunnelSelected => !ShardSmartSplit;
@@ -2843,7 +3755,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         new("warp_on_warp", "WoW (WARP on WARP)", "WARP on WARP — slowest, for the most filtered networks"),
     };
 
-    public sealed record ChainedSubModeOption(string Key, string English, string EnglishDescription) : LocalizedItem
+    public sealed record ChainedSubModeOption(string Key, string English, string EnglishDescription, string Category, string IconKind = "LinkVariant") : LocalizedItem
     {
         public string Display => Loc.Of(English);
         public string Description => Loc.Of(EnglishDescription);
@@ -2851,17 +3763,36 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
     public ObservableCollection<ChainedSubModeOption> ChainedSubModes { get; } = new()
     {
-        new("psiphon_warp", "Psiphon over WARP", "Multi-hop: Psiphon routed inside Cloudflare WARP/MASQUE tunnel"),
-        new("psiphon_v2ray", "Psiphon over V2Ray", "Multi-hop: Psiphon routed inside V2Ray (Xray/Sing-box) proxy node"),
-        new("tor_warp", "Tor over WARP", "Multi-hop: Tor onion routing through Cloudflare WARP"),
-        new("tor_v2ray", "Tor over V2Ray", "Multi-hop: Tor onion routing through V2Ray (Xray/Sing-box) proxy node"),
+        new("psiphon_warp", "Psiphon over WARP", "Multi-hop: Psiphon routed inside Cloudflare WARP/MASQUE tunnel", "Psiphon", "ShieldLock"),
+        new("psiphon_v2ray", "Psiphon over V2Ray", "Multi-hop: Psiphon routed inside V2Ray (Xray/Sing-box) proxy node", "Psiphon", "ShieldLock"),
+        new("psiphon_foxy", "Psiphon over Foxy", "Multi-hop: Psiphon routed inside Firefox VPN (Foxy)", "Psiphon", "ShieldLock"),
+        new("psiphon_lantern", "Psiphon over Lantern", "Multi-hop: Psiphon routed inside the Lantern server pool", "Psiphon", "ShieldLock"),
+
+        new("tor_warp", "Tor over WARP", "Multi-hop: Tor onion routing through Cloudflare WARP", "Tor", "ShieldMoon"),
+        new("tor_v2ray", "Tor over V2Ray", "Multi-hop: Tor onion routing through V2Ray (Xray/Sing-box) proxy node", "Tor", "ShieldMoon"),
+
+        new("foxy_warp", "Foxy over WARP", "Multi-hop: Firefox VPN tunnelled inside Cloudflare WARP", "Foxy", "Firefox"),
+        new("foxy_v2ray", "Foxy over V2Ray", "Multi-hop: Firefox VPN tunnelled inside V2Ray (Xray/Sing-box) proxy node", "Foxy", "Firefox"),
+
+        new("lantern_warp", "Lantern over WARP", "Multi-hop: every Lantern server dialed inside Cloudflare WARP", "Lantern", "RadioTower"),
+
+        new("veep_warp", "Veep over WARP", "Multi-hop: Veep proxy dialed inside Cloudflare WARP", "Veep", "ShieldCheck"),
+
+        new("warp_v2ray", "WARP over V2Ray", "Multi-hop: Cloudflare WARP dialed through V2Ray (Xray/Sing-box) proxy node, for networks that block the WARP edges", "WARP", "SwapHorizontal"),
     };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsChainedPsiphonWarp))]
     [NotifyPropertyChangedFor(nameof(IsChainedTorWarp))]
+    [NotifyPropertyChangedFor(nameof(IsChainedFoxyWarp))]
     [NotifyPropertyChangedFor(nameof(IsChainedPsiphonV2Ray))]
+    [NotifyPropertyChangedFor(nameof(IsChainedPsiphonFoxy))]
+    [NotifyPropertyChangedFor(nameof(IsChainedPsiphonLantern))]
     [NotifyPropertyChangedFor(nameof(IsChainedTorV2Ray))]
+    [NotifyPropertyChangedFor(nameof(IsChainedFoxyV2Ray))]
+    [NotifyPropertyChangedFor(nameof(IsChainedWarpV2Ray))]
+    [NotifyPropertyChangedFor(nameof(IsChainedLanternWarp))]
+    [NotifyPropertyChangedFor(nameof(IsChainedVeepWarp))]
     [NotifyPropertyChangedFor(nameof(IsChainedV2Ray))]
     [NotifyPropertyChangedFor(nameof(IsChainedWarp))]
     [NotifyPropertyChangedFor(nameof(ChainedV2RayBannerTitle))]
@@ -2879,8 +3810,15 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             var targetMethod = value switch
             {
                 "psiphon_v2ray" => ConnectionMethod.PsiphonOverV2Ray,
+                "psiphon_foxy" => ConnectionMethod.PsiphonOverFoxy,
+                "psiphon_lantern" => ConnectionMethod.PsiphonOverLantern,
                 "tor_warp" => ConnectionMethod.TorOverWarp,
                 "tor_v2ray" => ConnectionMethod.TorOverV2Ray,
+                "foxy_warp" => ConnectionMethod.FoxyOverWarp,
+                "foxy_v2ray" => ConnectionMethod.FoxyOverV2Ray,
+                "warp_v2ray" => ConnectionMethod.WarpOverV2Ray,
+                "lantern_warp" => ConnectionMethod.LanternOverWarp,
+                "veep_warp" => ConnectionMethod.VeepOverWarp,
                 _ => ConnectionMethod.PsiphonOverWarp,
             };
             if (CurrentMethod != targetMethod)
@@ -2894,23 +3832,41 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                 try { SelectedConnectionMethod = targetMethod.ToToken(); }
                 finally { _suppressMethodSideEffects = false; }
             }
+
+            DebouncedRestartIfActive();
         }
     }
 
     public bool IsChainedPsiphonWarp => SelectedChainedSubMode == "psiphon_warp";
     public bool IsChainedTorWarp => SelectedChainedSubMode == "tor_warp";
+    public bool IsChainedFoxyWarp => SelectedChainedSubMode == "foxy_warp";
     public bool IsChainedPsiphonV2Ray => SelectedChainedSubMode == "psiphon_v2ray";
+    public bool IsChainedPsiphonFoxy => SelectedChainedSubMode == "psiphon_foxy";
+    public bool IsChainedPsiphonLantern => SelectedChainedSubMode == "psiphon_lantern";
     public bool IsChainedTorV2Ray => SelectedChainedSubMode == "tor_v2ray";
-    public bool IsChainedV2Ray => IsChainedPsiphonV2Ray || IsChainedTorV2Ray;
-    public bool IsChainedWarp => IsChainedPsiphonWarp || IsChainedTorWarp;
+    public bool IsChainedFoxyV2Ray => SelectedChainedSubMode == "foxy_v2ray";
+    public bool IsChainedWarpV2Ray => SelectedChainedSubMode == "warp_v2ray";
+    public bool IsChainedLanternWarp => SelectedChainedSubMode == "lantern_warp";
+    public bool IsChainedVeepWarp => SelectedChainedSubMode == "veep_warp";
+    public bool IsChainedV2Ray => IsChainedPsiphonV2Ray || IsChainedTorV2Ray || IsChainedFoxyV2Ray
+                                  || IsChainedWarpV2Ray || CurrentMethod.IsV2Ray();
+    public bool IsChainedWarp => IsChainedPsiphonWarp || IsChainedTorWarp || IsChainedFoxyWarp || IsChainedLanternWarp || IsChainedVeepWarp;
 
     public string ChainedV2RayBannerTitle => IsChainedTorV2Ray
         ? Loc.Of("Tor over V2Ray (Xray / Sing-box)")
-        : Loc.Of("Psiphon over V2Ray (Xray / Sing-box)");
+        : IsChainedFoxyV2Ray
+            ? Loc.Of("Foxy over V2Ray (Xray / Sing-box)")
+            : IsChainedWarpV2Ray
+                ? Loc.Of("WARP over V2Ray (Xray / Sing-box)")
+                : Loc.Of("Psiphon over V2Ray (Xray / Sing-box)");
 
     public string ChainedV2RayBannerDesc => IsChainedTorV2Ray
         ? Loc.Of("Routes all Tor traffic through your upstream V2Ray proxy node for deep censorship evasion with onion privacy.")
-        : Loc.Of("Routes all Psiphon traffic through your upstream V2Ray proxy node to bypass heavy firewalls with dual encryption.");
+        : IsChainedFoxyV2Ray
+            ? Loc.Of("Routes all Firefox VPN traffic through your upstream V2Ray proxy node to bypass heavy firewalls with dual encryption.")
+            : IsChainedWarpV2Ray
+                ? Loc.Of("Routes Cloudflare WARP traffic through your upstream V2Ray proxy node to bypass heavy firewalls with dual encryption.")
+                : Loc.Of("Routes all Psiphon traffic through your upstream V2Ray proxy node to bypass heavy firewalls with dual encryption.");
 
     [ObservableProperty] private string _selectedChainedOuterTransport = "auto";
     partial void OnSelectedChainedOuterTransportChanged(string value)
@@ -2937,6 +3893,33 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.ChainedTorOuterTransport = norm;
         _settingsService.Save();
         RestartIfActive(ConnectionMethod.TorOverWarp);
+    }
+
+    [ObservableProperty] private string _selectedChainedFoxyOuterTransport = "auto";
+    partial void OnSelectedChainedFoxyOuterTransportChanged(string value)
+    {
+        var norm = NormalizeChainedOuter(value);
+        _settingsService.Settings.ChainedFoxyOuterTransport = norm;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.FoxyOverWarp);
+    }
+
+    [ObservableProperty] private string _selectedChainedLanternOuterTransport = "auto";
+    partial void OnSelectedChainedLanternOuterTransportChanged(string value)
+    {
+        var norm = NormalizeChainedOuter(value);
+        _settingsService.Settings.ChainedLanternOuterTransport = norm;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.LanternOverWarp);
+    }
+
+    [ObservableProperty] private string _selectedChainedVeepOuterTransport = "auto";
+    partial void OnSelectedChainedVeepOuterTransportChanged(string value)
+    {
+        var norm = NormalizeChainedOuter(value);
+        _settingsService.Settings.ChainedVeepOuterTransport = norm;
+        _settingsService.Save();
+        RestartIfActive(ConnectionMethod.VeepOverWarp);
     }
 
     
@@ -2991,28 +3974,213 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Save();
     }
 
-    [ObservableProperty] private bool _v2RayEnableFragment = true;
+    [ObservableProperty] private bool _v2RayEnableFragment = false;
     partial void OnV2RayEnableFragmentChanged(bool value)
     {
         _settingsService.Settings.V2RayEnableFragment = value;
         _settingsService.Save();
     }
 
+    [ObservableProperty] private string _v2RayFragmentPackets = "tlshello";
+    partial void OnV2RayFragmentPacketsChanged(string value)
+    {
+        _settingsService.Settings.V2RayFragmentPackets = string.IsNullOrWhiteSpace(value) ? "tlshello" : value.Trim();
+        DebouncedSave();
+    }
+
+    [ObservableProperty] private string _v2RayFragmentLength = "100-200";
+    partial void OnV2RayFragmentLengthChanged(string value)
+    {
+        _settingsService.Settings.V2RayFragmentLength = string.IsNullOrWhiteSpace(value) ? "100-200" : value.Trim();
+        DebouncedSave();
+    }
+
+    [ObservableProperty] private string _v2RayFragmentInterval = "10-20";
+    partial void OnV2RayFragmentIntervalChanged(string value)
+    {
+        _settingsService.Settings.V2RayFragmentInterval = string.IsNullOrWhiteSpace(value) ? "10-20" : value.Trim();
+        DebouncedSave();
+    }
+
+    public static IReadOnlyList<string> SingBoxMuxProtocols { get; } = new[] { "h2mux", "smux", "yamux" };
+
+    internal static string NormalizeSingBoxMuxProtocol(string? value)
+    {
+        var v = value?.Trim().ToLowerInvariant();
+        return v is "smux" or "yamux" ? v : "h2mux";
+    }
+
+    [ObservableProperty] private string _singBoxInboundPort = "10808";
+    partial void OnSingBoxInboundPortChanged(string value)
+    {
+        if (int.TryParse(value, out var p) && p > 0 && p <= 65535)
+        {
+            _settingsService.Settings.SingBoxInboundPort = p;
+            DebouncedSave();
+        }
+    }
+
+    [ObservableProperty] private bool _singBoxRouteDnsThroughCore = true;
+    partial void OnSingBoxRouteDnsThroughCoreChanged(bool value)
+    {
+        _settingsService.Settings.SingBoxRouteDnsThroughCore = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _singBoxEnableMux;
+    partial void OnSingBoxEnableMuxChanged(bool value)
+    {
+        _settingsService.Settings.SingBoxEnableMux = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private string _singBoxMuxProtocol = "h2mux";
+    partial void OnSingBoxMuxProtocolChanged(string value)
+    {
+        var clean = NormalizeSingBoxMuxProtocol(value);
+        _settingsService.Settings.SingBoxMuxProtocol = clean;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _singBoxMuxPadding;
+    partial void OnSingBoxMuxPaddingChanged(bool value)
+    {
+        _settingsService.Settings.SingBoxMuxPadding = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private bool _singBoxEnableFragment;
+    partial void OnSingBoxEnableFragmentChanged(bool value)
+    {
+        _settingsService.Settings.SingBoxEnableFragment = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty] private string _singBoxFragmentFallbackDelay = "500ms";
+    partial void OnSingBoxFragmentFallbackDelayChanged(string value)
+    {
+        _settingsService.Settings.SingBoxFragmentFallbackDelay = string.IsNullOrWhiteSpace(value) ? "500ms" : value.Trim();
+        DebouncedSave();
+    }
+
     
 
-    public ObservableCollection<V2RayConfigItemViewModel> V2RayConfigs { get; } = new();
+    public ObservableRangeCollection<V2RayConfigItemViewModel> V2RayConfigs { get; } = new();
 
     public bool HasV2RayConfigs => V2RayConfigs.Count > 0;
     public bool HasNoV2RayConfigs => V2RayConfigs.Count == 0;
     public int V2RayConfigsCount => V2RayConfigs.Count;
+    public bool HasTimedOutV2RayConfigs => V2RayConfigs.Any(c => c.Latency == -3);
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(V2RaySortTooltip))]
+    [NotifyPropertyChangedFor(nameof(IsV2RaySorted))]
+    private string _v2RaySortMode = "default";
+
+    public bool IsV2RaySorted => !string.Equals(V2RaySortMode, "default", StringComparison.OrdinalIgnoreCase);
+
+    public string V2RaySortTooltip => V2RaySortMode switch
+    {
+        "latency" => Loc.Of("Sorted by Latency — click to sort by Name"),
+        "name" => Loc.Of("Sorted by Name — click to sort by Latency"),
+        _ => Loc.Of("Sort configs (Latency / Name)")
+    };
+
+    private void RefreshV2RayListMetadata()
+    {
+        OnPropertyChanged(nameof(HasV2RayConfigs));
+        OnPropertyChanged(nameof(HasNoV2RayConfigs));
+        OnPropertyChanged(nameof(V2RayConfigsCount));
+        OnPropertyChanged(nameof(HasTimedOutV2RayConfigs));
+    }
+
+    [RelayCommand]
+    private void CycleV2RaySort()
+    {
+        var next = string.Equals(V2RaySortMode, "latency", StringComparison.OrdinalIgnoreCase)
+            ? "name"
+            : "latency";
+        SortV2RayConfigsBy(next);
+    }
+
+    public void SortV2RayConfigsBy(string mode)
+    {
+        var normalized = string.Equals(mode, "name", StringComparison.OrdinalIgnoreCase)
+            ? "name"
+            : "latency";
+        V2RaySortMode = normalized;
+        if (V2RayConfigs.Count <= 1) return;
+
+        var ordered = normalized == "name"
+            ? V2RayConfigs
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(c => c.Latency >= 0 ? c.Latency : int.MaxValue)
+                .ToList()
+            : V2RayConfigs
+                .OrderBy(c => c.Latency switch
+                {
+                    >= 0 => 0,
+                    -1 => 1,
+                    -2 => 2,
+                    _ => 3
+                })
+                .ThenBy(c => c.Latency >= 0 ? c.Latency : int.MaxValue)
+                .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+        V2RayConfigs.ReplaceAll(ordered);
+        lock (_settingsService.Settings.SyncRoot)
+        {
+            _settingsService.Settings.V2RayConfigs.Clear();
+            foreach (var vm in ordered)
+            {
+                vm.SyncToEntry();
+                _settingsService.Settings.V2RayConfigs.Add(vm.Entry);
+            }
+        }
+        _settingsService.Save();
+    }
+
+    [RelayCommand]
+    private void RemoveTimedOutV2RayConfigs()
+    {
+        var timedOut = V2RayConfigs.Where(c => c.Latency == -3).ToList();
+        if (timedOut.Count == 0) return;
+
+        var removedIds = timedOut.Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
+        var wasActiveRemoved = timedOut.Any(c => c.IsActive);
+
+        foreach (var item in timedOut)
+        {
+            V2RayConfigs.Remove(item);
+        }
+
+        lock (_settingsService.Settings.SyncRoot)
+        {
+            _settingsService.Settings.V2RayConfigs.RemoveAll(c => removedIds.Contains(c.Id));
+            if (wasActiveRemoved && V2RayConfigs.Count > 0)
+            {
+                V2RayConfigs[0].IsActive = true;
+                V2RayConfigs[0].SyncToEntry();
+                _settingsService.Settings.V2RayActiveConfigId = V2RayConfigs[0].Id;
+            }
+            else if (V2RayConfigs.Count == 0)
+            {
+                _settingsService.Settings.V2RayActiveConfigId = "";
+            }
+        }
+
+        _settingsService.Save();
+        RefreshV2RayListMetadata();
+    }
 
     [ObservableProperty] private bool _isTestingAllV2RayLatency;
 
     private void LoadV2RayConfigsFromSettings()
     {
-        V2RayConfigs.Clear();
         var s = _settingsService.Settings;
         var activeId = s.V2RayActiveConfigId;
+        var list = new List<V2RayConfigItemViewModel>(s.V2RayConfigs.Count);
 
         foreach (var entry in s.V2RayConfigs)
         {
@@ -3020,21 +4188,24 @@ public sealed partial class SettingsViewModel : PageViewModelBase
             {
                 entry.IsActive = (entry.Id == activeId);
             }
-            var vm = new V2RayConfigItemViewModel(entry);
-            V2RayConfigs.Add(vm);
+            list.Add(new V2RayConfigItemViewModel(entry));
         }
 
-        if (V2RayConfigs.Count > 0 && !V2RayConfigs.Any(c => c.IsActive))
+        if (list.Count > 0 && !list.Any(c => c.IsActive))
         {
-            V2RayConfigs[0].IsActive = true;
-            s.V2RayActiveConfigId = V2RayConfigs[0].Id;
+            list[0].IsActive = true;
+            s.V2RayActiveConfigId = list[0].Id;
             s.V2RayConfigs[0].IsActive = true;
-            _settingsService.Save();
+            for (var i = 1; i < s.V2RayConfigs.Count; i++)
+            {
+                s.V2RayConfigs[i].IsActive = false;
+            }
+            _ = Task.Run(() => _settingsService.Save());
         }
 
-        OnPropertyChanged(nameof(HasV2RayConfigs));
-        OnPropertyChanged(nameof(HasNoV2RayConfigs));
-        OnPropertyChanged(nameof(V2RayConfigsCount));
+        V2RayConfigs.ReplaceAll(list);
+
+        RefreshV2RayListMetadata();
     }
 
     [RelayCommand]
@@ -3058,7 +4229,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         item.Latency = -2;
         try
         {
-            var ms = await _v2rayEngine.MeasureRealDelayAsync(item.Entry);
+            var ms = await Task.Run(async () => await _v2rayEngine.MeasureRealDelayAsync(item.Entry));
             item.Latency = ms;
             item.SyncToEntry();
             _settingsService.Save();
@@ -3070,6 +4241,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         finally
         {
             item.IsTesting = false;
+            OnPropertyChanged(nameof(HasTimedOutV2RayConfigs));
         }
     }
 
@@ -3087,14 +4259,14 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
         try
         {
-            using var semaphore = new SemaphoreSlim(4);
+            using var semaphore = new SemaphoreSlim(25);
             var tasks = V2RayConfigs.Select(async c =>
             {
-                await semaphore.WaitAsync();
+                await semaphore.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    var ms = await _v2rayEngine.MeasureRealDelayAsync(c.Entry);
-                    Ui.Invoke(() =>
+                    var ms = await _v2rayEngine.MeasureRealDelayAsync(c.Entry).ConfigureAwait(false);
+                    Ui.Post(() =>
                     {
                         c.Latency = ms;
                         c.SyncToEntry();
@@ -3102,21 +4274,25 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                 }
                 catch
                 {
-                    Ui.Invoke(() => c.Latency = -3);
+                    Ui.Post(() => c.Latency = -3);
                 }
                 finally
                 {
-                    Ui.Invoke(() => c.IsTesting = false);
+                    Ui.Post(() => c.IsTesting = false);
                     semaphore.Release();
                 }
             });
 
-            await Task.WhenAll(tasks);
+            await Task.WhenAll(tasks).ConfigureAwait(false);
             _settingsService.Save();
         }
         finally
         {
-            IsTestingAllV2RayLatency = false;
+            Ui.Post(() =>
+            {
+                IsTestingAllV2RayLatency = false;
+                OnPropertyChanged(nameof(HasTimedOutV2RayConfigs));
+            });
         }
     }
 
@@ -3140,9 +4316,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         }
 
         _settingsService.Save();
-        OnPropertyChanged(nameof(HasV2RayConfigs));
-        OnPropertyChanged(nameof(HasNoV2RayConfigs));
-        OnPropertyChanged(nameof(V2RayConfigsCount));
+        RefreshV2RayListMetadata();
     }
 
     [RelayCommand]
@@ -3166,13 +4340,14 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     private void ConfirmClearAllConfigs()
     {
         V2RayConfigs.Clear();
-        _settingsService.Settings.V2RayConfigs.Clear();
-        _settingsService.Settings.V2RayActiveConfigId = "";
+        lock (_settingsService.Settings.SyncRoot)
+        {
+            _settingsService.Settings.V2RayConfigs.Clear();
+            _settingsService.Settings.V2RayActiveConfigId = "";
+        }
         _settingsService.Save();
         IsClearAllConfigsDialogOpen = false;
-        OnPropertyChanged(nameof(HasV2RayConfigs));
-        OnPropertyChanged(nameof(HasNoV2RayConfigs));
-        OnPropertyChanged(nameof(V2RayConfigsCount));
+        RefreshV2RayListMetadata();
     }
 
     
@@ -3207,7 +4382,8 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [RelayCommand]
     private async Task ConfirmImportAsync()
     {
-        if (string.IsNullOrWhiteSpace(ImportLinkText))
+        var rawText = ImportLinkText;
+        if (string.IsNullOrWhiteSpace(rawText))
         {
             ImportErrorText = Loc.Of("Please enter or paste one or more links or subscription URLs.");
             HasImportError = true;
@@ -3216,7 +4392,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
         try
         {
-            var outcome = await V2RayLinkParser.ParseInputAsync(ImportLinkText);
+            var outcome = await Task.Run(() => V2RayLinkParser.ParseInputAsync(rawText));
             var entries = outcome.Entries;
             if (entries.Count == 0)
             {
@@ -3226,12 +4402,14 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                 return;
             }
 
-            foreach (var entry in entries)
+            var viewModels = entries.Select(e => new V2RayConfigItemViewModel(e)).ToList();
+
+            lock (_settingsService.Settings.SyncRoot)
             {
-                _settingsService.Settings.V2RayConfigs.Add(entry);
-                var vm = new V2RayConfigItemViewModel(entry);
-                V2RayConfigs.Add(vm);
+                _settingsService.Settings.V2RayConfigs.AddRange(entries);
             }
+
+            V2RayConfigs.AddRange(viewModels);
 
             if (string.IsNullOrEmpty(_settingsService.Settings.V2RayActiveConfigId) && V2RayConfigs.Count > 0)
             {
@@ -3240,7 +4418,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                 V2RayConfigs[0].SyncToEntry();
             }
 
-            _settingsService.Save();
+            _ = Task.Run(() => _settingsService.Save());
 
             if (outcome.Error is not null)
             {
@@ -3285,6 +4463,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     [ObservableProperty] private string _editConfigSecurity = "reality";
     [ObservableProperty] private string _editConfigNetwork = "tcp";
     [ObservableProperty] private string _editConfigSni = "";
+    [ObservableProperty] private string _editConfigHost = "";
     [ObservableProperty] private string _editConfigPath = "";
     [ObservableProperty] private string _editConfigPublicKey = "";
     [ObservableProperty] private string _editConfigShortId = "";
@@ -3295,11 +4474,21 @@ public sealed partial class SettingsViewModel : PageViewModelBase
     public bool IsTlsOrRealitySecurity => EditConfigSecurity is "reality" or "tls";
     public bool IsWsOrGrpcNetwork => EditConfigNetwork is "ws" or "grpc";
 
+    private static string NormalizeV2RayProtocol(string? proto) =>
+        (proto ?? "").Trim().ToLowerInvariant() switch
+        {
+            "ss" or "shadowsocks" => "shadowsocks",
+            "hy2" or "hysteria2" => "hysteria2",
+            "vmess" => "vmess",
+            "trojan" => "trojan",
+            _ => "vless",
+        };
+
     [RelayCommand]
     private void SetEditProtocol(string? proto)
     {
         if (string.IsNullOrEmpty(proto)) return;
-        EditConfigProtocol = proto.ToLowerInvariant();
+        EditConfigProtocol = NormalizeV2RayProtocol(proto);
     }
 
     [RelayCommand]
@@ -3333,6 +4522,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         EditConfigSecurity = "reality";
         EditConfigNetwork = "tcp";
         EditConfigSni = "";
+        EditConfigHost = "";
         EditConfigPath = "";
         EditConfigPublicKey = "";
         EditConfigShortId = "";
@@ -3352,13 +4542,14 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         AddEditConfigDialogTitle = Loc.Of("Edit Configuration");
         EditConfigId = item.Id;
         EditConfigName = item.Name;
-        EditConfigProtocol = item.Protocol;
+        EditConfigProtocol = NormalizeV2RayProtocol(item.Protocol);
         EditConfigAddress = item.Address;
         EditConfigPort = item.Port.ToString();
         EditConfigUserId = item.Entry.UserId;
         EditConfigSecurity = item.Security;
         EditConfigNetwork = item.Network;
-        EditConfigSni = item.Entry.Sni ?? item.Entry.Host ?? "";
+        EditConfigSni = item.Entry.Sni ?? "";
+        EditConfigHost = item.Entry.Host ?? "";
         EditConfigPath = item.Entry.Path ?? "";
         EditConfigPublicKey = item.Entry.PublicKey ?? "";
         EditConfigShortId = item.Entry.ShortId ?? "";
@@ -3417,7 +4608,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                 existing.Network = EditConfigNetwork;
                 existing.Entry.UserId = EditConfigUserId.Trim();
                 existing.Entry.Sni = string.IsNullOrWhiteSpace(EditConfigSni) ? null : EditConfigSni.Trim();
-                existing.Entry.Host = existing.Entry.Sni;
+                existing.Entry.Host = string.IsNullOrWhiteSpace(EditConfigHost) ? null : EditConfigHost.Trim();
                 existing.Entry.Path = string.IsNullOrWhiteSpace(EditConfigPath) ? null : EditConfigPath.Trim();
                 existing.Entry.PublicKey = string.IsNullOrWhiteSpace(EditConfigPublicKey) ? null : EditConfigPublicKey.Trim();
                 existing.Entry.ShortId = string.IsNullOrWhiteSpace(EditConfigShortId) ? null : EditConfigShortId.Trim();
@@ -3437,7 +4628,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                 Security = EditConfigSecurity,
                 Network = EditConfigNetwork,
                 Sni = string.IsNullOrWhiteSpace(EditConfigSni) ? null : EditConfigSni.Trim(),
-                Host = string.IsNullOrWhiteSpace(EditConfigSni) ? null : EditConfigSni.Trim(),
+                Host = string.IsNullOrWhiteSpace(EditConfigHost) ? null : EditConfigHost.Trim(),
                 Path = string.IsNullOrWhiteSpace(EditConfigPath) ? null : EditConfigPath.Trim(),
                 PublicKey = string.IsNullOrWhiteSpace(EditConfigPublicKey) ? null : EditConfigPublicKey.Trim(),
                 ShortId = string.IsNullOrWhiteSpace(EditConfigShortId) ? null : EditConfigShortId.Trim(),
@@ -3473,12 +4664,13 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         (v ?? "").Trim().ToLowerInvariant() switch
         {
             "turbo" => "turbo",
+            "balanced" => "balanced",
             "thorough" => "thorough",
             
             "stealth" => "verified",
             "verified" => "verified",
             "ironclad" => "ironclad",
-            _ => "balanced",
+            _ => "turbo",
         };
 
     private static string NormalizeAetherNoize(string? v) =>
@@ -3526,7 +4718,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.LanProxyUsername = "";
         _settingsService.Settings.LanProxyPassword = "";
         _settingsService.Settings.AetherScanMode = "balanced";
-        _settingsService.Settings.AetherScanModeMim = "balanced";
+        _settingsService.Settings.AetherScanModeMim = "turbo";
         _settingsService.Settings.AetherNoize = "balanced";
         _settingsService.Settings.AetherIpVersion = "4";
         _settingsService.Settings.AetherExitLoc = "";
@@ -3535,10 +4727,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         _settingsService.Settings.AetherMimOuterPeer = "";
         _settingsService.Settings.AetherMimInnerPeer = "";
         _settingsService.Settings.AetherFragment = false;
-        _settingsService.Settings.AetherFragmentSize = "";
-        _settingsService.Settings.AetherFragmentDelay = "";
-        _settingsService.Settings.AetherMasqueTransport = "h3";
-        _settingsService.Settings.AetherMasqueQuic = true;
+        _settingsService.Settings.AetherFragmentSize = "16-32";
+        _settingsService.Settings.AetherFragmentDelay = "2-10";
+        _settingsService.Settings.AetherMasqueTransport = "h2";
+        _settingsService.Settings.AetherMasqueQuic = false;
         _settingsService.Settings.TorExitCountry = "";
         _settingsService.Settings.TorBridges = "";
         _settingsService.Save();
@@ -3575,8 +4767,8 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         AetherMimOuterPeer = "";
         AetherMimInnerPeer = "";
         AetherFragment = false;
-        AetherFragmentSize = "";
-        AetherFragmentDelay = "";
+        AetherFragmentSize = "16-32";
+        AetherFragmentDelay = "2-10";
         AetherMasqueTransport = "h2";
         SelectedTorExitCountry = "auto";
         TorBridges = "";
@@ -3610,7 +4802,10 @@ public sealed partial class SettingsViewModel : PageViewModelBase
                 : $"{Uri.EscapeDataString(trimmedUser)}:{Uri.EscapeDataString(pass)}@";
         }
 
-        var hostPort = string.IsNullOrEmpty(port) ? host : $"{host}:{port}";
+        var hostForUri = host.Contains(':')
+            ? ($"[{host.Trim('[', ']')}]")
+            : host;
+        var hostPort = string.IsNullOrEmpty(port) ? hostForUri : $"{hostForUri}:{port}";
         return $"{scheme}://{creds}{hostPort}";
     }
 
@@ -3660,7 +4855,24 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         if (slashIdx >= 0)
             proxy = proxy[..slashIdx];
 
+        if (proxy.StartsWith("[", StringComparison.Ordinal))
+        {
+            var close = proxy.IndexOf(']');
+            if (close > 0)
+            {
+                host = proxy[1..close];
+                var rest = proxy[(close + 1)..];
+                if (rest.StartsWith(":", StringComparison.Ordinal)) port = rest[1..];
+                return;
+            }
+        }
+        var colonCount = proxy.Count(c => c == ':');
         var lastColon = proxy.LastIndexOf(':');
+        if (colonCount >= 2)
+        {
+            host = proxy;
+            return;
+        }
         if (lastColon > 0)
         {
             host = proxy[..lastColon];
@@ -3820,6 +5032,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         AetherStatusText = Loc.Of("Starting download...");
         AetherStatusColor = "#8B93A7";
 
+        var wasConnected = _tunnel.State != ConnectionState.Disconnected;
         try
         {
             var progress = new Progress<int>(p =>
@@ -3833,7 +5046,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
 
             
             
-            if (_tunnel.State != ConnectionState.Disconnected) await _tunnel.StopAsync();
+            if (wasConnected) await _tunnel.StopAsync();
 
             var success = await _coreUpdateService.UpdateCoreAsync("aether", progress);
             if (success)
@@ -3860,6 +5073,7 @@ public sealed partial class SettingsViewModel : PageViewModelBase
         finally
         {
             IsUpdatingAether = false;
+            await RestartTunnelAfterUpdateAsync(wasConnected);
         }
     }
 

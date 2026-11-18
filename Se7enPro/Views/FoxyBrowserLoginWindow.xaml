@@ -1,0 +1,66 @@
+<Window x:Class="Se7enPro.Views.FoxyBrowserLoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Sign in via Firefox Browser"
+        Width="440" Height="560"
+        MinWidth="380" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        FontFamily="{StaticResource UI.FontFamily}"
+        TextElement.Foreground="{DynamicResource TextPrimaryBrush}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="Grayscale"
+        UseLayoutRounding="True">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="5" CornerRadius="18" GlassFrameThickness="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
+    </WindowChrome.WindowChrome>
+
+    <Border Background="{DynamicResource Surface.CardElevated}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" CornerRadius="18" Margin="10">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="18,14,14,12" MouseLeftButtonDown="OnHeaderMouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="34" Height="34" CornerRadius="9" Background="{DynamicResource Status.FoxySoft}" BorderBrush="{DynamicResource Status.FoxyBorder}" BorderThickness="1" Margin="0,0,10,0">
+                    <materialDesign:PackIcon Kind="Firefox" Width="18" Height="18" Foreground="{DynamicResource Status.Foxy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="TitleText" Text="Sign in via Firefox Browser" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="accounts.firefox.com — handles CAPTCHA &amp; 2FA directly" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,1,0,0" />
+                </StackPanel>
+
+                <Button Grid.Column="2" Style="{StaticResource UI.ModalCloseButton}" VerticalAlignment="Center" ToolTip="{DynamicResource Loc_close}" Click="OnCloseClicked" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <materialDesign:PackIcon Kind="WindowClose" Width="14" Height="14" />
+                </Button>
+            </Grid>
+
+            <ProgressBar x:Name="LoadProgress" Grid.Row="1" Height="2" IsIndeterminate="True" Foreground="{DynamicResource Status.Foxy}" Background="Transparent" BorderThickness="0" />
+
+            <Border x:Name="ErrorBanner" Grid.Row="2" Background="{DynamicResource Status.DangerSoft}" BorderBrush="{DynamicResource Status.DangerBorder}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="14,10,14,4" Visibility="Collapsed">
+                <TextBlock x:Name="ErrorBannerText" FontSize="12" Foreground="{StaticResource DangerBrush}" TextWrapping="Wrap" />
+            </Border>
+
+            <Border Grid.Row="3" Margin="12,8,12,12" CornerRadius="10" ClipToBounds="True" Background="#FFFFFFFF" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1">
+                <wv2:WebView2 x:Name="BrowserView" />
+            </Border>
+        </Grid>
+    </Border>
+</Window>

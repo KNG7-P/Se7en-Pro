@@ -15,26 +15,39 @@ public sealed record EndpointLocationResult(
 
 public static class EndpointProbeHelper
 {
-    public static async Task<EndpointLocationResult?> ProbeAsync(int socksPort, CancellationToken ct)
+    public static async Task<EndpointLocationResult?> ProbeAsync(
+        int socksPort, CancellationToken ct, string? username = null, string? password = null)
     {
         if (socksPort <= 0) return null;
 
         try
         {
+            var proxy = new WebProxy($"socks5://127.0.0.1:{socksPort}");
+            if (!string.IsNullOrEmpty(username))
+            {
+                proxy.Credentials = new NetworkCredential(username, password ?? "");
+            }
+
             using var handler = new SocketsHttpHandler
             {
-                Proxy = new WebProxy($"socks5://127.0.0.1:{socksPort}"),
-                ConnectTimeout = TimeSpan.FromSeconds(5)
+                Proxy = proxy,
+                ConnectTimeout = TimeSpan.FromSeconds(4)
             };
             using var client = new HttpClient(handler)
             {
-                Timeout = TimeSpan.FromSeconds(12)
+                Timeout = TimeSpan.FromSeconds(10)
             };
 
-            var cfResult = await QueryCloudflareTraceAsync(client, ct);
-            if (cfResult != null && !string.IsNullOrEmpty(cfResult.Ip) && !string.IsNullOrEmpty(cfResult.CountryCode))
+            var ipApiResult = await QueryIpApiAsync(client, ct);
+            if (ipApiResult != null && !string.IsNullOrEmpty(ipApiResult.Ip) && !string.IsNullOrEmpty(ipApiResult.CountryCode))
             {
-                return cfResult;
+                return ipApiResult;
+            }
+
+            var ipInfoResult = await QueryIpInfoAsync(client, ct);
+            if (ipInfoResult != null && !string.IsNullOrEmpty(ipInfoResult.Ip) && !string.IsNullOrEmpty(ipInfoResult.CountryCode))
+            {
+                return ipInfoResult;
             }
 
             var countryIsResult = await QueryCountryIsAsync(client, ct);
@@ -49,12 +62,7 @@ public static class EndpointProbeHelper
                 return ipWhoIsResult;
             }
 
-            var ipApiResult = await QueryIpApiAsync(client, ct);
-            if (ipApiResult != null && !string.IsNullOrEmpty(ipApiResult.Ip) && !string.IsNullOrEmpty(ipApiResult.CountryCode))
-            {
-                return ipApiResult;
-            }
-
+            var cfResult = await QueryCloudflareTraceAsync(client, ct);
             if (cfResult != null && !string.IsNullOrEmpty(cfResult.Ip))
             {
                 return cfResult;
@@ -64,6 +72,38 @@ public static class EndpointProbeHelper
         {
         }
 
+        return null;
+    }
+
+    private static async Task<EndpointLocationResult?> QueryIpInfoAsync(HttpClient client, CancellationToken ct)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
+
+            var json = await client.GetStringAsync("https://ipinfo.io/json", cts.Token);
+            using var doc = JsonDocument.Parse(json);
+            string? ip = null;
+            string? country = null;
+            string? city = null;
+
+            if (doc.RootElement.TryGetProperty("ip", out var ipProp))
+                ip = ipProp.GetString()?.Trim();
+            if (doc.RootElement.TryGetProperty("country", out var cProp))
+            {
+                var c = cProp.GetString()?.Trim().ToUpperInvariant();
+                if (!string.IsNullOrEmpty(c) && c.Length == 2 && c != "T1" && c != "XX") country = c;
+            }
+            if (doc.RootElement.TryGetProperty("city", out var cityProp))
+                city = cityProp.GetString()?.Trim();
+
+            if (!string.IsNullOrEmpty(ip) && !string.IsNullOrEmpty(country))
+            {
+                return new EndpointLocationResult(ip, country, city);
+            }
+        }
+        catch { }
         return null;
     }
 

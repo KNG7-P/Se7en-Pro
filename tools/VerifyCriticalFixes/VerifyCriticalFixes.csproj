@@ -22,9 +22,14 @@
     <Compile Include="..\..\Se7enPro\Services\ConnectionMethod.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\LocalizedItem.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\Loc.cs" LinkBase="Units" />
-    <Compile Include="..\..\Se7enPro\Services\DnsSettings.cs" LinkBase="Units" />
-    <Compile Include="..\..\Se7enPro\Services\DnsResolverPolicy.cs" LinkBase="Units" />
-    <Compile Include="..\..\Se7enPro\Services\DnsProber.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Dns\DnsSettings.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Dns\DnsResolverPolicy.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Dns\DnsProber.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\V2Ray\V2RayLinkParser.cs" LinkBase="Units" />
+
+    <!-- The crash-recovery journal for TUN bypass routes. It is deliberately free of
+         P/Invoke so the decision logic can be driven offline against a temp file. -->
+    <Compile Include="..\..\Se7enPro\Services\Tun\TunRouteJournal.cs" LinkBase="Units" />
 
     <!-- The DNS forwarder, compiled in so the live relay-ordering test can drive the real
          relay path. Its other partials are needed for it to link. -->
@@ -33,8 +38,21 @@
     <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Policy.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Local.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Split.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SocksDnsForwarder.Doh.cs" LinkBase="Units" />
 
     <Compile Include="..\..\Se7enPro\Models\UserSettings.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Models\FirefoxAccountInfo.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Models\Notice.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Models\ObservableRangeCollection.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\ITunnelCoreManager.cs" LinkBase="Contracts" />
+    <Compile Include="..\..\Se7enPro\Services\Foxy\HelloSplitHelper.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Foxy\FoxyNetwork.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Foxy\FoxyConnectProxy.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Foxy\FxaCoreBridge.cs" LinkBase="Units" />
+
+    <!-- The LAN gate every engine shares. Compiled in so "LAN toggle on without a
+         login must stay on loopback" is checked rather than assumed. -->
+    <Compile Include="..\..\Se7enPro\Services\LanPolicy.cs" LinkBase="Units" />
 
     <!-- The DNS view model and its row model. Compiled in so the auto-save behaviour can
          be driven headlessly: debounce, no-op suppression and load-suppression are all
@@ -44,19 +62,25 @@
     <!-- The identity pool and its two dependencies. Compiled in with no engine references
          at all, which is the point: rotation, validity and failure attribution can then be
          driven offline, against a temp file, with no network. -->
-    <Compile Include="..\..\Se7enPro\Services\IdentityPool.cs" LinkBase="Units" />
-    <Compile Include="..\..\Se7enPro\Services\IdentityFileGuard.cs" LinkBase="Units" />
-    <Compile Include="..\..\Se7enPro\Services\ProtectedSecret.cs" LinkBase="Units" />
-    <Compile Include="..\..\Se7enPro\Services\IdentityRelay.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Identity\IdentityPool.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Identity\IdentityFileGuard.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Security\ProtectedSecret.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Identity\IdentityRelay.cs" LinkBase="Units" />
 
     <!-- The aether capability probe and the optional-flag gating. Compiled in so the
          decisions can be tested against the REAL bundled aether.exe rather than a fixture:
          the whole point is that the shipped Windows build has no tls-verify flag. -->
-    <Compile Include="..\..\Se7enPro\Services\AetherCapabilities.cs" LinkBase="Units" />
-    <Compile Include="..\..\Se7enPro\Services\AetherExtras.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Aether\AetherCapabilities.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Aether\AetherExtras.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\ViewModels\DnsFieldRow.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\ViewModels\DnsLabels.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\ViewModels\DnsSettingsViewModel.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\ViewModels\V2RayConfigItemViewModel.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\CountryHelper.Flags.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\MihomoConfigBuilder.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\V2Ray\V2RayConfigBuilder.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\PsiphonServerListBootstrap.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Views\ModalWindowHelper.cs" LinkBase="Units" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />

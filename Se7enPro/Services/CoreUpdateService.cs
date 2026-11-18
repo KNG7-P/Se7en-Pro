@@ -14,8 +14,11 @@ namespace Se7enPro.Services;
 
 public sealed class CoreUpdateService : ICoreUpdateService
 {
+    private const long MaxArchiveBytes = 64L * 1024 * 1024;
+
     private readonly ILogger<CoreUpdateService> _logger;
     private readonly HttpClient _httpClient;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _versionCache = new(StringComparer.OrdinalIgnoreCase);
 
     public CoreUpdateService(ILogger<CoreUpdateService> logger)
     {
@@ -29,8 +32,12 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
     public string GetInstalledVersion(string coreId)
     {
+        if (_versionCache.TryGetValue(coreId, out var cached))
+            return cached;
+
         try
         {
+            string version;
             switch (coreId.ToLowerInvariant())
             {
                 case "aether":
@@ -41,17 +48,23 @@ public sealed class CoreUpdateService : ICoreUpdateService
                         var ver = QueryExeVersion(exePath, "--version");
                         if (!string.IsNullOrEmpty(ver))
                         {
-                            
                             var parts = ver.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length >= 2) return parts[1].Trim();
-                            return ver.Trim();
+                            version = parts.Length >= 2 ? parts[1].Trim() : ver.Trim();
+                            _versionCache[coreId] = version;
+                            return version;
                         }
 
                         var fvi = FileVersionInfo.GetVersionInfo(exePath);
                         if (!string.IsNullOrEmpty(fvi.FileVersion))
-                            return fvi.FileVersion;
+                        {
+                            version = fvi.FileVersion;
+                            _versionCache[coreId] = version;
+                            return version;
+                        }
                     }
-                    return "1.7.0";
+                    version = "1.7.0";
+                    _versionCache[coreId] = version;
+                    return version;
                 }
 
                 case "tor":
@@ -62,7 +75,6 @@ public sealed class CoreUpdateService : ICoreUpdateService
                         var ver = QueryExeVersion(exePath, "--version");
                         if (!string.IsNullOrEmpty(ver))
                         {
-                            
                             var lines = ver.Split('\n');
                             if (lines.Length > 0)
                             {
@@ -72,12 +84,16 @@ public sealed class CoreUpdateService : ICoreUpdateService
                                 {
                                     var rest = first.Substring(idx + 8).Trim();
                                     var space = rest.IndexOf(' ');
-                                    return space > 0 ? rest.Substring(0, space) : rest;
+                                    version = space > 0 ? rest.Substring(0, space) : rest;
+                                    _versionCache[coreId] = version;
+                                    return version;
                                 }
                             }
                         }
                     }
-                    return "0.4.9.11";
+                    version = "0.4.9.11";
+                    _versionCache[coreId] = version;
+                    return version;
                 }
 
                 default:
@@ -232,8 +248,8 @@ public sealed class CoreUpdateService : ICoreUpdateService
         
         
         
-        UpdateIntegrity.HardenStagingDirectory(tempDir);
-        var zipPath = Path.Combine(tempDir, "aether-windows-x86_64.zip");
+        if (!UpdateIntegrity.HardenStagingDirectory(tempDir))
+            _logger.LogWarning("Could not harden the core update staging directory ACL: {Dir}", tempDir);
         var extractedExe = Path.Combine(tempDir, "aether.exe");
 
         try
@@ -252,13 +268,16 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
             
             progress?.Report(5);
+            byte[] zipBytes;
             using (var response = await _httpClient.GetAsync(updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
             {
                 response.EnsureSuccessStatusCode();
                 var totalBytes = response.Content.Headers.ContentLength ?? (updateInfo.DownloadSizeBytes > 0 ? updateInfo.DownloadSizeBytes : 4500000);
+                if (response.Content.Headers.ContentLength > MaxArchiveBytes)
+                    throw new InvalidOperationException(Loc.Of("The downloaded core archive is too large."));
 
                 await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                await using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+                using var archiveStream = new MemoryStream();
 
                 var buffer = new byte[81920];
                 long downloadedBytes = 0;
@@ -266,8 +285,10 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                 {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
                     downloadedBytes += bytesRead;
+                    if (downloadedBytes > MaxArchiveBytes)
+                        throw new InvalidOperationException(Loc.Of("The downloaded core archive is too large."));
+                    archiveStream.Write(buffer, 0, bytesRead);
 
                     if (totalBytes > 0)
                     {
@@ -275,50 +296,64 @@ public sealed class CoreUpdateService : ICoreUpdateService
                         progress?.Report(Math.Min(75, pct));
                     }
                 }
+
+                zipBytes = archiveStream.ToArray();
             }
 
-            
-            
             progress?.Report(78);
             var zipHash = UpdateIntegrity.VerifyAgainstManifest(
-                manifestText, "aether-windows-x86_64.zip", zipPath);
+                manifestText, "aether-windows-x86_64.zip", zipBytes);
             _logger.LogInformation(
                 "Core archive verified against SHA256SUMS: {Hash}", zipHash);
 
             progress?.Report(80);
 
-            
-            
-            
-            using (var archive = ZipFile.OpenRead(zipPath))
+            byte[] executableBytes;
+            using (var archiveStream = new MemoryStream(zipBytes, writable: false))
+            using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read))
             {
-                var entry = archive.GetEntry("aether.exe")
-                            ?? archive.GetEntry("aether-windows-x86_64/aether.exe")
-                            ?? archive.GetEntry("aether-windows-x86_64\\aether.exe");
-
-                if (entry is null)
+                var expectedNames = new[]
                 {
-                    throw new FileNotFoundException("aether.exe was not found inside the downloaded archive.");
+                    "aether.exe",
+                    "aether-windows-x86_64/aether.exe",
+                    "aether-windows-x86_64\\aether.exe"
+                };
+                var entries = archive.Entries
+                    .Where(e => expectedNames.Contains(e.FullName, StringComparer.Ordinal))
+                    .ToArray();
+                if (entries.Length != 1)
+                {
+                    throw new FileNotFoundException("The downloaded archive must contain exactly one expected aether.exe entry.");
                 }
 
-                entry.ExtractToFile(extractedExe, overwrite: true);
+                var entry = entries[0];
+                if (entry.Length > MaxArchiveBytes)
+                    throw new InvalidDataException("The aether.exe archive entry is too large.");
+
+                using var entryStream = entry.Open();
+                using var executableStream = new MemoryStream((int)entry.Length);
+                entryStream.CopyTo(executableStream);
+                executableBytes = executableStream.ToArray();
             }
 
-            
-            
-            
-            var exeHash = UpdateIntegrity.ComputeSha256(extractedExe);
+            File.WriteAllBytes(extractedExe, executableBytes);
+            var exeHash = UpdateIntegrity.ComputeSha256(executableBytes);
             _logger.LogInformation("Staged aether.exe SHA-256: {Hash}", exeHash);
 
             progress?.Report(84);
 
             
             
-            var stagedVersion = QueryExeVersion(extractedExe, "--version");
+            
+            var stagedVersion = ReadFileVersion(extractedExe);
+            if (string.IsNullOrWhiteSpace(stagedVersion))
+            {
+                stagedVersion = updateInfo.LatestVersion;
+            }
             if (string.IsNullOrWhiteSpace(stagedVersion))
             {
                 throw new InvalidOperationException(
-                    Loc.Of("The downloaded core did not start, so it was not installed."));
+                    Loc.Of("The downloaded core could not be identified, so it was not installed."));
             }
 
             var appResourcePath = Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe");
@@ -330,17 +365,11 @@ public sealed class CoreUpdateService : ICoreUpdateService
             
             
             
-            var backups = new Dictionary<string, string>();
+            var backups = new Dictionary<string, byte[]>();
             foreach (var destination in targets)
             {
-                if (!File.Exists(destination)) continue;
-                var backup = Path.Combine(tempDir, Path.GetRandomFileName() + ".aether.exe");
-                try
-                {
-                    File.Copy(destination, backup, overwrite: true);
-                    backups[destination] = backup;
-                }
-                catch { }
+                if (File.Exists(destination))
+                    backups[destination] = File.ReadAllBytes(destination);
             }
 
             progress?.Report(88);
@@ -356,13 +385,19 @@ public sealed class CoreUpdateService : ICoreUpdateService
                 {
                     try
                     {
-                        SafeReplaceFile(extractedExe, destination);
+                        ReplaceTargetWithElevationFallback(executableBytes, extractedExe, destination, exeHash);
                         updatedTargets.Add(destination);
                         updatedCount++;
                     }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Failed to update target {Destination}; continuing with other targets", destination);
+                        if (string.Equals(destination, appResourcePath, StringComparison.OrdinalIgnoreCase)
+                            && (File.Exists(appResourcePath) || AdminElevation.IsTrustedInstallPath()))
+                        {
+                            throw new UnauthorizedAccessException(
+                                Loc.Of("Administrator permission is required to update the bundled core so it persists after restart."), ex);
+                        }
                     }
                 }
 
@@ -381,7 +416,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
                     var devSourcePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Resources", "aether", "aether.exe"));
                     if (File.Exists(devSourcePath))
                     {
-                        SafeReplaceFile(extractedExe, devSourcePath);
+                        SafeReplaceFile(executableBytes, devSourcePath);
                     }
                 }
                 catch { }
@@ -392,12 +427,11 @@ public sealed class CoreUpdateService : ICoreUpdateService
                 
                 
                 var mismatched = updatedTargets.FirstOrDefault(t =>
-                    !string.Equals(NormalizeVersion(QueryExeVersion(t, "--version")),
-                                   NormalizeVersion(stagedVersion), StringComparison.OrdinalIgnoreCase));
+                    !string.Equals(UpdateIntegrity.ComputeSha256(t), exeHash, StringComparison.OrdinalIgnoreCase));
                 if (mismatched is not null)
                 {
                     throw new InvalidOperationException(
-                        string.Format(Loc.Of("{0} still reports an old version after the update."), "aether.exe"));
+                        string.Format(Loc.Of("{0} failed verification after the update."), "aether.exe"));
                 }
             }
             catch (Exception ex)
@@ -410,6 +444,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
                 throw;
             }
 
+            _versionCache.TryRemove("aether", out _);
             progress?.Report(100);
             _logger.LogInformation("Aether core successfully installed/verified: {Version}", stagedVersion);
             return true;
@@ -450,27 +485,26 @@ public sealed class CoreUpdateService : ICoreUpdateService
             {
                 try
                 {
-                    string image = "";
+                    string image;
                     try { image = p.MainModule?.FileName ?? ""; }
                     catch
                     {
-                        try { p.Kill(entireProcessTree: true); p.WaitForExit(1000); } catch { }
+                        _logger.LogInformation(
+                            "Leaving process {Pid} ({Name}) alone: its image path is not readable",
+                            p.Id, name);
                         continue;
                     }
 
-                    if (!string.IsNullOrEmpty(image))
-                    {
-                        string full;
-                        try { full = Path.GetFullPath(image); }
-                        catch { full = ""; }
+                    string full;
+                    try { full = Path.GetFullPath(image); }
+                    catch { full = ""; }
 
-                        if (!string.IsNullOrEmpty(full) && !expected.Contains(full))
-                        {
-                            _logger.LogInformation(
-                                "Leaving process {Pid} ({Name}) alone: it is not a Se7en Pro core ({Path})",
-                                p.Id, name, full);
-                            continue;
-                        }
+                    if (string.IsNullOrEmpty(full) || !expected.Contains(full))
+                    {
+                        _logger.LogInformation(
+                            "Leaving process {Pid} ({Name}) alone: it is not a Se7en Pro core ({Path})",
+                            p.Id, name, full);
+                        continue;
                     }
 
                     try { p.Kill(entireProcessTree: true); } catch { }
@@ -485,7 +519,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
         }
     }
 
-        private static void SafeReplaceFile(string source, string destination)
+        private static void SafeReplaceFile(byte[] source, string destination)
     {
         var destDir = Path.GetDirectoryName(destination);
         if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
@@ -493,7 +527,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
         var tempFile = destination + ".tmp." + Guid.NewGuid().ToString("N");
         try
         {
-            File.Copy(source, tempFile, overwrite: true);
+            File.WriteAllBytes(tempFile, source);
 
             if (File.Exists(destination))
             {
@@ -514,7 +548,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
                     }
                     catch
                     {
-                        File.Copy(source, destination, overwrite: true);
+                        File.WriteAllBytes(destination, source);
                         return;
                     }
                 }
@@ -530,14 +564,49 @@ public sealed class CoreUpdateService : ICoreUpdateService
         }
     }
 
+    private static void ReplaceTargetWithElevationFallback(
+        byte[] executableBytes, string stagedExePath, string destination, string expectedHash)
+    {
+        try
+        {
+            SafeReplaceFile(executableBytes, destination);
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            var dir = Path.GetDirectoryName(destination);
+            var mkdir = !string.IsNullOrEmpty(dir) ? $"if not exist \"{dir}\" mkdir \"{dir}\" && " : "";
+            var psi = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c {mkdir}copy /Y \"{stagedExePath}\" \"{destination}\"",
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true,
+            };
+            using var proc = Process.Start(psi)
+                ?? throw new UnauthorizedAccessException($"Could not start elevated copy for {destination}.");
+            proc.WaitForExit();
+            if (proc.ExitCode != 0
+                || !File.Exists(destination)
+                || !string.Equals(UpdateIntegrity.ComputeSha256(destination), expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException($"Elevated replacement failed for {destination} (exit={proc.ExitCode}).");
+            }
+        }
+    }
+
     private static string FindAetherExecutable()
     {
+        var appResource = Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe");
+        if (EngineTrust.RunFromBundle)
+            return File.Exists(appResource) ? appResource : "";
+
         var localCached = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Se7en", "aether", EngineProcessNames.Aether);
         if (File.Exists(localCached)) return localCached;
-
-        var appResource = Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe");
         if (File.Exists(appResource)) return appResource;
 
         return "";
@@ -545,12 +614,14 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
     private static string FindTorExecutable()
     {
+        var appResource = Path.Combine(AppContext.BaseDirectory, "Resources", "tor", "tor.exe");
+        if (EngineTrust.RunFromBundle)
+            return File.Exists(appResource) ? appResource : "";
+
         var localCached = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Se7en", "tor", EngineProcessNames.Tor);
         if (File.Exists(localCached)) return localCached;
-
-        var appResource = Path.Combine(AppContext.BaseDirectory, "Resources", "tor", "tor.exe");
         if (File.Exists(appResource)) return appResource;
 
         return "";
@@ -613,6 +684,19 @@ public sealed class CoreUpdateService : ICoreUpdateService
         _logger.LogWarning(
             "Not offering an update: cannot compare \"{Current}\" with \"{Latest}\"", current, latest);
         return false;
+    }
+
+    private static string ReadFileVersion(string exePath)
+    {
+        try
+        {
+            var fvi = FileVersionInfo.GetVersionInfo(exePath);
+            var raw = !string.IsNullOrWhiteSpace(fvi.FileVersion)
+                ? fvi.FileVersion
+                : fvi.ProductVersion;
+            return string.IsNullOrWhiteSpace(raw) ? "" : NormalizeVersion(raw);
+        }
+        catch { return ""; }
     }
 
     private static string NormalizeVersion(string? raw)

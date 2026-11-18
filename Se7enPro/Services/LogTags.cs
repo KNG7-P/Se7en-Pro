@@ -8,12 +8,15 @@ public static class LogTags
     public const string Aether = "aether";
     public const string Tor = "tor";
     public const string Shard = "shard";
+    public const string Foxy = "foxy";
+    public const string Lantern = "lantern";
+    public const string Veep = "veep";
     public const string V2Ray = "v2ray";
     public const string Chain = "chain";
     public const string Tun = "tun";
     public const string App = "app";
 
-    private static readonly string[] All = { Psiphon, Aether, Tor, Shard, V2Ray, Chain, Tun, App, "warp" };
+    private static readonly string[] All = { Psiphon, Aether, Tor, Shard, Foxy, Lantern, Veep, V2Ray, Chain, Tun, App, "warp" };
 
         public static bool Has(string? line) => Of(line) is not null;
 
@@ -38,6 +41,14 @@ public static class LogTags
         ConnectionMethod.Shard => Shard,
         ConnectionMethod.PsiphonOverV2Ray or ConnectionMethod.TorOverV2Ray => V2Ray,
         ConnectionMethod.PsiphonOverWarp or ConnectionMethod.TorOverWarp => Chain,
+        ConnectionMethod.PsiphonOverFoxy => Chain,
+        ConnectionMethod.PsiphonOverLantern => Chain,
+        ConnectionMethod.WarpOverV2Ray => Chain,
+        ConnectionMethod.Lantern => Lantern,
+        ConnectionMethod.LanternOverWarp => Chain,
+        ConnectionMethod.Veep => Veep,
+        ConnectionMethod.VeepOverWarp => Chain,
+        var m when m.IsFoxy() => Foxy,
         _ => App,
     };
 }

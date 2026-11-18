@@ -83,15 +83,20 @@ public partial class CountryFlag : UserControl
         if (string.IsNullOrEmpty(code) || code == "auto")
         {
             AutoIcon.Visibility = Visibility.Visible;
+            FlagImage.Visibility = Visibility.Collapsed;
+            FlagImage.Source = null;
             FlagBorder.ClearValue(Border.BackgroundProperty);
             return;
         }
 
-        if (code.Length == 2)
+        var dash = code.IndexOf('-');
+        var isoCode = dash > 0 ? code[..dash] : code;
+
+        if (isoCode.Length == 2)
         {
             try
             {
-                var image = _imageCache.GetOrAdd(code, c =>
+                var image = _imageCache.GetOrAdd(isoCode, c =>
                 {
                     var uri = new Uri($"pack://application:,,,/Resources/Flags/{c}.png", UriKind.Absolute);
                     var bmp = new BitmapImage();
@@ -109,9 +114,12 @@ public partial class CountryFlag : UserControl
                     AlignmentX = AlignmentX.Center,
                     AlignmentY = AlignmentY.Center
                 };
+                RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.HighQuality);
                 brush.Freeze();
 
                 FlagBorder.Background = brush;
+                FlagImage.Source = null;
+                FlagImage.Visibility = Visibility.Collapsed;
                 AutoIcon.Visibility = Visibility.Collapsed;
                 return;
             }
@@ -122,6 +130,8 @@ public partial class CountryFlag : UserControl
         }
 
         AutoIcon.Visibility = Visibility.Visible;
+        FlagImage.Visibility = Visibility.Collapsed;
+        FlagImage.Source = null;
         FlagBorder.ClearValue(Border.BackgroundProperty);
     }
 }

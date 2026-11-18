@@ -14,11 +14,14 @@ internal sealed class FakeSettings : ISettingsService
     public event EventHandler? SettingsChanged;
 
     public void Load() { }
-    public void Save() => SettingsChanged?.Invoke(this, EventArgs.Empty);
+    public bool Save() { SettingsChanged?.Invoke(this, EventArgs.Empty); return true; }
+    public bool SaveQuietly() => true;
+    public void ResetToDefaults() => Save();
 }
 
 internal sealed class FakeTunnel : ITunnelCoreManager
 {
+    public ConnectionMethod ActiveMethod => ConnectionMethod.WireGuard;
     public ConnectionState State { get; private set; } = ConnectionState.Connected;
     public int SocksProxyPort { get; private set; }
     public int HttpProxyPort => SocksProxyPort; 
@@ -26,6 +29,8 @@ internal sealed class FakeTunnel : ITunnelCoreManager
     public string ConnectedServerRegion => "";
     public string CurrentRouteIp => "";
     public string CurrentRouteSni => "";
+    public string ServerEndpointAddress => "";
+    public IReadOnlyList<string> ServerEndpointAddresses => Array.Empty<string>();
     public IReadOnlyList<string> AvailableEgressRegions => Array.Empty<string>();
     public IReadOnlyList<string> RecentLog => Array.Empty<string>();
     public long BytesSent => 0;
@@ -70,7 +75,9 @@ internal sealed class FakeSystemProxy : ISystemProxyService
 
     public bool IsApplied => SetCalls > ClearCalls;
 
-    public void Set(int httpProxyPort)
+    public void Set(int httpProxyPort) => Set(httpProxyPort, null);
+
+    public void Set(int httpProxyPort, IEnumerable<string>? bypassEntries = null)
     {
         SetCalls++;
         LastSetPort = httpProxyPort;
