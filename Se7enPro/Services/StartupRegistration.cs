@@ -8,7 +8,7 @@ public sealed class StartupRegistration : IStartupRegistration
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-    private const string ValueName = "Se7enPro";
+    private static readonly string ValueName = BuildIdentity.RunValueName;
 
     public const string AutostartArg = "--autostart";
 

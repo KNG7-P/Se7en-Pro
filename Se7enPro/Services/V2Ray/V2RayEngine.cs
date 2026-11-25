@@ -644,7 +644,7 @@ public sealed class V2RayEngine : IConnectionEngine, IDisposable
 
     private static string RunConfigPath(bool isXray)
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Se7en");
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), BuildIdentity.AppFolderName);
         return Path.Combine(dir, isXray ? "xray_run.json" : "singbox_run.json");
     }
 

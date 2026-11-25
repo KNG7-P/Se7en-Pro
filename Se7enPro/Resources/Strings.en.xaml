@@ -1228,5 +1228,29 @@
     <sys:String x:Key="Loc_foxyProxyChainedDisabledWarning">Foxy Upstream Proxy applies only in standalone Foxy mode and is disabled in Foxy over WARP / Foxy over V2Ray modes.</sys:String>
     <sys:String x:Key="Loc_upstreamProxyEnableDescFoxy">Route standalone Foxy tunnel dials through an intermediate SOCKS5 or HTTP proxy</sys:String>
     <sys:String x:Key="Loc_configListRemoveTimedOut">Remove timed-out configs</sys:String>
+
+    <!-- Split Tunnel -->
+    <sys:String x:Key="Loc_Delete">Delete</sys:String>
+    <sys:String x:Key="Loc_Rename">Rename</sys:String>
+    <sys:String x:Key="Loc_splitAddToMode">Add to this mode</sys:String>
+    <sys:String x:Key="Loc_splitApplications">Applications</sys:String>
+    <sys:String x:Key="Loc_splitBlock">Block</sys:String>
+    <sys:String x:Key="Loc_splitBypass">Direct</sys:String>
+    <sys:String x:Key="Loc_splitDefaultOutbound">Default outbound</sys:String>
+    <sys:String x:Key="Loc_splitDomain">Domain</sys:String>
+    <sys:String x:Key="Loc_splitIpCidrShort">IP</sys:String>
+    <sys:String x:Key="Loc_splitModeEmpty">Nothing here yet</sys:String>
+    <sys:String x:Key="Loc_splitMoveNext">Move to the next mode</sys:String>
+    <sys:String x:Key="Loc_splitProcess">Process</sys:String>
+    <sys:String x:Key="Loc_splitProfileCreate">Create profile</sys:String>
+    <sys:String x:Key="Loc_splitProfileNew">New profile name</sys:String>
+    <sys:String x:Key="Loc_splitRefresh">Refresh</sys:String>
+    <sys:String x:Key="Loc_splitRemoveAssignment">Remove from this profile</sys:String>
+    <sys:String x:Key="Loc_splitThroughTunnel">Proxy</sys:String>
+    <sys:String x:Key="Loc_ApplyNewRouting">Apply new routing?</sys:String>
+    <sys:String x:Key="Loc_ApplyNewRoutingBody">Switch to “{0}” and reconnect so the new routing takes effect?
+
+The tunnel will drop for a moment.</sys:String>
+    <sys:String x:Key="Loc_Thisprofileisfull">This profile is full.</sys:String>
 </ResourceDictionary>
 

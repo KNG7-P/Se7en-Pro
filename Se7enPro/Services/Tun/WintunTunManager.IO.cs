@@ -342,7 +342,7 @@ public sealed partial class WintunTunManager
         {
             try
             {
-                var dir = Path.Combine(root, "Se7en", legacy);
+                var dir = Path.Combine(root, BuildIdentity.AppFolderName, legacy);
                 if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
                 dir = Path.Combine(root, "Psiphon", legacy);
                 if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);

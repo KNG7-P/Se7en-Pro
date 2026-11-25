@@ -359,7 +359,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
             var appResourcePath = Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe");
             var localAppCachedPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Se7en", "aether", EngineProcessNames.Aether);
+                BuildIdentity.AppFolderName, "aether", EngineProcessNames.Aether);
             var targets = new[] { appResourcePath, localAppCachedPath };
 
             
@@ -473,7 +473,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
         Collect(Path.Combine(AppContext.BaseDirectory, "Resources", "aether", "aether.exe"));
         Collect(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Se7en", "aether", EngineProcessNames.Aether));
+            BuildIdentity.AppFolderName, "aether", EngineProcessNames.Aether));
 
         foreach (var name in new[] { "Se7enPro.Aether", "aether" })
         {
@@ -605,7 +605,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
         var localCached = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Se7en", "aether", EngineProcessNames.Aether);
+            BuildIdentity.AppFolderName, "aether", EngineProcessNames.Aether);
         if (File.Exists(localCached)) return localCached;
         if (File.Exists(appResource)) return appResource;
 
@@ -620,7 +620,7 @@ public sealed class CoreUpdateService : ICoreUpdateService
 
         var localCached = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Se7en", "tor", EngineProcessNames.Tor);
+            BuildIdentity.AppFolderName, "tor", EngineProcessNames.Tor);
         if (File.Exists(localCached)) return localCached;
         if (File.Exists(appResource)) return appResource;
 

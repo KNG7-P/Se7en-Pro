@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.37216.2 d17.14
@@ -13,6 +13,9 @@ Global
 		Release|Any CPU = Release|Any CPU
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
+		SplitDebug|Any CPU = SplitDebug|Any CPU
+		SplitDebug|x64 = SplitDebug|x64
+		SplitDebug|x86 = SplitDebug|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -27,6 +30,12 @@ Global
 		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.Release|x64.Build.0 = Release|x64
 		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.Release|x86.ActiveCfg = Release|x86
 		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.Release|x86.Build.0 = Release|x86
+		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.SplitDebug|Any CPU.ActiveCfg = SplitDebug|Any CPU
+		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.SplitDebug|Any CPU.Build.0 = SplitDebug|Any CPU
+		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.SplitDebug|x64.ActiveCfg = SplitDebug|x64
+		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.SplitDebug|x64.Build.0 = SplitDebug|x64
+		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.SplitDebug|x86.ActiveCfg = SplitDebug|x86
+		{19DA3D64-AA2B-1A58-944A-BE831B82E12F}.SplitDebug|x86.Build.0 = SplitDebug|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

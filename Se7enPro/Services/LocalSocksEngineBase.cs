@@ -150,7 +150,7 @@ public abstract class LocalSocksEngineBase : IConnectionEngine, IDisposable
 
     internal string WorkDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Se7en",
+        BuildIdentity.AppFolderName,
         WorkSubdirectory);
 
     public virtual Task<bool> RecoverFromMissingPrerequisitesAsync(CancellationToken ct)

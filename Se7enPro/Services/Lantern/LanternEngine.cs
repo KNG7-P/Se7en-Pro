@@ -82,7 +82,7 @@ public sealed class LanternEngine : LocalSocksEngineBase
             var resLantern = Path.Combine(AppDir, "Resources", "lantern");
             var workDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Se7en", WorkSubdirectory);
+                BuildIdentity.AppFolderName, WorkSubdirectory);
             try { Directory.CreateDirectory(workDir); } catch { }
 
             var serversPath = ResolveServersJson(workDir, resLantern);

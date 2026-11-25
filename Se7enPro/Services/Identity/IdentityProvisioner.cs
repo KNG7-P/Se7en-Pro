@@ -67,7 +67,7 @@ public sealed class IdentityProvisioner
     public static string GetAetherWorkDirectory() =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Se7en",
+            BuildIdentity.AppFolderName,
             "aether");
 
     public record AetherIdentitiesStatus(

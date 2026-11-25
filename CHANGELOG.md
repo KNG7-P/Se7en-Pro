@@ -1,5 +1,24 @@
 # 📝 Se7en Pro — Changelog
 
+## [Unreleased]
+
+Split tunneling was rebuilt around profiles with three independent routing modes, and the engine now actually enforces each mode.
+
+### 🚀 Highlights & Features
+- **Three Independent Modes**: Bypass (direct), Through Tunnel (proxy) and Block (no network) each keep their own list per profile. The previous single global mode plus one shared entry list is gone — that shared list was the reason adding an app to Through Tunnel also pulled every previously added Bypass app into the tunnel.
+- **Profiles**: create, rename, delete and switch profiles; each profile carries its own default outbound (Tunnel / Direct / Block) for unmatched traffic. Profiles are fully isolated and the active one is restored on start.
+- **Explicit Moves Only**: an app, domain or IP range belongs to exactly one mode per profile. Changing its mode is an explicit remove-and-add performed by the store, so a target can never be duplicated or silently moved. Selections survive mode and profile switches.
+- **Real Enforcement**: Through Tunnel is owned by the TUN catch-all; Bypass cancels the redirect at the WFP redirect layer (falling back to route pinning when that layer is unavailable); Block is dropped at `ALE_AUTH_CONNECT` **and** `DATAGRAM_DATA`, so even an already-open UDP socket stops. mihomo TUN emits the same three lists as native rules in a fixed order — Block, then Bypass, then Through Tunnel, then `MATCH` from the profile default.
+- **Domain and IP Rules Follow Their Mode**: only Bypass domains/CIDRs are resolved locally and pinned to the physical gateway. Through Tunnel entries stay on the tunnel path and Block entries are rejected before they are dialled.
+
+### 🔧 Fixes & Improvements
+- **Application Management**: real names and icons, search, live mode badges, duplicate prevention, and stable path-based identifiers so a renamed application keeps its rule.
+- **UI Redesign**: one compact status strip, a profile bar, three clearly separated mode tabs with counts, an inline custom-rule panel (process / domain / IP), and a permanent searchable application pane.
+- **One-Time Migration**: an existing install's old flat split list is converted into one profile exactly once, then the legacy keys are dropped.
+- **No Unrelated Changes**: split-tunnel-only diff; the routing, DNS and process-monitor changes are scoped to plan-driven behaviour.
+
+---
+
 ## [1.0.8]
 
 Major protocol expansion (Foxy, Lantern, Veep), Aether 2.4.0 update, 2 new TUN engines (Zeptun & Mihomo), new multi-hop Chain modes, MTU scanner, and major stability/performance optimizations.

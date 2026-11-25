@@ -1,30 +1,31 @@
-﻿<UserControl x:Class="Se7enPro.Views.SplitTunnelPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" xmlns:conv="clr-namespace:Se7enPro.Converters" xmlns:vm="clr-namespace:Se7enPro.ViewModels" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:SplitTunnelViewModel}">
+<UserControl x:Class="Se7enPro.Views.SplitTunnelPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes" xmlns:conv="clr-namespace:Se7enPro.Converters" xmlns:vm="clr-namespace:Se7enPro.ViewModels" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:SplitTunnelViewModel}">
     <UserControl.Resources>
-        <conv:StringEqualsConverter x:Key="StringEquals" />
-        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <conv:InverseBooleanToVisibilityConverter x:Key="InvBoolToVis" />
+        <conv:EqualsMultiConverter x:Key="MultiEquals" />
+        <conv:NotEqualsToVisibilityConverter x:Key="NotEqualsToVis" />
 
-        
-        <Style x:Key="PresetChipStyle" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
-            <Setter Property="BorderThickness" Value="1" />
+        <Style x:Key="SegmentButton" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-            <Setter Property="FontFamily" Value="{StaticResource UI.MonoFontFamily}" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Padding" Value="9,4" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Padding" Value="12,6" />
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="ChipBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
-                                <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{StaticResource Brand.AccentBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.SelectedBg}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Surface.CardBorderStrong}" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -32,407 +33,510 @@
                 </Setter.Value>
             </Setter>
         </Style>
-    </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel HorizontalAlignment="Stretch" Margin="24,0,24,24">
+        <Style x:Key="ModeTab" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.CardSecondaryBg}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Surface.CardBorderStrong}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
+        <Style x:Key="IconPillButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-            
-            
-            
-            <Border Background="#18F59E0B" BorderBrush="{DynamicResource Status.WarningBorder}" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,14" Visibility="{Binding ShowSystemWideWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <Grid VerticalAlignment="Center">
+        <Style x:Key="RuleRowBorder" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface.CardSecondaryBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushDefault}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+        <DataTemplate x:Key="RuleRowTemplate">
+            <Border Style="{StaticResource RuleRowBorder}">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <materialDesign:PackIcon Grid.Column="0" Kind="{Binding Icon}" Width="15" Height="15" VerticalAlignment="Center" Foreground="{Binding ActionBrush}" Margin="0,0,10,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <Button Grid.Column="2" Style="{StaticResource IconPillButton}" Command="{Binding DataContext.MoveRuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="{DynamicResource Loc_splitMoveNext}">
+                        <materialDesign:PackIcon Kind="SwapHorizontal" Width="14" Height="14" />
+                    </Button>
+                    <Button Grid.Column="3" Style="{StaticResource IconPillButton}" Width="26" Height="26" Margin="2,0,0,0"
+                            Command="{Binding DataContext.RemoveRuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="{DynamicResource Loc_Delete}">
+                        <materialDesign:PackIcon Kind="Close" Width="14" Height="14" />
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="24,0,24,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+            <!-- Admin / status strip -->
+            <Border Grid.Row="0" Background="{DynamicResource Surface.CardSecondaryBg}" BorderBrush="{DynamicResource BorderBrushDefault}" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <materialDesign:PackIcon Grid.Column="0" Kind="Lock" Width="18" Height="18" Foreground="{StaticResource Brand.WarningBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
 
-                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Brand.WarningBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 
-                    <Button Grid.Column="2" Style="{StaticResource UI.Btn.Warning}" Padding="12,0" Margin="12,0,0,0" Command="{Binding RestartAsAdminCommand}" Visibility="{Binding IsAdminElevated, Converter={StaticResource InverseBooleanToVisibilityConverter}}" AutomationProperties.Name="{DynamicResource Loc_splitElevateToAdmin}">
+                    <ToggleButton Grid.Column="2" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding SystemWideEnabled, Mode=TwoWay}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                  Visibility="{Binding IsAdminElevated, Converter={StaticResource BoolToVis}}" ToolTip="{Binding Source={StaticResource Loc_splitEnableSystemWide}}" />
+
+                    <Button Grid.Column="3" Style="{StaticResource UI.Btn.Warning}" Padding="12,0" Height="30" Margin="10,0,0,0" Command="{Binding RestartAsAdminCommand}"
+                            Visibility="{Binding IsAdminElevated, Converter={StaticResource InvBoolToVis}}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="Shield" Width="14" Height="14" Foreground="{StaticResource Brand.WarningBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <TextBlock Text="{DynamicResource Loc_splitElevateToAdmin}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource Brand.WarningBrush}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="2" Style="{StaticResource UI.Btn.Warning}" Padding="12,0" Margin="12,0,0,0" Command="{Binding EnableSystemWideCommand}" Visibility="{Binding IsAdminElevated, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="{DynamicResource Loc_splitEnableSystemWide}">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="Shield" Width="14" Height="14" Foreground="{StaticResource Brand.WarningBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <TextBlock Text="{DynamicResource Loc_splitEnableSystemWide}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource Brand.WarningBrush}" VerticalAlignment="Center" />
+                            <materialDesign:PackIcon Kind="ShieldAlertOutline" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{DynamicResource Loc_splitElevateToAdmin}" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
                 </Grid>
             </Border>
 
-            
-            
-            
-            <Border Style="{StaticResource UI.Card}" Padding="18,16" Margin="0,0,0,14">
-                <StackPanel>
-                    
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
-                        <materialDesign:PackIcon Kind="CallSplit" Width="16" Height="16" Foreground="{StaticResource Brand.AccentBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBlock Text="{DynamicResource Loc_Configuration}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            <!-- Profile bar: left = the split-tunnel switch, right = which profile -->
+            <Border Grid.Row="1" Style="{StaticResource UI.Card}" Padding="14,10" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- left: the one control this page is about -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ToggleButton Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding SplitTunnelEnabled, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock Text="{DynamicResource Loc_splitTunnelTitle}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    
-                    <Grid VerticalAlignment="Center" Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="{DynamicResource Loc_splitEnableLabel}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                            <TextBlock Text="{DynamicResource Loc_Routeselectedwebsitesandapplicatio}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
-                        </StackPanel>
-
-                        <ToggleButton Grid.Column="1" Style="{StaticResource MaterialDesignSwitchToggleButton}" IsChecked="{Binding SplitTunnelEnabled, Mode=TwoWay}" AutomationProperties.Name="{DynamicResource Loc_splitEnableLabel}" VerticalAlignment="Center" />
-                    </Grid>
-
-                    
-                    <Border Height="1" Background="{DynamicResource Surface.SubtleBorder}" Margin="0,0,0,12" />
-
-                    
-                    <Grid VerticalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="200" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="{DynamicResource Loc_RoutingPolicy}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                            <TextBlock Text="{DynamicResource Loc_Selectwhetherlisteditemsshouldbypa}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap" />
-                        </StackPanel>
-
-                        <ComboBox Grid.Column="1" Style="{StaticResource UI.CustomComboBox}" Height="38" AutomationProperties.Name="{DynamicResource Loc_RoutingPolicy}" SelectedValue="{Binding SplitTunnelMode, Mode=TwoWay}" SelectedValuePath="Tag" HorizontalContentAlignment="Left" VerticalAlignment="Center">
-                            <ComboBoxItem Tag="exclude" HorizontalContentAlignment="Left">
-                                <TextBlock Text="{DynamicResource Loc_BypassTunnel}" FontSize="12" HorizontalAlignment="Left" />
-                            </ComboBoxItem>
-                            <ComboBoxItem Tag="include" HorizontalContentAlignment="Left">
-                                <TextBlock Text="{DynamicResource Loc_RouteThroughTunnel}" FontSize="12" HorizontalAlignment="Left" />
-                            </ComboBoxItem>
+                    <!-- right: which profile is active, and creating a new one -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <ComboBox Style="{StaticResource UI.CustomComboBox}" Height="32" MinWidth="140" MaxWidth="200" VerticalAlignment="Center" Margin="0,0,6,0"
+                                  ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                                  Visibility="{Binding HasProfiles, Converter={StaticResource BoolToVis}}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="{Binding OutboundIcon}" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Brand.AccentBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Text="{Binding CountLabel}" FontSize="10.5" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
                         </ComboBox>
-                    </Grid>
-                </StackPanel>
+
+                        <TextBox Style="{StaticResource UI.CustomTextBox}" Height="32" Width="128" FontSize="12" VerticalAlignment="Center"
+                                 materialDesign:HintAssist.Hint="{DynamicResource Loc_splitProfileNew}"
+                                 Text="{Binding NewProfileName, UpdateSourceTrigger=PropertyChanged}" KeyDown="OnNewProfileKeyDown" />
+                        <Button Style="{StaticResource UI.PrimaryButton}" Height="32" MinWidth="0" Padding="9,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                Command="{Binding CreateProfileCommand}" ToolTip="{DynamicResource Loc_splitProfileCreate}">
+                            <materialDesign:PackIcon Kind="Plus" Width="16" Height="16" Foreground="{DynamicResource TextOnCyanBrush}" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            
-            
-            
-            <Grid Margin="0,0,0,14">
+            <!-- Body -->
+            <Grid Grid.Row="3">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" MinWidth="260" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="330" MinWidth="280" />
                 </Grid.ColumnDefinitions>
 
-                
-                <RadioButton Grid.Column="0" CommandParameter="Websites" Checked="OnSplitTunnelTabChecked" IsChecked="{Binding IsWebsitesTab, Mode=OneWay}" Cursor="Hand" Height="44" AutomationProperties.Name="{DynamicResource Loc_WebsitesIPs}">
-                    <RadioButton.Style>
-                        <Style TargetType="RadioButton">
-                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-                            <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
-                            <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
-                            <Setter Property="BorderThickness" Value="1" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="RadioButton">
-                                        <Border x:Name="TabBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" Padding="14,0">
-                                            <Grid VerticalAlignment="Center">
+                <!-- Rules -->
+                <Border Grid.Column="0" Style="{StaticResource UI.Card}" Padding="14" MinHeight="360">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0">
+                        <!-- default outbound: wraps instead of colliding at narrow widths -->
+                        <DockPanel LastChildFill="False" Margin="0,0,0,12">
+                            <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0" MaxWidth="150">
+                                <TextBlock Text="{DynamicResource Loc_splitDefaultOutbound}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding DefaultOutboundText}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,2,0,0"
+                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding DefaultOutboundText}" />
+                            </StackPanel>
+
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                <ItemsControl ItemsSource="{Binding DefaultOutbounds}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <RadioButton Style="{StaticResource SegmentButton}" GroupName="DefaultOutbound" Margin="4,0,0,0"
+                                                         Command="{Binding DataContext.SetDefaultOutboundCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                         CommandParameter="{Binding Key}">
+                                                <RadioButton.IsChecked>
+                                                    <MultiBinding Converter="{StaticResource MultiEquals}" Mode="OneWay">
+                                                        <Binding Path="Key" />
+                                                        <Binding Path="DataContext.DefaultOutbound" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                                    </MultiBinding>
+                                                </RadioButton.IsChecked>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <materialDesign:PackIcon Kind="{Binding Icon}" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                    <TextBlock Text="{Binding Label}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </RadioButton>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <Border Height="1" Background="{DynamicResource BorderBrushDefault}" Margin="0,0,0,12" Grid.Row="0" />
+
+                        <!-- mode tabs -->
+                        <DockPanel LastChildFill="False" Margin="0,0,0,12">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{StaticResource UI.IconButton}" Width="30" Height="30" Command="{Binding OpenCustomRuleCommand}" ToolTip="{DynamicResource Loc_splitAddRuleBtn}">
+                                    <materialDesign:PackIcon Kind="Plus" Width="16" Height="16" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                </Button>
+                                <Button Style="{StaticResource UI.IconButton}" Width="30" Height="30" Margin="2,0,0,0" Command="{Binding ClearModeCommand}" ToolTip="{DynamicResource Loc_splitClearAll}">
+                                    <materialDesign:PackIcon Kind="DeleteSweepOutline" Width="16" Height="16" Foreground="{DynamicResource TextMutedBrush}" />
+                                </Button>
+                            </StackPanel>
+                            <WrapPanel Orientation="Horizontal">
+                                <RadioButton Style="{StaticResource ModeTab}" GroupName="Mode" Margin="0,0,4,0"
+                                             Command="{Binding SelectModeCommand}" CommandParameter="bypass">
+                                    <RadioButton.IsChecked>
+                                        <MultiBinding Converter="{StaticResource MultiEquals}" Mode="OneWay">
+                                            <Binding Path="ActiveMode" />
+                                            <Binding Source="bypass" />
+                                        </MultiBinding>
+                                    </RadioButton.IsChecked>
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Earth" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#F59E0B" />
+                                        <TextBlock Text="{DynamicResource Loc_splitBypass}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Border Background="{DynamicResource Surface.CardSecondaryBg}" CornerRadius="6" Padding="5,0" Margin="7,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding BypassCountText}" FontSize="10" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                </RadioButton>
+
+                                <RadioButton Style="{StaticResource ModeTab}" GroupName="Mode" Margin="0,0,4,0"
+                                             Command="{Binding SelectModeCommand}" CommandParameter="tunnel">
+                                    <RadioButton.IsChecked>
+                                        <MultiBinding Converter="{StaticResource MultiEquals}" Mode="OneWay">
+                                            <Binding Path="ActiveMode" />
+                                            <Binding Source="tunnel" />
+                                        </MultiBinding>
+                                    </RadioButton.IsChecked>
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="ShieldCheckOutline" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#00D4FF" />
+                                        <TextBlock Text="{DynamicResource Loc_splitThroughTunnel}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Border Background="{DynamicResource Surface.CardSecondaryBg}" CornerRadius="6" Padding="5,0" Margin="7,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding TunnelCountText}" FontSize="10" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                </RadioButton>
+
+                                <RadioButton Style="{StaticResource ModeTab}" GroupName="Mode"
+                                             Command="{Binding SelectModeCommand}" CommandParameter="block">
+                                    <RadioButton.IsChecked>
+                                        <MultiBinding Converter="{StaticResource MultiEquals}" Mode="OneWay">
+                                            <Binding Path="ActiveMode" />
+                                            <Binding Source="block" />
+                                        </MultiBinding>
+                                    </RadioButton.IsChecked>
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="BlockHelper" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#EF4444" />
+                                        <TextBlock Text="{DynamicResource Loc_splitBlock}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Border Background="{DynamicResource Surface.CardSecondaryBg}" CornerRadius="6" Padding="5,0" Margin="7,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding BlockCountText}" FontSize="10" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                </RadioButton>
+                            </WrapPanel>
+                        </DockPanel>
+
+                        <!-- header -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <TextBlock Text="{Binding ActiveModeHeader}" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding ActiveModeCaption}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding RuleCountText}" FontSize="10.5" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+
+                        <!-- custom rule entry -->
+                        <Border Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource BorderBrushDefault}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="0,0,0,10"
+                                Visibility="{Binding IsCustomRuleOpen, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding RuleKinds}" Margin="0,0,0,8">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <RadioButton Style="{StaticResource SegmentButton}" GroupName="RuleKind"
+                                                         Padding="9,5" Margin="0,0,4,4"
+                                                         Command="{Binding DataContext.SelectRuleKindCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                         CommandParameter="{Binding Kind}">
+                                                <RadioButton.IsChecked>
+                                                    <MultiBinding Converter="{StaticResource MultiEquals}" Mode="OneWay">
+                                                        <Binding Path="Kind" />
+                                                        <Binding Path="DataContext.CustomRuleKind" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                                    </MultiBinding>
+                                                </RadioButton.IsChecked>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding LocalLabel}" FontSize="11.5" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </RadioButton>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="{Binding CustomRuleHelp}" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" Margin="2,0,0,8" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Style="{StaticResource UI.CustomTextBox}" Height="34" FontSize="12"
+                                             materialDesign:HintAssist.Hint="{Binding CustomRuleHint}"
+                                             Text="{Binding CustomRuleValue, UpdateSourceTrigger=PropertyChanged}" KeyDown="OnCustomRuleKeyDown" />
+                                    <Button Grid.Column="1" Style="{StaticResource UI.PrimaryButton}" Height="34" MinWidth="0" Padding="14,0" Margin="8,0,0,0" Command="{Binding AddCustomRuleCommand}">
+                                        <materialDesign:PackIcon Kind="Check" Width="16" Height="16" Foreground="{DynamicResource TextOnCyanBrush}" />
+                                    </Button>
+                                    <Button Grid.Column="2" Style="{StaticResource UI.IconButton}" Width="34" Height="34" Margin="4,0,0,0" Command="{Binding CloseCustomRuleCommand}">
+                                        <materialDesign:PackIcon Kind="Close" Width="15" Height="15" Foreground="{DynamicResource TextMutedBrush}" />
+                                    </Button>
+                                </Grid>
+
+                                <TextBlock Text="{Binding CustomRuleError}" FontSize="11" Foreground="{StaticResource Brand.ErrorBrush}" Margin="2,6,0,0"
+                                           Visibility="{Binding CustomRuleError, Converter={StaticResource NotEqualsToVis}, ConverterParameter=''}" />
+                            </StackPanel>
+                        </Border>
+
+                        </StackPanel>
+
+                        <!-- rules list: scrolls inside the card, independent of the app list -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding BypassRows}" Visibility="{Binding IsBypassMode, Converter={StaticResource BoolToVis}}" ItemTemplate="{StaticResource RuleRowTemplate}" />
+
+                                <ItemsControl ItemsSource="{Binding TunnelRows}" Visibility="{Binding IsTunnelMode, Converter={StaticResource BoolToVis}}" ItemTemplate="{StaticResource RuleRowTemplate}" />
+
+                                <ItemsControl ItemsSource="{Binding BlockRows}" Visibility="{Binding IsBlockMode, Converter={StaticResource BoolToVis}}" ItemTemplate="{StaticResource RuleRowTemplate}" />
+
+                                <Border Padding="16,22" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource BorderBrushDefault}" BorderThickness="1"
+                                        Visibility="{Binding ActiveModeEmpty, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="TrayPlus" Width="24" Height="24" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                                        <TextBlock Text="{DynamicResource Loc_splitModeEmpty}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- Applications -->
+                <Border Grid.Column="2" Style="{StaticResource UI.Card}" Padding="14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{DynamicResource Loc_splitApplications}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Style="{StaticResource UI.IconButton}" Width="30" Height="30" Command="{Binding RefreshAppsCommand}" ToolTip="{DynamicResource Loc_splitRefresh}">
+                                <materialDesign:PackIcon Kind="Refresh" Width="15" Height="15" Foreground="{DynamicResource TextSecondaryBrush}" />
+                            </Button>
+                        </Grid>
+
+                        <TextBox Grid.Row="1" Style="{StaticResource UI.CustomTextBox}" Height="34" FontSize="12" Margin="0,0,0,10"
+                                 materialDesign:HintAssist.Hint="{DynamicResource Loc_splitSearchAppsHint}"
+                                 Text="{Binding AppSearch, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <!-- The scan cannot see portable exes or games; typing a name and
+                             confirming adds it as a Process rule without a path. -->
+                        <Button Grid.Row="2" Style="{StaticResource UI.IconButton}" Height="30" Margin="0,0,0,8"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Command="{Binding AddTypedAppCommand}"
+                                Visibility="{Binding CanAddTypedApp, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                <materialDesign:PackIcon Kind="PlusCircleOutline" Width="15" Height="15" VerticalAlignment="Center" Margin="0,0,7,0" Foreground="{StaticResource Brand.AccentBrush}" />
+                                <TextBlock Text="{Binding TypedAppPreview}" FontSize="11.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Button>
+
+                        <Grid Grid.Row="3">
+                            <ListBox ItemsSource="{Binding FilteredApps}" Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="Margin" Value="0" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <ContentPresenter />
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource RuleRowBorder}" Padding="8,6">
+                                            <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
 
-                                                <materialDesign:PackIcon Grid.Column="0" x:Name="TabIcon" Kind="Web" Width="17" Height="17" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-
-                                                <TextBlock Grid.Column="1" x:Name="TabText" Text="{DynamicResource Loc_WebsitesIPs}" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-
-                                                
-                                                <Border Grid.Column="2" x:Name="CountBadge" Background="{DynamicResource BgInput}" CornerRadius="10" Padding="7,2" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="CountText" Text="{Binding DomainCount}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="7" Background="{DynamicResource Surface.SubtleBg}" Margin="0,0,9,0">
+                                                    <Image Source="{Binding Icon}" Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
                                                 </Border>
+
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                    <TextBlock Text="{Binding FileName}" FontSize="10" FontFamily="{StaticResource UI.MonoFontFamily}" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,1,0,0" />
+                                                </StackPanel>
+
+                                                <Grid Grid.Column="2" VerticalAlignment="Center">
+                                                    <!-- not assigned: add to the active mode -->
+                                                    <Button Style="{StaticResource IconPillButton}" Width="28" Height="26"
+                                                            Command="{Binding DataContext.AssignAppCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                            CommandParameter="{Binding}" ToolTip="{DynamicResource Loc_splitAddToMode}"
+                                                            Visibility="{Binding Assigned, Converter={StaticResource InvBoolToVis}}">
+                                                        <materialDesign:PackIcon Kind="Plus" Width="15" Height="15" />
+                                                    </Button>
+
+                                                    <!-- assigned: show the mode and allow a direct move -->
+                                                    <Border CornerRadius="6" Padding="8,3" BorderThickness="1" Visibility="{Binding Assigned, Converter={StaticResource BoolToVis}}"
+                                                            Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource BorderBrushDefault}">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse Width="6" Height="6" Fill="{Binding ModeBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                            <TextBlock Text="{Binding ModeLabel}" FontSize="10.5" FontWeight="SemiBold" Foreground="{Binding ModeBrush}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                                            <Button Style="{StaticResource IconPillButton}" Width="20" Height="20" Margin="5,0,0,0"
+                                                                    Command="{Binding DataContext.RemoveAppAssignmentCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                    CommandParameter="{Binding}" ToolTip="{DynamicResource Loc_splitRemoveAssignment}">
+                                                                <materialDesign:PackIcon Kind="Close" Width="12" Height="12" />
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Grid>
                                             </Grid>
                                         </Border>
-                                        <ControlTemplate.Triggers>
-                                            <DataTrigger Binding="{Binding DataContext.IsWebsitesTab, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
-                                                <Setter TargetName="TabBorder" Property="Background" Value="#2200D4FF" />
-                                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#8000D4FF" />
-                                                <Setter TargetName="TabBorder" Property="BorderThickness" Value="1.4" />
-                                                <Setter TargetName="TabIcon" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
-                                                <Setter TargetName="TabText" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
-                                                <Setter TargetName="TabText" Property="FontWeight" Value="SemiBold" />
-                                                <Setter TargetName="CountBadge" Property="Background" Value="#3300D4FF" />
-                                                <Setter TargetName="CountText" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
-                                            </DataTrigger>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True" />
-                                                    <Condition Binding="{Binding DataContext.IsWebsitesTab, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False" />
-                                                </MultiDataTrigger.Conditions>
-                                                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
-                                                <Setter TargetName="TabText" Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-                                            </MultiDataTrigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </RadioButton.Style>
-                </RadioButton>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                
-                <RadioButton Grid.Column="2" CommandParameter="Apps" Checked="OnSplitTunnelTabChecked" IsChecked="{Binding IsAppsTab, Mode=OneWay}" Cursor="Hand" Height="44" AutomationProperties.Name="{DynamicResource Loc_splitTabApps}">
-                    <RadioButton.Style>
-                        <Style TargetType="RadioButton">
-                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-                            <Setter Property="Background" Value="{DynamicResource Surface.SubtleBg}" />
-                            <Setter Property="BorderBrush" Value="{DynamicResource Surface.SubtleBorder}" />
-                            <Setter Property="BorderThickness" Value="1" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="RadioButton">
-                                        <Border x:Name="TabBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" Padding="14,0">
-                                            <Grid VerticalAlignment="Center">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding IsScanningApps, Converter={StaticResource BoolToVis}}">
+                                <materialDesign:PackIcon Kind="Loading" Width="26" Height="26" Foreground="{StaticResource Brand.AccentBrush}" RenderTransformOrigin="0.5,0.5">
+                                    <materialDesign:PackIcon.RenderTransform>
+                                        <RotateTransform x:Name="ScanSpin" Angle="0" />
+                                    </materialDesign:PackIcon.RenderTransform>
+                                    <materialDesign:PackIcon.Triggers>
+                                        <!-- Fires when the overlay is shown and stops with it. -->
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard RepeatBehavior="Forever">
+                                                    <DoubleAnimation Storyboard.TargetName="ScanSpin" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:1.1" />
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </materialDesign:PackIcon.Triggers>
+                                </materialDesign:PackIcon>
+                            </StackPanel>
 
-                                                <materialDesign:PackIcon Grid.Column="0" x:Name="TabIcon" Kind="Apps" Width="17" Height="17" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-
-                                                <TextBlock Grid.Column="1" x:Name="TabText" Text="{DynamicResource Loc_splitTabApps}" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-
-                                                
-                                                <Border Grid.Column="2" x:Name="CountBadge" Background="{DynamicResource BgInput}" CornerRadius="10" Padding="7,2" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="CountText" Text="{Binding AppCount}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <DataTrigger Binding="{Binding DataContext.IsAppsTab, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
-                                                <Setter TargetName="TabBorder" Property="Background" Value="#2200D4FF" />
-                                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#8000D4FF" />
-                                                <Setter TargetName="TabBorder" Property="BorderThickness" Value="1.4" />
-                                                <Setter TargetName="TabIcon" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
-                                                <Setter TargetName="TabText" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
-                                                <Setter TargetName="TabText" Property="FontWeight" Value="SemiBold" />
-                                                <Setter TargetName="CountBadge" Property="Background" Value="#3300D4FF" />
-                                                <Setter TargetName="CountText" Property="Foreground" Value="{StaticResource Brand.AccentBrush}" />
-                                            </DataTrigger>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True" />
-                                                    <Condition Binding="{Binding DataContext.IsAppsTab, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False" />
-                                                </MultiDataTrigger.Conditions>
-                                                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource Surface.HoverBg}" />
-                                                <Setter TargetName="TabText" Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-                                            </MultiDataTrigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </RadioButton.Style>
-                </RadioButton>
+                            <TextBlock Text="{DynamicResource Loc_splitNoMatchingApps}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="{Binding NoFilteredApps, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </Grid>
+                </Border>
             </Grid>
-
-            
-            
-            
-            <Border Style="{StaticResource UI.Card}" Padding="18,16" Margin="0,0,0,14" IsEnabled="{Binding SplitTunnelEnabled}" Visibility="{Binding IsWebsitesTab, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel>
-                    
-                    <Grid Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Loc_WebsiteNetworkRules}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                            <TextBlock Text="{Binding DomainRulesCountText}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
-                        </StackPanel>
-
-                        
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            
-                            <Button Style="{StaticResource UI.Btn.Danger}" Padding="10,0" Margin="0,0,8,0" Command="{Binding ClearDomainEntriesCommand}" Visibility="{Binding HasDomainEntries, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="{DynamicResource Loc_clearAllRules}">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <materialDesign:PackIcon Kind="DeleteSweep" Width="15" Height="15" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
-                                    <TextBlock Text="{DynamicResource Loc_clearAllRules}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-
-                            
-                            <Button Style="{StaticResource UI.PrimaryButton}" Padding="14,0" Command="{Binding OpenAddSiteDialogCommand}" AutomationProperties.Name="{DynamicResource Loc_AddWebsiteIP}">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <materialDesign:PackIcon Kind="Plus" Width="16" Height="16" Foreground="{DynamicResource TextOnCyanBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                    <TextBlock Text="{DynamicResource Loc_AddWebsiteIP}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextOnCyanBrush}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </Grid>
-
-                    
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,14">
-                        <TextBlock Text="{DynamicResource Loc_splitQuickPresets}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <Button Style="{StaticResource PresetChipStyle}" Content="*.ir" Command="{Binding AddPresetCommand}" CommandParameter="*.ir" Margin="0,0,6,0" />
-                        <Button Style="{StaticResource PresetChipStyle}" Content="192.168.0.0/16" Command="{Binding AddPresetCommand}" CommandParameter="192.168.0.0/16" Margin="0,0,6,0" />
-                        <Button Style="{StaticResource PresetChipStyle}" Content="10.0.0.0/8" Command="{Binding AddPresetCommand}" CommandParameter="10.0.0.0/8" Margin="0,0,6,0" />
-                        <Button Style="{StaticResource PresetChipStyle}" Content="localhost" Command="{Binding AddPresetCommand}" CommandParameter="localhost" />
-                    </StackPanel>
-
-                    
-                    <Border Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="12" Padding="24,28" Visibility="{Binding NoDomainEntries, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="EarthOff" Width="32" Height="32" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,0,0,8" />
-                            <TextBlock Text="{DynamicResource Loc_NowebsitesorIPsubnetsconfiguredyet}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-                            <TextBlock Text="{DynamicResource Loc_ClickAddWebsiteIPorpickapresetabov}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,3,0,0" />
-                        </StackPanel>
-                    </Border>
-
-                    
-                    <ItemsControl ItemsSource="{Binding DomainEntries}" Visibility="{Binding HasDomainEntries, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <UniformGrid Columns="2" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Margin="4,4" Padding="10,6" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" Height="42">
-                                    <Grid VerticalAlignment="Center">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        
-                                        <Border Grid.Column="0" Width="26" Height="26" CornerRadius="6" Background="{DynamicResource Status.CyanSoft}" VerticalAlignment="Center" Margin="0,0,8,0">
-                                            <materialDesign:PackIcon Kind="{Binding Icon}" Width="14" Height="14" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        </Border>
-
-                                        
-                                        <TextBlock Grid.Column="1" Text="{Binding Value}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Value}" />
-
-                                        
-                                        <Border Grid.Column="2" CornerRadius="5" Padding="6,2" Background="{DynamicResource BgInput}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" Margin="6,0,6,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding DirectionLabel}" FontSize="10" FontWeight="SemiBold" Foreground="{Binding DirectionBrush}" VerticalAlignment="Center" />
-                                        </Border>
-
-                                        
-                                        <Button Grid.Column="3" Style="{StaticResource UI.IconButton}" Width="24" Height="24" ToolTip="{DynamicResource Loc_Removerule}" Command="{Binding DataContext.RemoveSplitEntryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" AutomationProperties.Name="{DynamicResource Loc_Removerule}">
-                                            <materialDesign:PackIcon Kind="Close" Width="13" Height="13" Foreground="{DynamicResource TextMutedBrush}" />
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            
-            
-            
-            <Border Style="{StaticResource UI.Card}" Padding="18,16" Margin="0,0,0,14" IsEnabled="{Binding SplitTunnelEnabled}" Visibility="{Binding IsAppsTab, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel>
-                    
-                    <Grid Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Loc_ApplicationRules}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                            <TextBlock Text="{Binding AppRulesSubtitle}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
-                        </StackPanel>
-
-                        
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            
-                            <Button Style="{StaticResource UI.Btn.Danger}" Padding="10,0" Margin="0,0,8,0" Command="{Binding ClearAppEntriesCommand}" Visibility="{Binding HasAppEntries, Converter={StaticResource BooleanToVisibilityConverter}}" AutomationProperties.Name="{DynamicResource Loc_clearAllRules}">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <materialDesign:PackIcon Kind="DeleteSweep" Width="15" Height="15" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
-                                    <TextBlock Text="{DynamicResource Loc_clearAllRules}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-
-                            
-                            <Button Style="{StaticResource UI.PrimaryButton}" Padding="14,0" Command="{Binding PickAppsCommand}" AutomationProperties.Name="{DynamicResource Loc_AddApplications}">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <materialDesign:PackIcon Kind="PlusCircleOutline" Width="16" Height="16" Foreground="{DynamicResource TextOnCyanBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                    <TextBlock Text="{DynamicResource Loc_AddApplications}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextOnCyanBrush}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </Grid>
-
-                    
-                    <Border Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" CornerRadius="12" Padding="24,32" Visibility="{Binding NoAppEntries, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Border Width="48" Height="48" CornerRadius="24" Background="{DynamicResource Status.CyanSoft}" HorizontalAlignment="Center" Margin="0,0,0,10">
-                                <materialDesign:PackIcon Kind="Apps" Width="26" Height="26" Foreground="{StaticResource Brand.AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="{DynamicResource Loc_Noapplicationsconfiguredyet}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-                            <TextBlock Text="{DynamicResource Loc_ClickAddApplicationstoselectinstal}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-                        </StackPanel>
-                    </Border>
-
-                    
-                    <ItemsControl ItemsSource="{Binding AppEntries}" Visibility="{Binding HasAppEntries, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <UniformGrid Columns="2" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Margin="4,4" Padding="10,6" CornerRadius="10" Background="{DynamicResource Surface.SubtleBg}" BorderBrush="{DynamicResource Surface.CardBorder}" BorderThickness="1" Height="42">
-                                    <Grid VerticalAlignment="Center">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        
-                                        <Border Grid.Column="0" Width="26" Height="26" CornerRadius="6" Background="#1AA78BFA" VerticalAlignment="Center" Margin="0,0,8,0">
-                                            <materialDesign:PackIcon Kind="Application" Width="14" Height="14" Foreground="{StaticResource Brand.PrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        </Border>
-
-                                        
-                                        <TextBlock Grid.Column="1" Text="{Binding Value}" FontFamily="{StaticResource UI.MonoFontFamily}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Value}" />
-
-                                        
-                                        <Border Grid.Column="2" CornerRadius="5" Padding="6,2" Background="{DynamicResource BgInput}" BorderBrush="{DynamicResource Surface.SubtleBorder}" BorderThickness="1" Margin="6,0,6,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding DirectionLabel}" FontSize="10" FontWeight="SemiBold" Foreground="{Binding DirectionBrush}" VerticalAlignment="Center" />
-                                        </Border>
-
-                                        
-                                        <Button Grid.Column="3" Style="{StaticResource UI.IconButton}" Width="24" Height="24" ToolTip="{DynamicResource Loc_Removeapplication}" Command="{Binding DataContext.RemoveSplitEntryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" AutomationProperties.Name="{DynamicResource Loc_Removeapplication}">
-                                            <materialDesign:PackIcon Kind="Close" Width="13" Height="13" Foreground="{DynamicResource TextMutedBrush}" />
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-        </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </UserControl>

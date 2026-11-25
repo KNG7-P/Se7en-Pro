@@ -53,6 +53,7 @@ internal static class Program
         RecentFeatureTests.Run();
         await TunnelStabilityFixTests.RunAsync();
         await FoxyIranBypassTests.RunAsync();
+        SplitTunnelProfileTests.Run();
 
         Console.WriteLine();
         Console.WriteLine(_failures == 0

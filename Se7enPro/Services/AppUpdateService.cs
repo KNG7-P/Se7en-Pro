@@ -216,7 +216,7 @@ public sealed class AppUpdateService : IAppUpdateService
             throw new AppUpdateException(ex.Message);
         }
 
-        var baseDir = Path.Combine(Path.GetTempPath(), "Se7enPro", "update");
+        var baseDir = Path.Combine(BuildIdentity.TempRoot, "update");
         string dir;
         try
         {
@@ -233,7 +233,7 @@ public sealed class AppUpdateService : IAppUpdateService
         }
         catch
         {
-            dir = Path.Combine(Path.GetTempPath(), "Se7enPro", "updates", Guid.NewGuid().ToString("N"));
+            dir = Path.Combine(BuildIdentity.TempRoot, "updates", Guid.NewGuid().ToString("N"));
             try
             {
                 if (!UpdateIntegrity.HardenStagingDirectory(dir))

@@ -47,19 +47,14 @@ internal static class MihomoConfigBuilder
         UserSettings s,
         string? realIfaceName,
         IEnumerable<string> engineProcessNames,
-        IReadOnlyList<string>? splitDomains = null,
-        IReadOnlyList<(string CleanCidr, AddressFamily Family)>? splitIpCidrs = null,
-        IReadOnlyList<string>? splitProcNames = null,
-        IReadOnlyList<string>? splitProcPaths = null)
+        SplitRoutingPlan? plan = null)
     {
         var requiresAuth = LanPolicy.CanExpose(s);
         var supportsSocksUdp = SupportsSocksUdp(activeMethod);
         var hasDirectOut = !string.IsNullOrEmpty(realIfaceName);
-        var splitInclude = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-        var emitSplitRules = s.SplitTunnelEnabled && (splitInclude || hasDirectOut);
-        var hasDomainSplitRules = emitSplitRules && splitDomains is { Count: > 0 };
-        var hasProcessRules = hasDirectOut
-            || (emitSplitRules && (splitProcNames is { Count: > 0 } || splitProcPaths is { Count: > 0 }));
+        plan ??= SplitRoutingPlan.Disabled;
+        var hasDomainSplitRules = plan.Enabled && plan.HasDomainRules;
+        var hasProcessRules = hasDirectOut || plan.HasAppRules;
 
         var sb = new StringBuilder();
         sb.AppendLine("mode: rule");
@@ -130,6 +125,20 @@ internal static class MihomoConfigBuilder
             sb.AppendLine("  enable: false");
         }
         sb.AppendLine("rules:");
+
+        // Block domain rules must be consulted BEFORE the port-53 redirect, otherwise a
+        // query for a blocked domain matches DST-PORT,53 first and is dialled through the
+        // proxy. The first matching rule wins in mihomo, so ordering is the enforcement.
+        if (plan.Enabled)
+        {
+            foreach (var domain in plan.BlockedDomains)
+            {
+                var clean = SanitizeRuleAtom(domain).TrimStart('*').TrimStart('.');
+                if (clean.Length == 0) continue;
+                sb.AppendLine($"  - {YamlSingleQuote($"DOMAIN-SUFFIX,{clean},REJECT")}");
+            }
+        }
+
         if (supportsSocksUdp)
         {
             sb.AppendLine($"  - {YamlSingleQuote("DST-PORT,53,Se7enProxy")}");
@@ -156,57 +165,128 @@ internal static class MihomoConfigBuilder
             }
         }
 
-        if (s.SplitTunnelEnabled)
-        {
-            var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-            var emitRules = include || hasDirectOut;
-            if (emitRules)
-            {
-                var target = include ? "Se7enProxy" : "Se7enDirect";
-                if (splitProcPaths is not null)
-                {
-                    foreach (var p in splitProcPaths)
-                    {
-                        var clean = SanitizeRuleAtom(p);
-                        if (clean.Length > 0)
-                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-PATH,{clean},{target}")}");
-                    }
-                }
-                if (splitProcNames is not null)
-                {
-                    foreach (var n in splitProcNames)
-                    {
-                        var clean = SanitizeRuleAtom(n);
-                        if (clean.Length > 0)
-                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-NAME,{clean},{target}")}");
-                    }
-                }
-                if (splitIpCidrs is not null)
-                {
-                    foreach (var (cidr, family) in splitIpCidrs)
-                    {
-                        var ruleType = family == AddressFamily.InterNetworkV6 ? "IP-CIDR6" : "IP-CIDR";
-                        sb.AppendLine($"  - {YamlSingleQuote($"{ruleType},{cidr},{target},no-resolve")}");
-                    }
-                }
-                if (splitDomains is not null)
-                {
-                    foreach (var d in splitDomains)
-                    {
-                        var clean = SanitizeRuleAtom(d).TrimStart('*').TrimStart('.');
-                        if (clean.Length > 0)
-                            sb.AppendLine($"  - {YamlSingleQuote($"DOMAIN-SUFFIX,{clean},{target}")}");
-                    }
-                }
-            }
+        // Precedence is explicit and deterministic: Block, then Bypass (Se7enDirect),
+        // then Through Tunnel (Se7enProxy), then the profile default via MATCH. Every
+        // application belongs to exactly one list, so no rule can shadow another one.
+        var directTarget = hasDirectOut ? "Se7enDirect" : "Se7enProxy";
 
-            sb.AppendLine($"  - {YamlSingleQuote(include && hasDirectOut ? "MATCH,Se7enDirect" : "MATCH,Se7enProxy")}");
-        }
-        else
+        foreach (var category in new[] { SplitRuleCategory.Block, SplitRuleCategory.Direct, SplitRuleCategory.Proxy })
         {
-            sb.AppendLine($"  - {YamlSingleQuote("MATCH,Se7enProxy")}");
+            EmitRules(sb, plan, category, directTarget, hasDirectOut);
         }
+
+        var matchTarget = plan.Enabled
+            ? plan.DefaultCategory switch
+            {
+                SplitRuleCategory.Direct => directTarget,
+                SplitRuleCategory.Block => "REJECT",
+                _ => "Se7enProxy",
+            }
+            : "Se7enProxy";
+        sb.AppendLine($"  - {YamlSingleQuote($"MATCH,{matchTarget}")}");
 
         return sb.ToString();
+    }
+
+    private static void EmitRules(
+        StringBuilder sb,
+        SplitRoutingPlan plan,
+        SplitRuleCategory category,
+        string directTarget,
+        bool hasDirectOut)
+    {
+        var target = category switch
+        {
+            SplitRuleCategory.Block => "REJECT",
+            SplitRuleCategory.Direct => directTarget,
+            _ => "Se7enProxy",
+        };
+        var noResolve = category == SplitRuleCategory.Direct && !hasDirectOut ? ",no-resolve" : "";
+
+        foreach (var rule in plan.Rules)
+        {
+            if (rule.Category != category) continue;
+
+            switch (rule.Target)
+            {
+                case SplitRuleTarget.ProcessPath:
+                    {
+                        var clean = SanitizeRuleAtom(rule.Value);
+                        if (clean.Length > 0)
+                        {
+                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-PATH,{clean},{target}")}");
+                        }
+                        break;
+                    }
+
+                case SplitRuleTarget.ProcessName:
+                    {
+                        var clean = SanitizeRuleAtom(rule.Value);
+                        if (clean.Length > 0)
+                        {
+                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-NAME,{clean},{target}")}");
+                        }
+                        break;
+                    }
+
+                case SplitRuleTarget.Keyword:
+                    {
+                        // mihomo has no substring matcher for images, so a keyword is
+                        // expressed with the wildcard matchers it does have:
+                        // "*keyword*" on the name, same on the full path.
+                        var clean = SanitizeRuleAtom(rule.Value);
+                        if (clean.Length > 0)
+                        {
+                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-NAME-WILDCARD,*{clean}*,{target}")}");
+                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-PATH-WILDCARD,*{clean}*,{target}")}");
+                        }
+                        break;
+                    }
+
+                case SplitRuleTarget.Regex:
+                    {
+                        var clean = SanitizeRuleAtom(rule.Value);
+                        if (clean.Length > 0)
+                        {
+                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-NAME-REGEX,{clean},{target}")}");
+                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-PATH-REGEX,{clean},{target}")}");
+                        }
+                        break;
+                    }
+
+                case SplitRuleTarget.Suffix:
+                    {
+                        // A suffix is a tail match, which mihomo spells as "*.suffix".
+                        var clean = SanitizeRuleAtom(rule.Value);
+                        if (clean.Length > 0)
+                        {
+                            sb.AppendLine($"  - {YamlSingleQuote($"PROCESS-NAME-WILDCARD,*{clean},{target}")}");
+                        }
+                        break;
+                    }
+
+                case SplitRuleTarget.IpCidr:
+                    {
+                        var parsed = SplitRules.ParseIpCidr(rule.Value);
+                        if (parsed is null) break;
+                        var clean = SanitizeRuleAtom(rule.Value);
+                        var ruleType = parsed.Value.Addr.AddressFamily == AddressFamily.InterNetworkV6
+                            ? "IP-CIDR6"
+                            : "IP-CIDR";
+                        sb.AppendLine($"  - {YamlSingleQuote($"{ruleType},{clean},{target},no-resolve")}");
+                        break;
+                    }
+
+                default:
+                    {
+                        var clean = SanitizeRuleAtom(rule.Value).TrimStart('*').TrimStart('.');
+                        if (clean.Length > 0)
+                        {
+                            sb.AppendLine($"  - {YamlSingleQuote($"DOMAIN-SUFFIX,{clean},{target}{noResolve}")}");
+                        }
+                        break;
+                    }
+            }
+        }
     }
 }

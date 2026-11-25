@@ -165,11 +165,21 @@ internal static class ContractTests
 
         var splitPage = File.ReadAllText(FindSource("SplitTunnelPage.xaml", "Se7enPro\\Views"));
         Check(splitPage.Contains("Text=\"{Binding StatusText}\"", StringComparison.Ordinal),
-              "the split-tunnel warning explains the actual admin or disabled state");
-        Check(splitPage.Contains("Command=\"{Binding EnableSystemWideCommand}\"", StringComparison.Ordinal),
-              "an elevated user gets the enable-system-wide action");
-        Check(splitPage.Contains("Command=\"{Binding RestartAsAdminCommand}\" Visibility=\"{Binding IsAdminElevated", StringComparison.Ordinal),
+              "the split-tunnel status strip explains the actual admin or disabled state");
+        Check(splitPage.Contains("Command=\"{Binding RestartAsAdminCommand}\"", StringComparison.Ordinal)
+              && splitPage.Contains("Visibility=\"{Binding IsAdminElevated, Converter={StaticResource InvBoolToVis}}\"", StringComparison.Ordinal),
               "the restart-as-admin action is hidden from an already elevated user");
+        Check(splitPage.Contains("Command=\"{Binding SelectModeCommand}\" CommandParameter=\"bypass\"", StringComparison.Ordinal)
+              && splitPage.Contains("Command=\"{Binding SelectModeCommand}\" CommandParameter=\"tunnel\"", StringComparison.Ordinal)
+              && splitPage.Contains("Command=\"{Binding SelectModeCommand}\" CommandParameter=\"block\"", StringComparison.Ordinal),
+              "the page exposes the three independent routing modes");
+        Check(splitPage.Contains("Command=\"{Binding SetDefaultOutboundCommand}", StringComparison.Ordinal),
+              "the page exposes the per-profile default outbound");
+        Check(splitPage.Contains("Command=\"{Binding DataContext.AssignAppCommand, RelativeSource={RelativeSource AncestorType=ListBox}}\"", StringComparison.Ordinal)
+              && splitPage.Contains("Command=\"{Binding DataContext.RemoveAppAssignmentCommand, RelativeSource={RelativeSource AncestorType=ListBox}}\"", StringComparison.Ordinal),
+              "the application list can assign and unassign an app");
+        Check(splitPage.Contains("ItemTemplate=\"{StaticResource RuleRowTemplate}\"", StringComparison.Ordinal),
+              "every mode renders its rules from one shared row template");
 
         Console.WriteLine();
         Console.WriteLine(failures == 0

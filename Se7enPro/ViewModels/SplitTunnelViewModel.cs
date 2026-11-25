@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,11 +9,6 @@ using Se7enPro.Models;
 using Se7enPro.Services;
 
 namespace Se7enPro.ViewModels;
-
-public sealed record SplitKindOption(string Key, string English) : LocalizedItem
-{
-    public string Display => Loc.Of(English);
-}
 
 public sealed partial class SplitTunnelViewModel : PageViewModelBase
 {
@@ -22,9 +18,9 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
 
     private bool _suppressPersist;
     private bool _suppressTunSideEffects;
-    private string _entriesSignature = "";
+    private bool _loading;
 
-    public override string Title => "Split Tunnel";
+    public override string Title => Loc.T("splitTunnelTitle", "Split Tunnel");
     public override string Route => "split";
     public override string Icon => "CallSplit";
 
@@ -39,93 +35,765 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
 
         var s = _settingsService.Settings;
         _splitTunnelEnabled = s.SplitTunnelEnabled;
-        _splitTunnelMode =
-            string.Equals(s.SplitTunnelMode, "include", StringComparison.OrdinalIgnoreCase)
-                ? "include"
-                : "exclude";
-
-        if (_splitTunnelEnabled && IsAdminElevated && !s.SystemWideTunneling)
-        {
-            s.SystemWideTunneling = true;
-            _settingsService.Save();
-        }
-
         _systemWideEnabled = AdminElevation.IsAdministrator() && s.SystemWideTunneling;
-        LoadSplitTunnelEntries();
+
+        LoadProfiles();
 
         _settingsService.SettingsChanged += OnSettingsServiceChanged;
         _tun.StateChanged += OnTunStateChanged;
         _tunnel.StateChanged += OnTunnelStateChanged;
+    }
 
-        
-        
-        Loc.Changed += () => Post(() =>
+    // ----------------------------------------------------------------- profiles
+
+    public ObservableCollection<SplitProfileItem> Profiles { get; } = new();
+
+    [ObservableProperty] private SplitProfileItem? _selectedProfile;
+
+    // Switching the active profile changes which apps go where. If a tunnel is already
+    // up, the new routing is only guaranteed once the connection is re-established, so
+    // ask first and reconnect on yes. When nothing is connected the switch is silent.
+    partial void OnSelectedProfileChanged(SplitProfileItem? value)
+    {
+        if (_loading || value is null) return;
+
+        if (IsConnected)
         {
-            OnPropertyChanged(nameof(DomainRulesCountText));
-            OnPropertyChanged(nameof(AppRulesSubtitle));
-            OnPropertyChanged(nameof(SplitTunnelModeHint));
-            OnPropertyChanged(nameof(ModeSummary));
-            OnPropertyChanged(nameof(StatusText));
-            foreach (var entry in DomainEntries) entry.RaiseDirection();
-            foreach (var entry in AppEntries) entry.RaiseDirection();
-            foreach (var entry in SplitTunnelEntries) entry.RaiseDirection();
-        });
+            _ = SwitchProfileAsync(value);
+            return;
+        }
+
+        ApplyProfileSelection(value);
     }
 
-    
-    
-    
-    
-    
+    private bool IsConnected =>
+        _tunnel.State is ConnectionState.Connected or ConnectionState.Connecting;
 
-    [ObservableProperty] private int _activeTab = 0; 
-
-    public bool IsWebsitesTab => ActiveTab == 0;
-    public bool IsAppsTab => ActiveTab == 1;
-
-    [RelayCommand]
-    private void SelectWebsitesTab() => SetTab(0);
-
-    [RelayCommand]
-    private void SelectAppsTab() => SetTab(1);
-
-    public void SetTab(int tab)
+    private async Task SwitchProfileAsync(SplitProfileItem target)
     {
-        ActiveTab = tab;
-        OnPropertyChanged(nameof(IsWebsitesTab));
-        OnPropertyChanged(nameof(IsAppsTab));
+        var name = target.Name;
+
+        if (await Ui.ConfirmAsync(
+                Loc.Of("Apply new routing?"),
+                string.Format(
+                    Loc.Of("Switch to \u201c{0}\u201d and reconnect so the new routing takes effect?\n\nThe tunnel will drop for a moment."),
+                    name)))
+        {
+            ApplyProfileSelection(target);
+            try
+            {
+                await _tunnel.RestartAsync();
+            }
+            catch
+            {
+                // The routing is already saved; a failed restart is reported by the
+                // tunnel itself, so there is nothing extra to surface here.
+            }
+
+            return;
+        }
+
+        // Declined: put the picker back where it was without touching the settings.
+        _loading = true;
+        try
+        {
+            SelectedProfile = Profiles.FirstOrDefault(p => string.Equals(p.Id, _appliedProfileId, StringComparison.Ordinal))
+                              ?? Profiles.FirstOrDefault();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
-    public ObservableCollection<SplitTunnelEntryView> SplitTunnelEntries { get; } = new();
-    public ObservableCollection<SplitTunnelEntryView> DomainEntries { get; } = new();
-    public ObservableCollection<SplitTunnelEntryView> AppEntries { get; } = new();
+    // The profile that is actually in force, so a declined switch can restore the picker.
+    private string _appliedProfileId = "";
 
-    public int DomainCount => DomainEntries.Count;
-    public int AppCount => AppEntries.Count;
-
-    public bool HasDomainEntries => DomainEntries.Count > 0;
-    public bool NoDomainEntries => DomainEntries.Count == 0;
-
-    public bool HasAppEntries => AppEntries.Count > 0;
-    public bool NoAppEntries => AppEntries.Count == 0;
-
-    public string DomainRulesCountText => string.Format(Loc.Of("{0} configured"), DomainEntries.Count);
-
-    public string AppRulesSubtitle => IsIncludeMode
-        ? Loc.Of("Only the applications listed below are routed through the secure tunnel.")
-        : Loc.Of("Selected applications bypass the tunnel and connect directly to the internet.");
-
-    public ObservableCollection<SplitKindOption> SplitTunnelKinds { get; } = new()
+    private void ApplyProfileSelection(SplitProfileItem target)
     {
-        new("domain", "Site / domain"),
-        new("ip", "IP or CIDR"),
+        _suppressPersist = true;
+        try
+        {
+            SplitTunnelProfileStore.SetActive(_settingsService.Settings, target.Id);
+            _appliedProfileId = target.Id;
+        }
+        finally
+        {
+            _suppressPersist = false;
+        }
+
+        _settingsService.Save();
+        ReloadActiveProfile();
+        RefreshStatus();
+    }
+
+    public bool HasProfiles => Profiles.Count > 0;
+    public bool HasNoProfiles => Profiles.Count == 0;
+    public SplitTunnelProfile? ActiveProfile =>
+        SelectedProfile is null ? null : FindProfile(SelectedProfile.Id);
+
+    [ObservableProperty] private string _newProfileName = "";
+
+    [ObservableProperty] private string _profileError = "";
+
+    [RelayCommand]
+    private void CreateProfile()
+    {
+        var name = (NewProfileName ?? "").Trim();
+        if (name.Length == 0)
+        {
+            // Previously an empty box silently created a profile called "Profile",
+            // which is the bug where a blank Enter kept adding profiles.
+            ProfileError = Loc.Of("Enter a profile name first.");
+            return;
+        }
+
+        if (_settingsService.Settings.SplitTunnelProfiles.Count >= SplitTunnelProfileStore.MaxProfiles)
+        {
+            ProfileError = string.Format(
+                Loc.Of("Profile limit reached ({0})."),
+                SplitTunnelProfileStore.MaxProfiles);
+            return;
+        }
+
+        var created = SplitTunnelProfileStore.CreateProfile(_settingsService.Settings, name);
+        if (created is null)
+        {
+            ProfileError = Loc.Of("Enter a profile name first.");
+            return;
+        }
+
+        ProfileError = "";
+        _settingsService.Save();
+        NewProfileName = "";
+        LoadProfiles(created.Id);
+        RefreshStatus();
+    }
+
+    partial void OnNewProfileNameChanged(string value)
+    {
+        if (ProfileError.Length > 0) ProfileError = "";
+    }
+
+    [RelayCommand]
+    private async Task DeleteProfile()
+    {
+        var current = ActiveProfile;
+        if (current is null) return;
+
+        if (!await Ui.ConfirmAsync(
+                Loc.Of("Delete profile"),
+                string.Format(Loc.Of("Delete “{0}” and its routing rules?"), current.Name)))
+        {
+            return;
+        }
+
+        SplitTunnelProfileStore.DeleteProfile(_settingsService.Settings, current.Id);
+        _settingsService.Save();
+        LoadProfiles();
+        RefreshStatus();
+    }
+
+    [ObservableProperty] private bool _isRenamingProfile;
+    [ObservableProperty] private string _renameText = "";
+
+    [RelayCommand]
+    private void BeginRename()
+    {
+        var current = ActiveProfile;
+        if (current is null) return;
+        RenameText = current.Name;
+        IsRenamingProfile = true;
+    }
+
+    [RelayCommand]
+    private void CommitRename()
+    {
+        var current = ActiveProfile;
+        IsRenamingProfile = false;
+        if (current is null) return;
+
+        // A blank rename keeps the old name rather than renaming to "Profile".
+        if ((RenameText ?? "").Trim().Length == 0)
+        {
+            RenameText = current.Name;
+            return;
+        }
+
+        if (!SplitTunnelProfileStore.Rename(_settingsService.Settings, current, RenameText)) return;
+
+        _settingsService.Save();
+        LoadProfiles(current.Id);
+    }
+
+    [RelayCommand]
+    private void CancelRename() => IsRenamingProfile = false;
+
+    // ----------------------------------------------------------------- default outbound
+
+    // Order requested for the profile's default outbound: Proxy, Direct, Block.
+    public IReadOnlyList<SplitOutboundOption> DefaultOutbounds { get; } = new[]
+    {
+        new SplitOutboundOption(SplitOutbound.Proxy, "Proxy", "ShieldCheckOutline"),
+        new SplitOutboundOption(SplitOutbound.Direct, "Direct", "Earth"),
+        new SplitOutboundOption(SplitOutbound.Block, "Block", "BlockHelper"),
     };
+
+    public string DefaultOutbound
+    {
+        get => ActiveProfile?.DefaultOutbound ?? SplitOutbound.Proxy;
+        set
+        {
+            var current = ActiveProfile;
+            if (current is null) return;
+            var normalized = SplitOutbound.Normalize(value);
+            if (string.Equals(current.DefaultOutbound, normalized, StringComparison.Ordinal)) return;
+
+            current.DefaultOutbound = normalized;
+            SplitTunnelProfileStore.Touch();
+            Persist();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DefaultOutboundLabel));
+            OnPropertyChanged(nameof(DefaultOutboundText));
+        }
+    }
+
+    public string DefaultOutboundLabel => DefaultOutbound switch
+    {
+        SplitOutbound.Direct => Loc.Of("Direct"),
+        SplitOutbound.Block => Loc.Of("Block"),
+        _ => Loc.Of("Proxy"),
+    };
+
+    // Kept short on purpose: the caption used to be "Everything else: Proxy" and wrapped
+    // onto two lines at the window's minimum width.
+    public string DefaultOutboundText =>
+        string.Format(Loc.Of("Rest: {0}"), DefaultOutboundLabel);
+
+    [RelayCommand]
+    private void SetDefaultOutbound(string? key) => DefaultOutbound = key ?? SplitOutbound.Proxy;
+
+    // ----------------------------------------------------------------- mode columns
+
+    [ObservableProperty] private string _activeMode = SplitRouteAction.Bypass;
+
+    public bool IsBypassMode => ActiveMode == SplitRouteAction.Bypass;
+    public bool IsTunnelMode => ActiveMode == SplitRouteAction.Tunnel;
+    public bool IsBlockMode => ActiveMode == SplitRouteAction.Block;
+
+    [RelayCommand]
+    private void SelectMode(string? mode)
+    {
+        ActiveMode = SplitTunnelProfileStore.NormalizeAction(mode);
+        OnPropertyChanged(nameof(IsBypassMode));
+        OnPropertyChanged(nameof(IsTunnelMode));
+        OnPropertyChanged(nameof(IsBlockMode));
+        RefreshColumns();
+        OnPropertyChanged(nameof(ActiveModeEmpty));
+    }
+
+    public ObservableCollection<SplitRuleRow> BypassRows { get; } = new();
+    public ObservableCollection<SplitRuleRow> TunnelRows { get; } = new();
+    public ObservableCollection<SplitRuleRow> BlockRows { get; } = new();
+
+    public int BypassCount => BypassRows.Count;
+    public int TunnelCount => TunnelRows.Count;
+    public int BlockCount => BlockRows.Count;
+
+    public string BypassCountText => BypassRows.Count.ToString();
+    public string TunnelCountText => TunnelRows.Count.ToString();
+    public string BlockCountText => BlockRows.Count.ToString();
+
+    public bool HasBypass => BypassRows.Count > 0;
+    public bool HasTunnel => TunnelRows.Count > 0;
+    public bool HasBlock => BlockRows.Count > 0;
+
+    public bool ActiveModeEmpty => ActiveMode switch
+    {
+        SplitRouteAction.Bypass => !HasBypass,
+        SplitRouteAction.Block => !HasBlock,
+        _ => !HasTunnel,
+    };
+
+    public string ActiveModeHeader => ActiveMode switch
+    {
+        SplitRouteAction.Bypass => Loc.Of("Direct"),
+        SplitRouteAction.Block => Loc.Of("Block"),
+        _ => Loc.Of("Proxy"),
+    };
+
+    public string ActiveModeCaption => ActiveMode switch
+    {
+        SplitRouteAction.Bypass => Loc.Of("No tunnel"),
+        SplitRouteAction.Block => Loc.Of("No network"),
+        _ => Loc.Of("Via proxy"),
+    };
+
+    private void RefreshColumns()
+    {
+        OnPropertyChanged(nameof(BypassCount));
+        OnPropertyChanged(nameof(TunnelCount));
+        OnPropertyChanged(nameof(BlockCount));
+        OnPropertyChanged(nameof(BypassCountText));
+        OnPropertyChanged(nameof(TunnelCountText));
+        OnPropertyChanged(nameof(BlockCountText));
+        OnPropertyChanged(nameof(HasBypass));
+        OnPropertyChanged(nameof(HasTunnel));
+        OnPropertyChanged(nameof(HasBlock));
+        OnPropertyChanged(nameof(ActiveModeEmpty));
+        OnPropertyChanged(nameof(ActiveModeHeader));
+        OnPropertyChanged(nameof(ActiveModeCaption));
+        OnPropertyChanged(nameof(RuleCountText));
+        OnPropertyChanged(nameof(StatusText));
+    }
+
+    public string RuleCountText
+    {
+        get
+        {
+            var total = BypassRows.Count + TunnelRows.Count + BlockRows.Count;
+            return string.Format(Loc.Of("{0} rules"), total);
+        }
+    }
+
+    // ----------------------------------------------------------------- applications
+
+    private List<SplitAppOption> _allApps = new();
+    private bool _appsLoaded;
+
+    public ObservableCollection<SplitAppOption> FilteredApps { get; } = new();
+
+    [ObservableProperty] private string _appSearch = "";
+
+    partial void OnAppSearchChanged(string value) => ApplyAppFilter();
+
+    [ObservableProperty] private bool _isScanningApps;
+
+    [RelayCommand]
+    private async Task RefreshApps()
+    {
+        InstalledAppsProvider.Invalidate();
+        _appsLoaded = false;
+        _allApps = new List<SplitAppOption>();
+        await EnsureAppsLoadedAsync();
+        ApplyAppFilter();
+    }
+
+    private async Task EnsureAppsLoadedAsync()
+    {
+        if (_appsLoaded) return;
+
+        IsScanningApps = true;
+        try
+        {
+            // Reuse the last scan while it is still fresh: opening the page twice must not
+            // walk Program Files twice.
+            var cached = InstalledAppsProvider.CachedApps;
+            var installed = cached.Count > 0
+                ? cached.ToList()
+                : await InstalledAppsProvider.LoadAsync();
+            var existing = ActiveProfile;
+            var assigned = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (existing is not null)
+            {
+                foreach (var row in BuildRows(existing.Block, SplitRouteAction.Block)) assigned[row.Key] = SplitRouteAction.Block;
+                foreach (var row in BuildRows(existing.Tunnel, SplitRouteAction.Tunnel)) assigned[row.Key] = SplitRouteAction.Tunnel;
+                foreach (var row in BuildRows(existing.Bypass, SplitRouteAction.Bypass)) assigned[row.Key] = SplitRouteAction.Bypass;
+            }
+
+            _allApps = installed
+                .Select(app => new SplitAppOption(app.Name, app.ExePath, app.FileName, app.Icon, app.IsRunning))
+                .ToList();
+
+            foreach (var app in _allApps)
+            {
+                if (assigned.TryGetValue("app\u0001" + app.ExePath, out var action)
+                    || assigned.TryGetValue("process\u0001" + app.FileName, out action))
+                {
+                    app.Mode = action;
+                }
+            }
+
+            _appsLoaded = true;
+        }
+        finally
+        {
+            IsScanningApps = false;
+        }
+    }
+
+    private void ApplyAppFilter()
+    {
+        var needle = (AppSearch ?? "").Trim();
+        var profile = ActiveProfile;
+        var ownership = BuildOwnershipMap(profile);
+
+        FilteredApps.Clear();
+
+        if (needle.Length > 0)
+        {
+            // Rank matches so the obvious one is first: exact file name, then name
+            // prefix, then substring. Someone typing "chrome" should see chrome.exe
+            // at the top even on a machine with a hundred apps.
+            var scored = new List<(SplitAppOption App, int Rank)>();
+            foreach (var app in _allApps)
+            {
+                var rank = app.MatchRank(needle);
+                if (rank < 0) continue;
+                scored.Add((app, rank));
+            }
+
+            scored.Sort(static (a, b) =>
+            {
+                var c = a.Rank.CompareTo(b.Rank);
+                return c != 0 ? c : string.Compare(a.App.Name, b.App.Name, StringComparison.CurrentCultureIgnoreCase);
+            });
+
+            foreach (var (app, _) in scored)
+            {
+                app.Mode = ownership.TryGetValue(app.ExePath, out var action) ? action : "";
+                FilteredApps.Add(app);
+                if (FilteredApps.Count >= 200) break;
+            }
+        }
+        else
+        {
+            foreach (var app in _allApps)
+            {
+                app.Mode = ownership.TryGetValue(app.ExePath, out var action) ? action : "";
+                FilteredApps.Add(app);
+                if (FilteredApps.Count >= 200) break;
+            }
+        }
+
+        OnPropertyChanged(nameof(NoFilteredApps));
+        OnPropertyChanged(nameof(CanAddTypedApp));
+        OnPropertyChanged(nameof(TypedAppPreview));
+    }
+
+    public bool NoFilteredApps => FilteredApps.Count == 0;
+
+    // Adding an app the scan never saw (a portable exe, a game, a renamed binary) must
+    // be possible without knowing the path: typing the name and confirming is enough.
+    public bool CanAddTypedApp
+    {
+        get
+        {
+            var typed = NormalizeTypedApp();
+            if (typed.Length == 0) return false;
+            return !_allApps.Any(a =>
+                string.Equals(a.FileName, typed, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(a.Name, typed.TrimEnd('.'), StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public string TypedAppPreview
+    {
+        get
+        {
+            var typed = NormalizeTypedApp();
+            return typed.Length == 0
+                ? ""
+                : string.Format(Loc.Of("Add “{0}” to {1}"), typed, ActiveModeHeader);
+        }
+    }
+
+    private string NormalizeTypedApp()
+    {
+        var raw = (AppSearch ?? "").Trim().Trim('"');
+        if (raw.Length < 2) return "";
+        if (raw.Contains('\\') || raw.Contains('/')) return raw;
+        return raw.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? raw : raw + ".exe";
+    }
+
+    [RelayCommand]
+    private void AddTypedApp()
+    {
+        var profile = ActiveProfile;
+        if (profile is null) return;
+
+        var typed = NormalizeTypedApp();
+        if (typed.Length == 0) return;
+
+        // A typed path becomes a path rule (stable across renames); a typed bare name
+        // becomes a name rule.
+        var kind = typed.Contains('\\') || typed.Contains('/')
+            ? SplitTargetKind.ProcessPath
+            : SplitTargetKind.Process;
+
+        SplitTunnelProfileStore.SetApplication(profile, kind, typed, ActiveMode, typed);
+        Persist();
+        AppSearch = "";
+        ReloadActiveProfile();
+        ApplyAppFilter();
+    }
+
+    private static Dictionary<string, string> BuildOwnershipMap(SplitTunnelProfile? profile)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (profile is null) return map;
+
+        foreach (var rule in profile.Block)
+        {
+            if (rule.Kind == SplitTargetKind.App) map[rule.Value] = SplitRouteAction.Block;
+        }
+        foreach (var rule in profile.Tunnel)
+        {
+            if (rule.Kind == SplitTargetKind.App) map[rule.Value] = SplitRouteAction.Tunnel;
+        }
+        foreach (var rule in profile.Bypass)
+        {
+            if (rule.Kind == SplitTargetKind.App) map[rule.Value] = SplitRouteAction.Bypass;
+        }
+        return map;
+    }
+
+    [RelayCommand]
+    private void AssignApp(SplitAppOption? app) => AssignAppToMode(app, ActiveMode);
+
+    // Removal targets the app, not a rule row: the store finds it in whichever of the
+    // three lists owns it, so no mode is ever assumed.
+    // Removal targets the app, not a rule row: the store finds it in whichever of the
+    // three lists owns it. The old code only ever asked the Bypass list, so an app in
+    // Through Tunnel or Block could not be removed from the Applications pane at all.
+    [RelayCommand]
+    private void RemoveAppAssignment(SplitAppOption? app)
+    {
+        var profile = ActiveProfile;
+        if (app is null || profile is null) return;
+
+        var removed = SplitTunnelProfileStore.RemoveValue(profile, SplitTargetKind.App, app.ExePath)
+                      | SplitTunnelProfileStore.RemoveValue(profile, SplitTargetKind.ProcessPath, app.ExePath)
+                      | SplitTunnelProfileStore.RemoveValue(profile, SplitTargetKind.Process, app.FileName);
+
+        if (!removed) return;
+
+        app.Mode = "";
+        Persist();
+        ReloadActiveProfile();
+        ApplyAppFilter();
+    }
+
+    [RelayCommand]
+    private void AssignAppBypass(SplitAppOption? app) => AssignAppToMode(app, SplitRouteAction.Bypass);
+
+    [RelayCommand]
+    private void AssignAppTunnel(SplitAppOption? app) => AssignAppToMode(app, SplitRouteAction.Tunnel);
+
+    [RelayCommand]
+    private void AssignAppBlock(SplitAppOption? app) => AssignAppToMode(app, SplitRouteAction.Block);
+
+    private void AssignAppToMode(SplitAppOption? app, string mode)
+    {
+        var profile = ActiveProfile;
+        if (profile is null || app is null) return;
+
+        // Path rules are stable across renames and survive a name-only match. Selecting an
+        // app can only ever touch that one target: it is removed from whichever of the
+        // three lists owns it and added to exactly one list.
+        SplitTunnelProfileStore.SetApplication(profile, SplitTargetKind.App, app.ExePath, mode, app.Name);
+        Persist();
+
+        app.Mode = mode;
+        ReloadActiveProfile();
+        ApplyAppFilter();
+    }
+
+    // ----------------------------------------------------------------- custom rules
+
+    [ObservableProperty] private bool _isCustomRuleOpen;
+    [ObservableProperty] private string _customRuleValue = "";
+    [ObservableProperty] private string _customRuleKind = SplitTargetKind.Process;
+    [ObservableProperty] private string _customRuleError = "";
+
+    [RelayCommand]
+    private void OpenCustomRule()
+    {
+        CustomRuleValue = "";
+        CustomRuleError = "";
+        IsCustomRuleOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseCustomRule() => IsCustomRuleOpen = false;
+
+    [RelayCommand]
+    private void AddCustomRule()
+    {
+        var profile = ActiveProfile;
+        if (profile is null) return;
+
+        var raw = (CustomRuleValue ?? "").Trim();
+        if (raw.Length == 0)
+        {
+            CustomRuleError = Loc.Of("Enter a value first.");
+            return;
+        }
+
+        // The selected matcher is used verbatim. Guessing between path and name here is
+        // what silently turned a typed path into "path.exe".
+        var kind = SplitTargetKind.Normalize(CustomRuleKind);
+        if (kind == SplitTargetKind.App) kind = SplitTargetKind.Process;
+
+        var normalizedValue = SplitTunnelProfileStore.NormalizeValue(kind, raw);
+        if (normalizedValue.Length == 0)
+        {
+            CustomRuleError = CustomRuleKind switch
+            {
+                SplitTargetKind.Regex => Loc.Of("That regular expression is not valid."),
+                SplitTargetKind.Ip => Loc.Of("Enter an address like 10.0.0.0/8."),
+                SplitTargetKind.Domain => Loc.Of("Enter a domain like example.com."),
+                SplitTargetKind.ProcessPath => Loc.Of("Enter a full image path."),
+                _ => Loc.Of("That value is not valid."),
+            };
+            return;
+        }
+
+        var result = SplitTunnelProfileStore.SetApplication(profile, kind, normalizedValue, ActiveMode);
+        Persist();
+        CustomRuleError = result switch
+        {
+            SplitMoveResult.AlreadyThere => Loc.Of("Already in this mode."),
+            SplitMoveResult.Full => Loc.Of("This profile is full."),
+            _ => "",
+        };
+        if (CustomRuleError.Length == 0)
+        {
+            CustomRuleValue = "";
+            IsCustomRuleOpen = false;
+        }
+
+        ReloadActiveProfile();
+    }
+
+    // One entry per matcher, in the order the UI shows them. Each carries its own
+    // example so the placeholder always teaches the format for the selected kind.
+    public IReadOnlyList<SplitRuleKindOption> RuleKinds { get; } = new[]
+    {
+        new SplitRuleKindOption(SplitTargetKind.ProcessPath, "Path", "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"),
+        new SplitRuleKindOption(SplitTargetKind.Process, "Process", "chrome.exe"),
+        new SplitRuleKindOption(SplitTargetKind.Ip, "IP", "10.0.0.0/8"),
+        new SplitRuleKindOption(SplitTargetKind.Keyword, "Keyword", "chrom"),
+        new SplitRuleKindOption(SplitTargetKind.Regex, "Regex", "^chrome.*\\.exe$"),
+        new SplitRuleKindOption(SplitTargetKind.Suffix, "Suffix", "rome"),
+        new SplitRuleKindOption(SplitTargetKind.Domain, "Domain", "example.com"),
+    };
+
+    [RelayCommand]
+    private void SelectRuleKind(string? kind)
+    {
+        CustomRuleKind = SplitTargetKind.Normalize(kind);
+        if (CustomRuleKind == SplitTargetKind.App) CustomRuleKind = SplitTargetKind.Process;
+        CustomRuleError = "";
+        OnPropertyChanged(nameof(CustomRuleKindLabel));
+        OnPropertyChanged(nameof(CustomRuleHint));
+        OnPropertyChanged(nameof(CustomRuleHelp));
+        OnPropertyChanged(nameof(IsProcessKind));
+    }
+
+    public bool IsProcessKind => SplitTargetKind.IsProcessKind(CustomRuleKind);
+
+    public string CustomRuleKindLabel => RuleKinds
+        .FirstOrDefault(k => k.Kind == CustomRuleKind)?.Label ?? Loc.Of("Process");
+
+    // Placeholder: an example of the exact thing to type.
+    public string CustomRuleHint => CustomRuleKind switch
+    {
+        SplitTargetKind.ProcessPath => "C:\\Program Files\\App\\app.exe",
+        SplitTargetKind.Process => "chrome.exe",
+        SplitTargetKind.Ip => "10.0.0.0/8",
+        SplitTargetKind.Keyword => "chrom",
+        SplitTargetKind.Regex => "^chrome.*\\.exe$",
+        SplitTargetKind.Suffix => "rome",
+        SplitTargetKind.Domain => "example.com",
+        _ => "app.exe",
+    };
+
+    // One short line that says what the selected matcher does — no paragraphs.
+    public string CustomRuleHelp => CustomRuleKind switch
+    {
+        SplitTargetKind.ProcessPath => Loc.Of("Exact image path"),
+        SplitTargetKind.Process => Loc.Of("Image file name"),
+        SplitTargetKind.Ip => Loc.Of("Address or range"),
+        SplitTargetKind.Keyword => Loc.Of("Anywhere in the name"),
+        SplitTargetKind.Regex => Loc.Of("Regular expression"),
+        SplitTargetKind.Suffix => Loc.Of("Ends with"),
+        SplitTargetKind.Domain => Loc.Of("Domain and subdomains"),
+        _ => "",
+    };
+
+    // ----------------------------------------------------------------- rule rows
+
+    [RelayCommand]
+    private void RemoveRule(SplitRuleRow? row)
+    {
+        var profile = ActiveProfile;
+        if (profile is null || row is null) return;
+
+        // The row no longer has to be in the mode the UI happens to be showing.
+        if (!SplitTunnelProfileStore.RemoveValue(profile, row.Kind, row.Value)) return;
+
+        Persist();
+        ReloadActiveProfile();
+        ApplyAppFilter();
+    }
+
+    [RelayCommand]
+    private void MoveRule(SplitRuleRow? row)
+    {
+        var profile = ActiveProfile;
+        if (profile is null || row is null) return;
+
+        var next = row.Action switch
+        {
+            SplitRouteAction.Bypass => SplitRouteAction.Tunnel,
+            SplitRouteAction.Tunnel => SplitRouteAction.Block,
+            _ => SplitRouteAction.Bypass,
+        };
+
+        var result = SplitTunnelProfileStore.SetApplication(profile, row.Kind, row.Value, next, row.DisplayName);
+        if (result != SplitMoveResult.AlreadyThere)
+        {
+            Persist();
+            ReloadActiveProfile();
+        }
+    }
+
+    [RelayCommand]
+    private async Task ClearMode()
+    {
+        var profile = ActiveProfile;
+        if (profile is null) return;
+
+        var rows = ActiveMode switch
+        {
+            SplitRouteAction.Bypass => profile.Bypass,
+            SplitRouteAction.Block => profile.Block,
+            _ => profile.Tunnel,
+        };
+        if (rows.Count == 0) return;
+
+        if (!await Ui.ConfirmAsync(
+                Loc.Of("Clear rules"),
+                string.Format(Loc.Of("Remove all {0} rules from this mode?"), rows.Count)))
+        {
+            return;
+        }
+
+        // Only the active mode is cleared; the other two lists are untouched.
+        SplitTunnelProfileStore.Clear(profile, ActiveMode);
+        Persist();
+        ReloadActiveProfile();
+    }
+
+    // ----------------------------------------------------------------- enable / system-wide
 
     [ObservableProperty] private bool _splitTunnelEnabled;
     partial void OnSplitTunnelEnabledChanged(bool value)
     {
         if (_suppressPersist) return;
         _settingsService.Settings.SplitTunnelEnabled = value;
+
         if (value && IsAdminElevated && !SystemWideEnabled)
         {
             _suppressTunSideEffects = true;
@@ -133,375 +801,10 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
             finally { _suppressTunSideEffects = false; }
             _settingsService.Settings.SystemWideTunneling = true;
         }
+
         _settingsService.Save();
         RefreshStatus();
     }
-
-    [ObservableProperty] private string _splitTunnelMode = "exclude";
-    partial void OnSplitTunnelModeChanged(string value)
-    {
-        RefreshModeSurface();
-        if (_suppressPersist) return;
-
-        var v = string.Equals(value, "include", StringComparison.OrdinalIgnoreCase)
-            ? "include"
-            : "exclude";
-        _settingsService.Settings.SplitTunnelMode = v;
-        _settingsService.Save();
-    }
-
-    public bool IsIncludeMode =>
-        string.Equals(SplitTunnelMode, "include", StringComparison.OrdinalIgnoreCase);
-
-    public string SplitTunnelModeHint => IsIncludeMode
-        ? Loc.Of("Only the sites, IPs and apps listed below reach the internet through the VPN. Everything else uses your real connection.")
-        : Loc.Of("The sites, IPs and apps listed below use your real connection. Everything else is tunnelled through the VPN.");
-
-    public string ModeSummary
-    {
-        get
-        {
-            var n = DomainEntries.Count + AppEntries.Count;
-            if (n == 0)
-            {
-                return Loc.Of("Right now: the list is empty, so every connection goes through the VPN. Add a rule below to split it.");
-            }
-
-            return IsIncludeMode
-                ? string.Format(Loc.Of("Right now: only these {0} rule(s) go through the VPN. Everything else uses your normal connection and is NOT protected."), n)
-                : string.Format(Loc.Of("Right now: these {0} rule(s) use your normal connection with your real local IP. Everything else goes through the VPN."), n);
-        }
-    }
-
-    public bool ShowIncludeWarning => SplitTunnelEnabled && IsIncludeMode;
-
-    private void RefreshModeSurface()
-    {
-        OnPropertyChanged(nameof(IsIncludeMode));
-        OnPropertyChanged(nameof(SplitTunnelModeHint));
-        OnPropertyChanged(nameof(ModeSummary));
-        OnPropertyChanged(nameof(ShowIncludeWarning));
-        OnPropertyChanged(nameof(AppRulesSubtitle));
-
-        var include = IsIncludeMode;
-        foreach (var entry in DomainEntries) entry.IncludeMode = include;
-        foreach (var entry in AppEntries) entry.IncludeMode = include;
-        foreach (var entry in SplitTunnelEntries) entry.IncludeMode = include;
-    }
-
-    [ObservableProperty] private string _newSplitKind = "domain";
-
-    [ObservableProperty] private string _newSplitValue = "";
-    partial void OnNewSplitValueChanged(string value)
-    {
-        if (!string.IsNullOrEmpty(SplitTunnelError)) SplitTunnelError = "";
-    }
-
-    [ObservableProperty] private string _splitTunnelError = "";
-
-    public bool HasSplitTunnelEntries => (DomainEntries.Count + AppEntries.Count) > 0;
-    public bool NoSplitTunnelEntries => (DomainEntries.Count + AppEntries.Count) == 0;
-
-    private void LoadSplitTunnelEntries()
-    {
-        SplitTunnelEntries.Clear();
-        DomainEntries.Clear();
-        AppEntries.Clear();
-
-        var stored = _settingsService.Settings.SplitTunnelEntries;
-        var include = IsIncludeMode;
-        if (stored is not null)
-        {
-            foreach (var e in stored)
-            {
-                if (e is null || string.IsNullOrWhiteSpace(e.Value)) continue;
-                var kind = (e.Kind ?? "domain").Trim().ToLowerInvariant();
-                if (kind != "ip" && kind != "app") kind = "domain";
-                var normalized = Normalize(kind, e.Value) ?? e.Value.Trim();
-                if (Contains(kind, normalized)) continue;
-                var row = new SplitTunnelEntryView
-                {
-                    Kind = kind,
-                    Value = normalized,
-                    IncludeMode = include,
-                };
-                SplitTunnelEntries.Add(row);
-                if (kind == "app")
-                    AppEntries.Add(row);
-                else
-                    DomainEntries.Add(row);
-            }
-        }
-
-        _entriesSignature = BuildStoredEntriesSignature();
-        NotifyEntriesChanged();
-    }
-
-    private string BuildStoredEntriesSignature()
-    {
-        var stored = _settingsService.Settings.SplitTunnelEntries;
-        if (stored is null || stored.Count == 0) return "";
-
-        var sb = new System.Text.StringBuilder();
-        foreach (var e in stored)
-        {
-            if (e is null || string.IsNullOrWhiteSpace(e.Value)) continue;
-            sb.Append((e.Kind ?? "domain").Trim().ToLowerInvariant())
-              .Append('|')
-              .Append(e.Value.Trim())
-              .Append('\n');
-        }
-        return sb.ToString();
-    }
-
-    private void NotifyEntriesChanged()
-    {
-        OnPropertyChanged(nameof(HasSplitTunnelEntries));
-        OnPropertyChanged(nameof(NoSplitTunnelEntries));
-        OnPropertyChanged(nameof(DomainCount));
-        OnPropertyChanged(nameof(AppCount));
-        OnPropertyChanged(nameof(HasDomainEntries));
-        OnPropertyChanged(nameof(NoDomainEntries));
-        OnPropertyChanged(nameof(HasAppEntries));
-        OnPropertyChanged(nameof(NoAppEntries));
-        OnPropertyChanged(nameof(DomainRulesCountText));
-        OnPropertyChanged(nameof(AppRulesSubtitle));
-        OnPropertyChanged(nameof(ModeSummary));
-    }
-
-    private SplitTunnelEntryView NewRow(string kind, string value) =>
-        new() { Kind = kind, Value = value, IncludeMode = IsIncludeMode };
-
-    [RelayCommand]
-    private async Task OpenAddSiteDialog()
-    {
-        var rule = await Ui.AskRuleAsync();
-        if (rule is not null) AddRule(rule.Value.Kind, rule.Value.Value);
-    }
-
-    [RelayCommand]
-    private void AddPreset(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return;
-        var p = raw.Trim();
-        var kind = Normalize("ip", p) is not null ? "ip" : "domain";
-        AddRule(kind, p);
-    }
-
-    public bool AddRule(string kind, string rawValue)
-    {
-        kind = (kind ?? "domain").Trim().ToLowerInvariant();
-        if (kind != "ip" && kind != "app") kind = "domain";
-
-        var normalized = Normalize(kind, rawValue);
-        if (string.IsNullOrEmpty(normalized))
-        {
-            SplitTunnelError = Loc.Of("Invalid target format.");
-            return false;
-        }
-
-        if (Contains(kind, normalized!))
-        {
-            return false;
-        }
-
-        var row = NewRow(kind, normalized!);
-        if (kind == "app")
-            AppEntries.Add(row);
-        else
-            DomainEntries.Add(row);
-
-        SplitTunnelError = "";
-        PersistSplitTunnelEntries();
-        return true;
-    }
-
-    [RelayCommand]
-    private void AddSplitEntry()
-    {
-        var kind = (NewSplitKind ?? "domain").Trim().ToLowerInvariant();
-        if (kind != "ip" && kind != "app") kind = "domain";
-
-        var value = (NewSplitValue ?? "").Trim();
-        if (value.Length == 0)
-        {
-            SplitTunnelError = Loc.Of("Enter a value first.");
-            return;
-        }
-
-        if (AddRule(kind, value))
-        {
-            NewSplitValue = "";
-        }
-    }
-
-    [RelayCommand]
-    private void RemoveSplitEntry(SplitTunnelEntryView? entry)
-    {
-        if (entry is null) return;
-        DomainEntries.Remove(entry);
-        AppEntries.Remove(entry);
-        SplitTunnelEntries.Remove(entry);
-        PersistSplitTunnelEntries();
-    }
-
-    [RelayCommand]
-    private async Task ClearDomainEntries()
-    {
-        if (DomainEntries.Count == 0) return;
-        if (!await Ui.ConfirmAsync(
-                Loc.Of("Clear Websites & IPs"),
-                string.Format(Loc.Of("Remove all {0} website and IP rules?"), DomainEntries.Count)))
-            return;
-
-        DomainEntries.Clear();
-        PersistSplitTunnelEntries();
-    }
-
-    [RelayCommand]
-    private async Task ClearAppEntries()
-    {
-        if (AppEntries.Count == 0) return;
-        if (!await Ui.ConfirmAsync(
-                Loc.Of("Clear Applications"),
-                string.Format(Loc.Of("Remove all {0} application rules?"), AppEntries.Count)))
-            return;
-
-        AppEntries.Clear();
-        PersistSplitTunnelEntries();
-    }
-
-    [RelayCommand]
-    private async Task ClearSplitEntries()
-    {
-        if (DomainEntries.Count == 0 && AppEntries.Count == 0) return;
-
-        if (!await Ui.ConfirmAsync(
-                Loc.Of("Clear all rules"),
-                string.Format(Loc.Of("Remove all {0} split-tunnel entries?"),
-                    DomainEntries.Count + AppEntries.Count)))
-            return;
-
-        DomainEntries.Clear();
-        AppEntries.Clear();
-        PersistSplitTunnelEntries();
-    }
-
-    [RelayCommand]
-    private async Task PickApps()
-    {
-        var chosen = await Ui.PickApplicationsAsync();
-        if (chosen.Count == 0) return;
-
-        var added = 0;
-        foreach (var raw in chosen)
-        {
-            var normalized = Normalize("app", raw);
-            if (string.IsNullOrEmpty(normalized)) continue;
-            if (Contains("app", normalized!)) continue;
-
-            AppEntries.Add(NewRow("app", normalized!));
-            added++;
-        }
-
-        if (added > 0)
-        {
-            SplitTunnelError = "";
-            PersistSplitTunnelEntries();
-        }
-    }
-
-        private static readonly string[] IranBypassDomains =
-    {
-        "ir",                 
-        "digikala.com",
-        "aparat.com",
-        "filimo.com",
-        "varzesh3.com",
-        "telewebion.com",
-        "sheypoor.com",
-        "zarinpal.com",
-    };
-
-    [RelayCommand]
-    private void ApplyIranBypassPreset()
-    {
-        SplitTunnelMode = "exclude";
-        if (!SplitTunnelEnabled) SplitTunnelEnabled = true;
-
-        var added = 0;
-        foreach (var domain in IranBypassDomains)
-        {
-            var normalized = SplitRules.NormalizeSplitDomain(domain);
-            if (string.IsNullOrEmpty(normalized)) continue;
-            if (Contains("domain", normalized!)) continue;
-
-            DomainEntries.Add(NewRow("domain", normalized!));
-            added++;
-        }
-
-        SplitTunnelError = added > 0
-            ? ""
-            : Loc.Of("Those sites are already in the list.");
-        if (added > 0) PersistSplitTunnelEntries();
-    }
-
-    private bool Contains(string kind, string value)
-    {
-        var list = kind == "app" ? (IEnumerable<SplitTunnelEntryView>)AppEntries : DomainEntries;
-        foreach (var existing in list)
-        {
-            if (existing.Kind == kind &&
-                string.Equals(existing.Value, value, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static string? Normalize(string kind, string value) => kind switch
-    {
-        "ip" => SplitRules.NormalizeSplitIpCidr(value),
-        "app" => NormalizeSplitApp(value),
-        _ => SplitRules.NormalizeSplitDomain(value),
-    };
-
-    private static string? NormalizeSplitApp(string raw)
-    {
-        var s = (raw ?? "").Trim().Trim('"');
-        if (s.Length == 0) return null;
-        return SplitRules.LooksLikeAppPath(s)
-            ? s
-            : SplitRules.NormalizeProcessName(s);
-    }
-
-    private void PersistSplitTunnelEntries()
-    {
-        var list = new List<SplitTunnelEntry>(DomainEntries.Count + AppEntries.Count);
-        foreach (var v in DomainEntries)
-        {
-            list.Add(new SplitTunnelEntry { Kind = v.Kind, Value = v.Value });
-        }
-        foreach (var v in AppEntries)
-        {
-            list.Add(new SplitTunnelEntry { Kind = v.Kind, Value = v.Value });
-        }
-        _settingsService.Settings.SplitTunnelEntries = list;
-        _entriesSignature = BuildStoredEntriesSignature();
-        _settingsService.Save();
-
-        SplitTunnelEntries.Clear();
-        foreach (var item in DomainEntries) SplitTunnelEntries.Add(item);
-        foreach (var item in AppEntries) SplitTunnelEntries.Add(item);
-
-        NotifyEntriesChanged();
-        RefreshStatus();
-    }
-
-    
-    
-    
 
     public bool IsAdminElevated { get; } = AdminElevation.IsAdministrator();
 
@@ -565,7 +868,7 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
         RefreshStatus();
     }
 
-        private bool TryRestartAsAdmin()
+    private bool TryRestartAsAdmin()
     {
         _settingsService.Settings.SystemWideTunneling = true;
         _settingsService.Save();
@@ -577,12 +880,15 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
         return false;
     }
 
-        [RelayCommand]
+    [RelayCommand]
     private void EnableSystemWide() => SystemWideEnabled = true;
 
-        public bool IsSplitActive =>
+    // ----------------------------------------------------------------- status
+
+    public bool IsSplitActive =>
         SplitTunnelEnabled
-        && SplitTunnelEntries.Count > 0
+        && SelectedProfile is not null
+        && (BypassRows.Count + TunnelRows.Count + BlockRows.Count) > 0
         && SystemWideEnabled
         && _tun.State == TunState.Running;
 
@@ -593,35 +899,33 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
         get
         {
             if (!IsAdminElevated)
-                return Loc.Of("Run Se7en Pro as Administrator — split tunnelling needs the system-wide adapter.");
+                return Loc.Of("Administrator rights are required for system-wide split tunnelling.");
 
             if (!SplitTunnelEnabled)
-                return Loc.Of("Split tunnelling is off. Everything follows the normal connection.");
+                return Loc.Of("Split tunnelling is off.");
+
+            if (SelectedProfile is null)
+                return Loc.Of("Create a profile to start routing applications.");
 
             if (!SystemWideEnabled)
-                return Loc.Of("Turn on system-wide tunnelling — these rules only apply in TUN mode.");
+                return Loc.Of("Turn on system-wide tunnelling to apply these rules.");
 
-            if (SplitTunnelEntries.Count == 0)
-                return Loc.Of("No rules yet. Add a site, an IP range, or pick an app below.");
+            if ((BypassRows.Count + TunnelRows.Count + BlockRows.Count) == 0)
+                return Loc.Of("No rules yet. Add an application to this profile.");
 
             return _tun.State switch
             {
-                TunState.Starting => Loc.Of("Starting the system-wide adapter…"),
-                TunState.Running =>
-                    string.Equals(SplitTunnelMode, "include", StringComparison.OrdinalIgnoreCase)
-                        ? string.Format(Loc.Of("Active — only the {0} listed rule(s) go through the VPN."), SplitTunnelEntries.Count)
-                        : string.Format(Loc.Of("Active — the {0} listed rule(s) bypass the VPN."), SplitTunnelEntries.Count),
-                TunState.Stopping => Loc.Of("Stopping the system-wide adapter…"),
-                TunState.Error => _tun.LastError ?? Loc.Of("The system-wide adapter failed to start."),
+                TunState.Starting => Loc.Of("Starting the adapter…"),
+                TunState.Running => string.Format(Loc.Of("Active — profile “{0}”"), SelectedProfile.Name),
+                TunState.Stopping => Loc.Of("Stopping the adapter…"),
+                TunState.Error => _tun.LastError ?? Loc.Of("The adapter failed to start."),
                 _ => _tunnel.State == ConnectionState.Connected
-                    ? Loc.Of("Waiting for the system-wide adapter to come up…")
-                    : Loc.Of("Rules are saved — they take effect once you connect."),
+                    ? Loc.Of("Waiting for the adapter…")
+                    : Loc.Of("Rules are saved — they apply once you connect."),
             };
         }
     }
 
-    
-    
     private static readonly object BrushActive = Ui.FrozenBrush("#22C55E");
     private static readonly object BrushPending = Ui.FrozenBrush("#F59E0B");
     private static readonly object BrushError = Ui.FrozenBrush("#EF4444");
@@ -643,14 +947,14 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
     {
         OnPropertyChanged(nameof(IsSplitActive));
         OnPropertyChanged(nameof(ShowSystemWideWarning));
-        OnPropertyChanged(nameof(ShowIncludeWarning));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusBrush));
+        OnPropertyChanged(nameof(HasProfiles));
+        OnPropertyChanged(nameof(HasNoProfiles));
+        OnPropertyChanged(nameof(DefaultOutbound));
+        OnPropertyChanged(nameof(DefaultOutboundLabel));
+        OnPropertyChanged(nameof(DefaultOutboundText));
     }
-
-    
-    
-    
 
     private void OnTunStateChanged(object? sender, EventArgs e) => Post(RefreshStatus);
 
@@ -660,7 +964,6 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
     {
         var s = _settingsService.Settings;
 
-        
         if (s.SystemWideTunneling != SystemWideEnabled)
         {
             _suppressTunSideEffects = true;
@@ -675,67 +978,276 @@ public sealed partial class SplitTunnelViewModel : PageViewModelBase
             finally { _suppressPersist = false; }
         }
 
-        var mode = string.Equals(s.SplitTunnelMode, "include", StringComparison.OrdinalIgnoreCase)
-            ? "include"
-            : "exclude";
-        if (!string.Equals(mode, SplitTunnelMode, StringComparison.Ordinal))
+        var activeId = s.ActiveSplitTunnelProfileId;
+        if (!string.Equals(SelectedProfile?.Id, activeId, StringComparison.Ordinal))
         {
-            _suppressPersist = true;
-            try { SplitTunnelMode = mode; }
-            finally { _suppressPersist = false; }
+            LoadProfiles(activeId);
         }
-
-        if (!string.Equals(BuildStoredEntriesSignature(), _entriesSignature, StringComparison.Ordinal))
-            LoadSplitTunnelEntries();
 
         RefreshStatus();
     });
 
+    // ----------------------------------------------------------------- plumbing
+
+    private void Persist()
+    {
+        _settingsService.Save();
+        RefreshStatus();
+    }
+
+    private SplitTunnelProfile? FindProfile(string id)
+    {
+        foreach (var p in _settingsService.Settings.SplitTunnelProfiles)
+        {
+            if (p is not null && string.Equals(p.Id, id, StringComparison.Ordinal)) return p;
+        }
+        return null;
+    }
+
+    private void LoadProfiles(string? selectId = null)
+    {
+        _loading = true;
+        try
+        {
+            var settings = _settingsService.Settings;
+            Profiles.Clear();
+
+            foreach (var profile in settings.SplitTunnelProfiles)
+            {
+                if (profile is null) continue;
+                Profiles.Add(new SplitProfileItem(
+                    profile.Id,
+                    profile.Name,
+                    profile.DefaultOutbound,
+                    profile.RuleCount));
+            }
+
+            var targetId = selectId
+                ?? settings.ActiveSplitTunnelProfileId
+                ?? "";
+            var selected = Profiles.FirstOrDefault(p => string.Equals(p.Id, targetId, StringComparison.Ordinal))
+                           ?? Profiles.FirstOrDefault();
+
+            SelectedProfile = selected;
+            _appliedProfileId = selected?.Id ?? "";
+            if (selected is not null
+                && !string.Equals(settings.ActiveSplitTunnelProfileId, selected.Id, StringComparison.Ordinal))
+            {
+                SplitTunnelProfileStore.SetActive(settings, selected.Id);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        ReloadActiveProfile();
+        RefreshStatus();
+    }
+
+    private void ReloadActiveProfile()
+    {
+        var profile = ActiveProfile;
+
+        BypassRows.Clear();
+        BlockRows.Clear();
+        TunnelRows.Clear();
+
+        if (profile is not null)
+        {
+            foreach (var row in BuildRows(profile.Block, SplitRouteAction.Block)) BlockRows.Add(row);
+            foreach (var row in BuildRows(profile.Tunnel, SplitRouteAction.Tunnel)) TunnelRows.Add(row);
+            foreach (var row in BuildRows(profile.Bypass, SplitRouteAction.Bypass)) BypassRows.Add(row);
+
+            if (SelectedProfile is not null)
+            {
+                SelectedProfile.DefaultOutbound = profile.DefaultOutbound;
+                SelectedProfile.RuleCount = profile.RuleCount;
+                SelectedProfile.Name = profile.Name;
+            }
+        }
+
+        OnPropertyChanged(nameof(DefaultOutbound));
+        OnPropertyChanged(nameof(DefaultOutboundLabel));
+        OnPropertyChanged(nameof(DefaultOutboundText));
+        RefreshColumns();
+    }
+
+    private static IEnumerable<SplitRuleRow> BuildRows(
+        IEnumerable<SplitTunnelRule> rules,
+        string action)
+    {
+        foreach (var rule in rules)
+        {
+            if (rule is null) continue;
+            yield return new SplitRuleRow(
+                action,
+                rule.Kind,
+                rule.Value,
+                string.IsNullOrWhiteSpace(rule.DisplayName)
+                    ? DefaultLabel(rule.Kind, rule.Value)
+                    : rule.DisplayName.Trim());
+        }
+    }
+
+    private static string DefaultLabel(string kind, string value) => kind switch
+    {
+        SplitTargetKind.Process or SplitTargetKind.App => value,
+        _ => value,
+    };
+
     private static void Post(Action action) => Ui.Post(action);
 }
 
-public sealed partial class SplitTunnelEntryView : ObservableObject
+public sealed partial class SplitProfileItem : ObservableObject
 {
-    public string Kind { get; init; } = "domain";
-    public string Value { get; init; } = "";
-
-        [ObservableProperty] private bool _includeMode;
-
-    partial void OnIncludeModeChanged(bool value)
+    public SplitProfileItem(string id, string name, string defaultOutbound, int ruleCount)
     {
-        OnPropertyChanged(nameof(DirectionLabel));
-        OnPropertyChanged(nameof(DirectionIcon));
-        OnPropertyChanged(nameof(DirectionBrush));
+        Id = id;
+        _name = name;
+        _defaultOutbound = defaultOutbound;
+        _ruleCount = ruleCount;
     }
 
-    public string DirectionLabel => Loc.Of(IncludeMode ? "through VPN" : "bypasses VPN");
+    public string Id { get; }
 
-    public void RaiseDirection()
+    [ObservableProperty] private string _name;
+    [ObservableProperty] private string _defaultOutbound;
+    [ObservableProperty] private int _ruleCount;
+
+    public string OutboundIcon => DefaultOutbound switch
     {
-        OnPropertyChanged(nameof(DirectionLabel));
-        OnPropertyChanged(nameof(DirectionIcon));
-        OnPropertyChanged(nameof(DirectionBrush));
-        OnPropertyChanged(nameof(KindLabel));
-    }
-
-    public string DirectionIcon => IncludeMode ? "ShieldCheckOutline" : "ShieldOffOutline";
-
-    public object DirectionBrush => IncludeMode ? DirectionVpnBrush : DirectionDirectBrush;
-
-    private static readonly object DirectionVpnBrush = Ui.FrozenBrush("#38BDF8");
-    private static readonly object DirectionDirectBrush = Ui.FrozenBrush("#F59E0B");
-
-    public string KindLabel => Kind switch
-    {
-        "ip" => Loc.Of("IP / CIDR"),
-        "app" => Loc.Of("App"),
-        _ => Loc.Of("Site"),
+        SplitOutbound.Direct => "Earth",
+        SplitOutbound.Block => "BlockHelper",
+        _ => "ShieldCheckOutline",
     };
+
+    public string OutboundLabel => DefaultOutbound switch
+    {
+        SplitOutbound.Direct => Loc.Of("Direct"),
+        SplitOutbound.Block => Loc.Of("Block"),
+        _ => Loc.Of("Proxy"),
+    };
+
+    partial void OnDefaultOutboundChanged(string value)
+    {
+        OnPropertyChanged(nameof(OutboundIcon));
+        OnPropertyChanged(nameof(OutboundLabel));
+    }
+
+    public string CountLabel => RuleCount.ToString();
+}
+
+public sealed partial class SplitAppOption : ObservableObject
+{
+    public SplitAppOption(string name, string exePath, string fileName, object? icon, bool isRunning)
+    {
+        Name = name;
+        ExePath = exePath;
+        FileName = fileName;
+        Icon = icon;
+        IsRunning = isRunning;
+    }
+
+    public string Name { get; }
+    public string ExePath { get; }
+    public string FileName { get; }
+    public object? Icon { get; }
+    public bool IsRunning { get; }
+
+    public string SearchText => $"{Name}\n{FileName}\n{ExePath}";
+
+    // Lower is better; -1 means "no match". Exact file name wins, then the file name
+    // starts with the text, then the display name starts with it, then anywhere.
+    public int MatchRank(string needle)
+    {
+        if (string.IsNullOrEmpty(needle)) return 0;
+
+        var withExe = needle.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? needle
+            : needle + ".exe";
+
+        if (string.Equals(FileName, withExe, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(FileName, needle, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (FileName?.StartsWith(needle, StringComparison.OrdinalIgnoreCase) == true) return 1;
+        if (Name?.StartsWith(needle, StringComparison.OrdinalIgnoreCase) == true) return 2;
+
+        if (SearchText.IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0) return 3;
+        return -1;
+    }
+
+    [ObservableProperty] private string _mode = "";
+
+    partial void OnModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(Assigned));
+        OnPropertyChanged(nameof(ModeLabel));
+        OnPropertyChanged(nameof(ModeBrush));
+    }
+
+    public bool Assigned => Mode.Length > 0;
+
+    public string ModeLabel => Mode switch
+    {
+        SplitRouteAction.Bypass => Loc.Of("Direct"),
+        SplitRouteAction.Block => Loc.Of("Block"),
+        SplitRouteAction.Tunnel => Loc.Of("Proxy"),
+        _ => Loc.Of("Add"),
+    };
+
+    public object ModeBrush => Mode switch
+    {
+        SplitRouteAction.Bypass => BypassBrush,
+        SplitRouteAction.Block => BlockBrush,
+        SplitRouteAction.Tunnel => TunnelBrush,
+        _ => IdleBrush,
+    };
+
+    private static readonly object BypassBrush = Services.Ui.FrozenBrush("#F59E0B");
+    private static readonly object BlockBrush = Services.Ui.FrozenBrush("#EF4444");
+    private static readonly object TunnelBrush = Services.Ui.FrozenBrush("#00D4FF");
+    private static readonly object IdleBrush = Services.Ui.FrozenBrush("#6B7280");
+}
+
+public sealed record SplitRuleRow(
+    string Action,
+    string Kind,
+    string Value,
+    string Label)
+{
+    public string Key => $"{Kind}\u0001{Value}";
+
+    public string DisplayName => Label;
 
     public string Icon => Kind switch
     {
-        "ip" => "IpNetwork",
-        "app" => "Application",
-        _ => "Web",
+        SplitTargetKind.Domain => "Web",
+        SplitTargetKind.Ip => "IpNetwork",
+        _ => "Application",
     };
+
+    public object ActionBrush => Action switch
+    {
+        SplitRouteAction.Bypass => BypassBrush,
+        SplitRouteAction.Block => BlockBrush,
+        _ => TunnelBrush,
+    };
+
+    private static readonly object BypassBrush = Services.Ui.FrozenBrush("#F59E0B");
+    private static readonly object BlockBrush = Services.Ui.FrozenBrush("#EF4444");
+    private static readonly object TunnelBrush = Services.Ui.FrozenBrush("#00D4FF");
+}
+
+public sealed record SplitOutboundOption(string Key, string English, string Icon) : LocalizedItem
+{
+    public string Label => Loc.Of(English);
+}
+
+public sealed record SplitRuleKindOption(string Kind, string Label, string Example)
+{
+    public string LocalLabel => Loc.Of(Label);
 }

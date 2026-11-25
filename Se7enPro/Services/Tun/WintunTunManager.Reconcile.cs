@@ -30,10 +30,11 @@ public sealed partial class WintunTunManager
 
             var desiredTunMethod = NormalizeTunMethod(_settings.Settings.TunMethod);
             var desiredMtu = ResolveTunMtu();
-            var splitHash = ComputeSplitHash(socksPort);
+            var plan = BuildSplitPlan();
+            var splitHash = ComputeSplitHash(socksPort, plan);
             var endpointHash = ComputeEndpointHash();
             var mihomoSplitHash = string.Equals(desiredTunMethod, "mihomo", StringComparison.Ordinal)
-                ? ComputeMihomoSplitHash()
+                ? plan.Hash
                 : "";
             WriteDiag($"reconcile: systemWide={systemWide} tunnel={tunnelState} socks={socksPort} "
                       + $"method={desiredTunMethod} mtu={desiredMtu} wantStart={wantStart} wantKeep={wantKeep} have={have} state={State}");
@@ -45,6 +46,8 @@ public sealed partial class WintunTunManager
                 StartSupervisor(socksPort);
                 _activeSplitHash = splitHash;
                 _activeEndpointHash = endpointHash;
+                _activeEnforcementHash = plan.Hash;
+                ApplySplitEnforcement(plan);
             }
             else if (wantStart && have && (_activeSocksPort != socksPort
                      || _activeTunMtu != desiredMtu
@@ -60,12 +63,20 @@ public sealed partial class WintunTunManager
                 StartSupervisor(socksPort);
                 _activeSplitHash = splitHash;
                 _activeEndpointHash = endpointHash;
+                _activeEnforcementHash = plan.Hash;
+                ApplySplitEnforcement(plan);
             }
             else if (wantStart && State == TunState.Running
                      && _activeSocksPort == socksPort
                      && _activeSplitHash != splitHash)
             {
                 WriteDiag("split rules changed; re-applying routes live");
+                if (!string.Equals(_activeEnforcementHash, plan.Hash, StringComparison.Ordinal))
+                {
+                    ApplySplitEnforcement(plan);
+                    _activeEnforcementHash = plan.Hash;
+                }
+
                 await ReapplyRoutesAsync(socksPort);
                 _activeSplitHash = splitHash;
                 _activeEndpointHash = endpointHash;
@@ -91,6 +102,11 @@ public sealed partial class WintunTunManager
             if (State == TunState.Running)
             {
                 SuppressSystemProxy();
+            }
+            else
+            {
+                _splitRouter.Disarm();
+                _activeEnforcementHash = "";
             }
         }
         catch (Exception ex)

@@ -53,11 +53,15 @@ internal static class MihomoSingBoxModalTests
               "Mihomo YAML disables packet sniffer when no split-domain rules exist");
 
         var splitSettings = new UserSettings { SplitTunnelEnabled = true };
-        var splitDomains = new[] { "example.com" };
+        var splitProfile = SplitTunnelProfileStore.CreateProfile(splitSettings, "Modal");
+        splitProfile.DefaultOutbound = SplitOutbound.Proxy;
+        SplitTunnelProfileStore.SetApplication(splitProfile, SplitTargetKind.Domain, "example.com", SplitRouteAction.Bypass);
+        SplitTunnelProfileStore.SetActive(splitSettings, splitProfile.Id);
+        var splitPlan = SplitRoutingPlanner.Build(splitSettings);
         var yamlTcpOnly = MihomoConfigBuilder.BuildYaml(
             10808, enableV6: false, ConnectionMethod.PsiphonOverV2Ray,
             1280, "se7en_tun", "198.18.0.1", 30, "fdfe:dcba:9876::1", 126,
-            splitSettings, "Ethernet", new[] { "xray", "sing-box" }, splitDomains: splitDomains);
+            splitSettings, "Ethernet", new[] { "xray", "sing-box" }, splitPlan);
         Check(yamlTcpOnly.Contains("ipv6: false", StringComparison.Ordinal), "Mihomo YAML disables top-level IPv6 when IPv6 is off");
         Check(yamlTcpOnly.Contains("udp: false", StringComparison.Ordinal), "Mihomo YAML disables SOCKS5 UDP for PsiphonOverV2Ray");
         Check(yamlTcpOnly.Contains("AND,((NETWORK,udp),(NOT,((DST-PORT,53)))),REJECT", StringComparison.Ordinal), "Mihomo YAML rejects non-DNS UDP cleanly for TCP-only proxies");
@@ -67,7 +71,7 @@ internal static class MihomoSingBoxModalTests
         var yamlUdp = MihomoConfigBuilder.BuildYaml(
             10808, enableV6: true, ConnectionMethod.WireGuard,
             1280, "se7en_tun", "198.18.0.1", 30, "fdfe:dcba:9876::1", 126,
-            splitSettings, "Ethernet", new[] { "aether" }, splitDomains: splitDomains);
+            splitSettings, "Ethernet", new[] { "aether" }, splitPlan);
         Check(yamlUdp.Contains("ipv6: true", StringComparison.Ordinal), "Mihomo YAML enables IPv6 when enableV6 is true");
         Check(yamlUdp.Contains("udp: true", StringComparison.Ordinal), "Mihomo YAML enables SOCKS5 UDP for WireGuard");
         Check(yamlUdp.Contains("QUIC:", StringComparison.Ordinal), "Mihomo YAML keeps QUIC sniffer when UDP and split-domains are active");

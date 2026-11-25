@@ -20,24 +20,14 @@ public sealed partial class WintunTunManager
     private async Task ApplyRoutesAsync(int tunIfIndex, CancellationToken ct)
     {
         var s = _settings.Settings;
-        var splitActive = s.SplitTunnelEnabled;
-        var include = splitActive && string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
+        var plan = BuildSplitPlan();
+        var splitActive = plan.Enabled;
 
-        var domains = new List<string>();
-        var ipCidrs = new List<string>();
-        var procNames = new List<string>();
-        var procPaths = new List<string>();
-
-        if (splitActive)
-        {
-            SplitRules.ClassifySplitEntries(s, out domains, out ipCidrs, out procNames, out procPaths);
-        }
-
-        if (splitActive && (procNames.Count + procPaths.Count > 0))
-        {
-            var ruleNames = string.Join(", ", procNames.Concat(procPaths.Select(System.IO.Path.GetFileName)));
-            WriteDiag($"per-application split active: monitoring {procNames.Count + procPaths.Count} rule(s) ({ruleNames})");
-        }
+        // Only Bypass domains may be resolved and pinned to the physical gateway. Through
+        // Tunnel domains are owned by the engine rules and Block domains are rejected
+        // before dialling; pinning either of those direct would silently defeat the mode.
+        var domains = plan.DirectDomains;
+        var ipCidrs = plan.DirectIpCidrs;
 
         var real = FindRealDefaultRouteV4()
             ?? throw new InvalidOperationException("No physical IPv4 default gateway found to anchor split routes.");
@@ -67,6 +57,12 @@ public sealed partial class WintunTunManager
             {
                 if (SplitRules.ParseIpCidr(cidr) is { } p && seenIps.Add(p.Addr.ToString()))
                     resolved.Add(p);
+            }
+            if (plan.HasAppRules || resolved.Count > 0)
+            {
+                WriteDiag($"split profile '{plan.ProfileName}': default={plan.DefaultCategory}, "
+                          + $"{plan.ProcessNames.Count + plan.ProcessPaths.Count} app rule(s), "
+                          + $"{plan.BypassDomains.Count} bypass domain(s), {resolved.Count} bypass ip rule(s)");
             }
         }
 
@@ -130,6 +126,7 @@ public sealed partial class WintunTunManager
                 or "94.140.14.14" or "94.140.15.15";
         }
 
+        var usesMihomoNative = UsesMihomoNativeSplitRules();
         var currentMethod = ConnectionMethodExtensions.ParseConnectionMethod(s.ConnectionMethod);
         var outerTransport = GetEffectiveChainedOuterTransport(s, currentMethod);
         var needsWarpEdges = currentMethod.UsesWarp()
@@ -148,7 +145,7 @@ public sealed partial class WintunTunManager
             }
             Bypass(IPAddress.Parse(addr), prefix);
         }
-        if (splitActive && !include)
+        if (splitActive)
         {
             foreach (var dns in _underlyingDnsServers)
             {
@@ -197,49 +194,68 @@ public sealed partial class WintunTunManager
             Bypass(IPAddress.Parse("23.235.42.0"), 24);
         }
 
-        var mihomoNativeSplit = UsesMihomoNativeSplitRules();
-        if (!include || mihomoNativeSplit)
-        {
-            if (!include)
-            {
-                foreach (var (addr, prefix) in resolved)
-                {
-                    if (addr.AddressFamily == AddressFamily.InterNetwork)
-                    {
-                        Bypass(addr, prefix);
-                    }
-                }
-            }
-
-            PersistRouteJournal();
-
-            ThroughTun(IPAddress.Parse("0.0.0.0"), 1);
-            ThroughTun(IPAddress.Parse("128.0.0.0"), 1);
-
-            if (_v6Enabled)
-            {
-                TrackNew(() => WintunRouteApi.AddRoute(tunIfIndex, IPAddress.Parse("::"), 1, TunAddressV6));
-                TrackNew(() => WintunRouteApi.AddRoute(tunIfIndex, IPAddress.Parse("8000::"), 1, TunAddressV6));
-            }
-            else
-            {
-                WriteDiag("ipv6: no global v6 address on the physical link; v6 stays outside the TUN");
-            }
-        }
-
-        if (splitActive && !(include && mihomoNativeSplit))
+        // The tunnel always owns the default route. Split traffic is decided per app by
+        // WFP, by mihomo's own process rules, or by the route monitor below; IP/DNS rules
+        // are pinned afterwards. Nothing here inverts the catch-all.
+        if (splitActive)
         {
             foreach (var (addr, prefix) in resolved)
             {
-                if (include)
+                if (addr.AddressFamily == AddressFamily.InterNetwork)
                 {
-                    if (addr.AddressFamily == AddressFamily.InterNetwork)
-                        ThroughTun(addr, prefix);
-                    else if (_v6Enabled && addr.AddressFamily == AddressFamily.InterNetworkV6)
-                        TrackNew(() => WintunRouteApi.AddRoute(tunIfIndex, addr, prefix, TunAddressV6));
+                    Bypass(addr, prefix);
                 }
             }
 
+            // A Block IP rule has to reach the tunnel so the engine can reject it. On the
+            // backends that have no rule engine an explicit host route into the TUN is
+            // what keeps that range off the physical link; without it the catch-all split
+            // would carry the range to the proxy and the rule would silently do nothing.
+            foreach (var cidr in plan.BlockedIpCidrs)
+            {
+                if (SplitRules.ParseIpCidr(cidr) is not { } blockedRange) continue;
+                if (blockedRange.Addr.AddressFamily != AddressFamily.InterNetwork) continue;
+                if (IPAddress.IsLoopback(blockedRange.Addr)) continue;
+
+                TrackNew(() => WintunRouteApi.AddRoute(
+                    tunIfIndex,
+                    blockedRange.Addr,
+                    blockedRange.Prefix == 0 ? (byte)1 : blockedRange.Prefix,
+                    TunAddressV4,
+                    metric: 1));
+            }
+
+            if (plan.BlockedIpCidrs.Count > 0)
+            {
+                WriteDiag($"split: {plan.BlockedIpCidrs.Count} blocked range(s) routed into the tunnel");
+            }
+        }
+
+        PersistRouteJournal();
+
+        ThroughTun(IPAddress.Parse("0.0.0.0"), 1);
+        ThroughTun(IPAddress.Parse("128.0.0.0"), 1);
+
+        if (_v6Enabled)
+        {
+            TrackNew(() => WintunRouteApi.AddRoute(tunIfIndex, IPAddress.Parse("::"), 1, TunAddressV6));
+            TrackNew(() => WintunRouteApi.AddRoute(tunIfIndex, IPAddress.Parse("8000::"), 1, TunAddressV6));
+        }
+        else
+        {
+            WriteDiag("ipv6: no global v6 address on the physical link; v6 stays outside the TUN");
+        }
+
+        _ = tunIfIndex;
+
+        if (splitActive && usesMihomoNative)
+        {
+            // mihomo resolves and routes these itself from its own rule list.
+            domains = new List<string>();
+        }
+
+        if (splitActive && domains.Count > 0)
+        {
             var resolveTargets = WidenDomainMatchSet(domains).Where(d => d.Contains('.')).ToList();
             if (resolveTargets.Count > 0)
             {
@@ -306,7 +322,7 @@ public sealed partial class WintunTunManager
                         }
                         if (isEngineRoute) continue;
 
-                        var entry = include ? ThroughTun(ip, 32) : Bypass(ip, 32);
+                        var entry = Bypass(ip, 32);
                         lock (_routeLock)
                         {
                             _dynamicRoutes[key] = (entry, d);
@@ -352,7 +368,7 @@ public sealed partial class WintunTunManager
         }
 
         WriteDiag($"routes applied: {_appliedRoutes.Count} entries "
-                  + $"(mode={(include ? "include" : splitActive ? "exclude" : "full")}, "
+                  + $"(mode={(splitActive ? "split:" + plan.ProfileName : "full")}, "
                   + $"realGw={realGateway})");
 
         PersistRouteJournal();

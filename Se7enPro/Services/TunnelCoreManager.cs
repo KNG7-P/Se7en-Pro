@@ -204,7 +204,7 @@ public sealed class TunnelCoreManager : ITunnelCoreManager, IConnectionEngine, I
         {
             _workDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Se7en",
+                BuildIdentity.AppFolderName,
                 "tunnel-core");
             Directory.CreateDirectory(_workDir);
 

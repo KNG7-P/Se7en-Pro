@@ -149,7 +149,7 @@ public sealed class StartupReaper : IStartupReaper
 
         if (failedToKill == 0)
         {
-            TryRemoveStaleLocks(Path.Combine(localAppData, "Se7en", "tunnel-core"));
+            TryRemoveStaleLocks(Path.Combine(localAppData, BuildIdentity.AppFolderName, "tunnel-core"));
             TryRemoveStaleLocks(Path.Combine(localAppData, "Psiphon", "tunnel-core"));
         }
 
@@ -166,21 +166,21 @@ public sealed class StartupReaper : IStartupReaper
         {
             Path.Combine(AppContext.BaseDirectory, "Resources"),
             Path.Combine(AppContext.BaseDirectory),
-            Path.Combine(localAppData, "Se7en"),
-            Path.Combine(localAppData, "Se7en", "tunnel-core"),
-            Path.Combine(localAppData, "Se7en", "tun2socks"),
-            Path.Combine(localAppData, "Se7en", "zeptun"),
-            Path.Combine(localAppData, "Se7en", "mihomo"),
-            Path.Combine(localAppData, "Se7en", "tor"),
-            Path.Combine(localAppData, "Se7en", "aether"),
-            Path.Combine(localAppData, "Se7en", "shard"),
-            Path.Combine(localAppData, "Se7en", "xray"),
-            Path.Combine(localAppData, "Se7en", "sing-box"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "tunnel-core"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "tun2socks"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "zeptun"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "mihomo"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "tor"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "aether"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "shard"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "xray"),
+            Path.Combine(localAppData, BuildIdentity.AppFolderName, "sing-box"),
             Path.Combine(localAppData, "Psiphon", "tunnel-core"),
             Path.Combine(localAppData, "Psiphon", "tun2socks"),
             Path.Combine(localAppData, "Psiphon", "singbox-tun"),
             Path.Combine(localAppData, "Psiphon", "xray-tun"),
-            Path.Combine(Path.GetTempPath(), "Se7en"),
+            Path.Combine(Path.GetTempPath(), BuildIdentity.AppFolderName),
             Path.Combine(Path.GetTempPath(), "Psiphon"),
         };
 

@@ -64,6 +64,10 @@ public sealed partial class WintunTunManager : ITunManager
     private long _routeGeneration;
     private readonly List<WintunRouteApi.RouteEntry> _appliedRoutes = new();
     private readonly WfpDnsLeakProtector _dnsLeakProtector = new();
+    private readonly WfpSplitRouter _splitRouter = new();
+    private readonly Dictionary<string, string?> _processPathByName =
+        new(StringComparer.OrdinalIgnoreCase);
+    private string _lastAppliedSplitSignature = "";
     private SocksDnsForwarder? _dnsForwarder;
     private bool _adapterDnsSet;
     private bool _v6Enabled;
@@ -94,6 +98,7 @@ public sealed partial class WintunTunManager : ITunManager
     private string _activeSplitHash = "";
     private string _activeEndpointHash = "";
     private string _activeMihomoSplitHash = "";
+    private string _activeEnforcementHash = "";
     private string _activeTunMethod = "wintun";
     private int _activeTunMtu = DefaultTunMtu;
 

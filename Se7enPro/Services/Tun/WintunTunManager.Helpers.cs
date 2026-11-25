@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -15,84 +16,12 @@ public sealed partial class WintunTunManager
 {
         private async Task ReapplyRoutesAsync(int socksPort)
     {
-        var s = _settings.Settings;
-        var splitActive = s.SplitTunnelEnabled;
-        var include = splitActive && string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-        var expectedIfIndex = include ? _tunIfIndex : _realIfIndex;
-
-        SplitRules.ClassifySplitEntries(s, out var domains, out _, out var procNames, out var procPaths);
-        var matchSet = WidenDomainMatchSet(domains);
-
         ApplyDnsPolicyToForwarder();
         WintunRouteApi.FlushDnsCache();
 
-        var doomed = new List<WintunRouteApi.RouteEntry>();
-        lock (_routeLock)
-        {
-            foreach (var kv in _dynamicRoutes.ToList())
-            {
-                if (kv.Value.Domain.StartsWith("engine:", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+        _ = socksPort;
+        await ApplyRoutesAsync(_tunIfIndex > 0 ? _tunIfIndex : 0, CancellationToken.None);
 
-                var wrongInterface = expectedIfIndex > 0 && kv.Value.Entry.IfIndex != expectedIfIndex;
-                if (splitActive && !wrongInterface)
-                {
-                    if (kv.Value.Domain.StartsWith("app:", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var appName = kv.Value.Domain.Substring(4);
-                        if (procNames.Contains(appName, StringComparer.OrdinalIgnoreCase) ||
-                            procPaths.Any(p => string.Equals(System.IO.Path.GetFileName(p), appName, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            continue;
-                        }
-                    }
-                    else if (SocksDnsForwarder.MatchDomain(kv.Value.Domain, matchSet) is not null)
-                    {
-                        continue;
-                    }
-                }
-                doomed.Add(kv.Value.Entry);
-                _dynamicRoutes.Remove(kv.Key);
-            }
-        }
-
-        var nic = WintunRouteApi.FindAdapter(TunInterfaceName);
-        if (nic is null)
-        {
-            WriteDiag("re-apply aborted: adapter gone");
-            return;
-        }
-
-        var tunIdx = WintunRouteApi.TryResolveAdapterIdentity(TunInterfaceName, out var resolvedIdx, out _) && resolvedIdx > 0
-            ? (int)resolvedIdx
-            : (_tunIfIndex > 0 ? _tunIfIndex : WintunRouteApi.GetAdapterIndex(nic));
-
-        await ApplyRoutesAsync(tunIdx, CancellationToken.None);
-
-        List<WintunRouteApi.RouteEntry> stale;
-        lock (_routeLock)
-        {
-            stale = doomed
-                .Distinct()
-                .Where(e => !_appliedRoutes.Contains(e))
-                .ToList();
-            foreach (var e in stale) _appliedRoutes.Remove(e);
-        }
-
-        foreach (var r in stale)
-        {
-            try { WintunRouteApi.DeleteRoute(r); } catch { }
-        }
-
-        if (stale.Count > 0)
-        {
-            WriteDiag($"re-apply: removed {stale.Count} stale split route(s); "
-                      + $"{_appliedRoutes.Count} still applied");
-        }
-
-        SweepProcessConnectionsNow();
         WintunRouteApi.FlushDnsCache();
         WintunRouteApi.ResetActiveNonEngineWebConnections();
     }
@@ -129,20 +58,169 @@ public sealed partial class WintunTunManager
             : $"dns: relay targets reset to built-in defaults ({targets.Count})");
     }
 
-    private string ComputeSplitHash(int socksPort)
+    // Applies the profile's Block and Bypass lists to WFP. Through-Tunnel needs nothing:
+    // the TUN catch-all owns it. Called whenever the plan, the TUN method or the adapter
+    // state changes, and a no-op when the resulting filter set would be identical.
+    private void ApplySplitEnforcement(SplitRoutingPlan plan)
     {
-        SplitRules.ClassifySplitEntries(
-            _settings.Settings, out var domains, out var ips, out var procNames, out var procPaths);
+        if (!plan.Enabled || UsesMihomoNativeSplitRules())
+        {
+            _splitRouter.Disarm();
+            return;
+        }
+
+        if (!plan.HasAppRules
+            && plan.BlockedIpCidrs.Count == 0
+            && plan.DefaultCategory != SplitRuleCategory.Block)
+        {
+            _splitRouter.Disarm();
+            return;
+        }
+
+        var blocked = ResolveExecutablePaths(plan, SplitRuleCategory.Block);
+        var bypass = ResolveExecutablePaths(plan, SplitRuleCategory.Direct);
+
+        // With default = Block the engine's MATCH,REJECT is not available on the
+        // wintun/zeptun backends, so the deny has to come from WFP as well: the apps that
+        // are explicitly allowed (Direct or Proxy) keep their filters, and everything
+        // else is denied by a catch-all behind them.
+        IReadOnlyList<string>? allowedWhenDefaultBlock = null;
+        if (plan.DefaultCategory == SplitRuleCategory.Block)
+        {
+            allowedWhenDefaultBlock = ResolveExecutablePaths(plan, SplitRuleCategory.Direct)
+                .Concat(ResolveExecutablePaths(plan, SplitRuleCategory.Proxy))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        else if (blocked.Count == 0 && bypass.Count == 0 && plan.BlockedIpCidrs.Count == 0)
+        {
+            _splitRouter.Disarm();
+            return;
+        }
+
+        // Block IP ranges are address-scoped, so they go to WFP directly instead of
+        // needing an app. Without this a Block CIDR would only work with mihomo.
+        var blockedCidrs = plan.BlockedIpCidrs
+            .OrderBy(static c => c, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var signature = string.Join("|",
+            plan.ProfileId,
+            allowedWhenDefaultBlock is null ? "-" : "defaultblock",
+            string.Join(";", blocked.OrderBy(static p => p, StringComparer.OrdinalIgnoreCase)),
+            string.Join(";", bypass.OrderBy(static p => p, StringComparer.OrdinalIgnoreCase)),
+            string.Join(";", blockedCidrs));
+
+        if (!_splitRouter.Apply(blocked, bypass, signature, allowedWhenDefaultBlock, blockedCidrs))
+        {
+            WriteDiag($"split enforcement: WFP filters not installed: {_splitRouter.LastError}");
+            return;
+        }
+
+        WriteDiag($"split enforcement: {(blocked.Count > 0 ? blocked.Count + " blocked" : "0 blocked")}, "
+                  + $"{(bypass.Count > 0 ? bypass.Count + " bypassed" : "0 bypassed")}"
+                  + (_splitRouter.BypassNeedsRouteFallback ? " (bypass via route fallback)" : ""));
+        _lastAppliedSplitSignature = signature;
+    }
+
+    private List<string> ResolveExecutablePaths(SplitRoutingPlan plan, SplitRuleCategory category)
+    {
+        var paths = new List<string>();
+
+        foreach (var rule in plan.Rules)
+        {
+            if (rule.Category != category) continue;
+
+            if (rule.Target == SplitRuleTarget.ProcessPath)
+            {
+                if (!paths.Contains(rule.Value, StringComparer.OrdinalIgnoreCase)) paths.Add(rule.Value);
+                continue;
+            }
+
+            if (rule.Target != SplitRuleTarget.ProcessName) continue;
+
+            var known = ResolveProcessPathByName(rule.Value);
+            if (known is not null && !paths.Contains(known, StringComparer.OrdinalIgnoreCase))
+            {
+                paths.Add(known);
+            }
+        }
+
+        return paths;
+    }
+
+    private string? ResolveProcessPathByName(string processName)
+    {
+        if (string.IsNullOrEmpty(processName)) return null;
+
+        if (_processPathByName.TryGetValue(processName, out var cached)) return cached;
+
+        string? found = null;
+        try
+        {
+            foreach (var running in System.Diagnostics.Process.GetProcessesByName(
+                         Path.GetFileNameWithoutExtension(processName)))
+            {
+                using (running)
+                {
+                    try
+                    {
+                        var path = running.MainModule?.FileName;
+                        if (!string.IsNullOrEmpty(path)) { found = path; break; }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+
+        if (found is null)
+        {
+            try
+            {
+                found = InstalledAppsProvider.GetCachedPathForFileName(processName);
+            }
+            catch { }
+        }
+
+        _processPathByName[processName] = found;
+        return found;
+    }
+
+    private string _splitPlanCacheKey = "";
+    private SplitRoutingPlan? _splitPlanCachePlan;
+
+    // Rebuilding the plan must never be on a hot path: the process monitor wakes every
+    // 250 ms and the DNS policy is refreshed on every change. The plan is therefore
+    // memoised on a cheap fingerprint — split-tunnel store revision plus the two
+    // top-level switches — so equal settings reuse the same instance.
+    internal SplitRoutingPlan BuildSplitPlan()
+    {
+        var s = _settings.Settings;
+        var key = string.Concat(
+            SplitTunnelProfileStore.Revision.ToString(),
+            "|", s.SplitTunnelEnabled ? "1" : "0",
+            "|", s.ActiveSplitTunnelProfileId ?? "",
+            "|", s.ActiveSplitTunnelProfile ?? "");
+
+        if (_splitPlanCachePlan is not null && string.Equals(key, _splitPlanCacheKey, StringComparison.Ordinal))
+        {
+            return _splitPlanCachePlan;
+        }
+
+        var plan = SplitRoutingPlanner.Build(s);
+        _splitPlanCachePlan = plan;
+        _splitPlanCacheKey = key;
+        return plan;
+    }
+
+    private string ComputeSplitHash(int socksPort, SplitRoutingPlan plan)
+    {
         var s = _settings.Settings;
         var raw = string.Join("|",
             socksPort.ToString(),
             s.SystemWideTunneling ? "1" : "0",
-            s.SplitTunnelEnabled ? "1" : "0",
-            (s.SplitTunnelMode ?? "").Trim(),
-            string.Join(",", domains),
-            string.Join(",", ips),
-            string.Join(",", procNames),
-            string.Join(",", procPaths),
+            plan.Hash,
             string.Join(",", s.CustomDnsUdp ?? ""),
             string.Join(",", s.CustomDnsDot ?? ""),
             string.Join(",", s.CustomDnsDoh ?? ""),
@@ -246,25 +324,6 @@ public sealed partial class WintunTunManager
             }
         }
         catch { }
-    }
-
-    internal string ComputeMihomoSplitHash()
-    {
-        var s = _settings.Settings;
-        SplitRules.ClassifySplitEntries(s, out var domains, out var ips, out var procNames, out var procPaths);
-        domains.Sort(StringComparer.OrdinalIgnoreCase);
-        ips.Sort(StringComparer.OrdinalIgnoreCase);
-        procNames.Sort(StringComparer.OrdinalIgnoreCase);
-        procPaths.Sort(StringComparer.OrdinalIgnoreCase);
-
-        var raw = string.Join("|",
-            s.SplitTunnelEnabled ? "1" : "0",
-            (s.SplitTunnelMode ?? "").Trim().ToLowerInvariant(),
-            string.Join(",", domains),
-            string.Join(",", ips),
-            string.Join(",", procNames),
-            string.Join(",", procPaths));
-        return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(raw)));
     }
 
     private static (NetworkInterface Nic, int IfIndex, IPAddress Gateway)? SelectRealDefaultRouteV4()

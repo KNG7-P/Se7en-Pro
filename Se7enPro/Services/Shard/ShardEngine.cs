@@ -176,7 +176,7 @@ public sealed class ShardEngine : LocalSocksEngineBase
         get
         {
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var dir = System.IO.Path.Combine(localAppData, "Se7en");
+            var dir = System.IO.Path.Combine(localAppData, BuildIdentity.AppFolderName);
             Directory.CreateDirectory(dir);
             return dir;
         }

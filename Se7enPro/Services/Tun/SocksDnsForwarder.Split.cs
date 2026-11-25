@@ -12,6 +12,11 @@ internal sealed partial class SocksDnsForwarder
 
                 public IReadOnlyList<string> Domains = Array.Empty<string>();
 
+                // Domains the profile blocks. A query for one of these is answered with
+                // an empty result so the app cannot resolve what it is not allowed to
+                // reach — and the query never leaves the machine.
+                public IReadOnlyList<string> BlockedDomains = Array.Empty<string>();
+
                 public string? LocalDnsIp;
 
                 public Action<IPAddress, string, bool>? AddressSeen;

@@ -50,6 +50,13 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private bool _systemProxyApplied;
     private string _appliedProxyPlan = "";
 
+    // Proxy mode has no TUN adapter, so the split rules cannot ride on the catch-all
+    // route. Block is still enforced with WFP (the same router the TUN path uses);
+    // Direct is enforced by keeping the app out of the system proxy. This field holds
+    // that router for the proxy path only.
+    private WfpSplitRouter? _proxyModeSplitRouter;
+    private string _proxyModeSplitSignature = "";
+
     public ConnectionManager(
         ILogger<ConnectionManager> logger,
         ILoggerFactory loggerFactory,
@@ -142,14 +149,14 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }, ct);
     }
 
-    
+
 
     private ConnectionState? _stateOverride;
 
-    
-    
-    
-    
+
+
+
+
     public ConnectionState State
     {
         get { lock (_sync) return _stateOverride ?? _active.State; }
@@ -171,9 +178,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
     private int _identityRecoveryStarted;
     private int _everConnected;
 
-    
-    
-    
+
+
+
     private bool _userWantsConnection;
 
     public long BytesSent => Math.Max(_cachedBytesSent, _active.BytesSent);
@@ -250,10 +257,10 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     private void StopStatsMonitor()
     {
-        
-        
-        
-        
+
+
+
+
         var old = Interlocked.Exchange(ref _statsCts, null);
         try { old?.Cancel(); } catch { }
         try { old?.Dispose(); } catch { }
@@ -269,12 +276,12 @@ public sealed class ConnectionManager : ITunnelCoreManager
     {
         try
         {
-            
-            
-            
-            
-            
-            
+
+
+
+
+
+
             var tunOwned = AdminElevation.IsAdministrator() && _settings.Settings.SystemWideTunneling;
             var nic = _cachedTunNic;
             if (!tunOwned)
@@ -283,9 +290,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
             }
             else if (nic is null || nic.OperationalStatus != OperationalStatus.Up)
             {
-                
-                
-                
+
+
+
                 _cachedTunNic = NetworkInterface.GetAllNetworkInterfaces()
                     .FirstOrDefault(n => n.OperationalStatus == OperationalStatus.Up &&
                         n.Name == "se7en_tun");
@@ -299,12 +306,12 @@ public sealed class ConnectionManager : ITunnelCoreManager
                 var tx = stats.BytesSent;
                 ResetStatsCacheIfSourceChanged("nic");
 
-                
-                
-                
-                
-                
-                
+
+
+
+
+
+
                 var moved = false;
                 if (rx > _cachedBytesReceived) { _cachedBytesReceived = rx; moved = true; }
                 if (tx > _cachedBytesSent) { _cachedBytesSent = tx; moved = true; }
@@ -322,8 +329,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }
         catch (Exception ex)
         {
-            
-            
+
+
             if (!_statsFailureLogged)
             {
                 _statsFailureLogged = true;
@@ -334,9 +341,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     private string _statsSource = "";
 
-    
-    
-    
+
+
+
     private void ResetStatsCacheIfSourceChanged(string source)
     {
         if (_statsSource == source) return;
@@ -517,7 +524,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
         }
     }
 
-        private bool IsUserStillWantsConnection()
+    private bool IsUserStillWantsConnection()
     {
         lock (_sync)
         {
@@ -536,7 +543,7 @@ public sealed class ConnectionManager : ITunnelCoreManager
     public int ConnectProgressPercent => _active.ConnectProgressPercent;
     public string ConnectProgressText => _active.ConnectProgressText;
 
-        public ConnectionMethod ActiveMethod => _active.Method;
+    public ConnectionMethod ActiveMethod => _active.Method;
 
     public IReadOnlyList<string> RecentLog
     {
@@ -552,13 +559,13 @@ public sealed class ConnectionManager : ITunnelCoreManager
     public event EventHandler? RouteChanged;
     public event EventHandler? ConnectProgressChanged;
 
-    
 
-    
-    
-    
-    
-    
+
+
+
+
+
+
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private CancellationTokenSource? _inFlightStartCts;
 
@@ -584,8 +591,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
             _inFlightStartCts = new CancellationTokenSource();
             inFlightCts = _inFlightStartCts;
         }
-        
-        
+
+
         try { previousCts?.Cancel(); } catch { }
         try { previousCts?.Dispose(); } catch { }
 
@@ -598,8 +605,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
             if (!ReferenceEquals(_active, desired))
             {
-                
-                
+
+
                 await SafeStopAsync(_active);
                 SwitchActiveTo(desired);
             }
@@ -770,9 +777,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
         await Task.WhenAll(tasks);
 
-        
-        
-        
+
+
+
         TunnelCoreManager.UpstreamProxyUrlOverride = null;
         TorEngine.Socks5ProxyOverride = null;
         AetherEngine.SocksPortOverride = null;
@@ -788,18 +795,18 @@ public sealed class ConnectionManager : ITunnelCoreManager
 
     private static async Task SafeStopAsync(IConnectionEngine engine)
     {
-        try { await engine.StopAsync(); } catch {  }
+        try { await engine.StopAsync(); } catch { }
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
+
+
+
 
     private void ApplySystemProxy(ConnectionState state)
     {
@@ -821,9 +828,21 @@ public sealed class ConnectionManager : ITunnelCoreManager
                 }
 
                 List<string>? bypassList = null;
-                if (s.SplitTunnelEnabled && string.Equals(s.SplitTunnelMode ?? "exclude", "exclude", StringComparison.OrdinalIgnoreCase))
+                if (s.SplitTunnelEnabled)
                 {
-                    SplitRules.ClassifySplitEntries(s, out var domains, out var ipCidrs, out _, out _);
+                    // System-proxy bypass is the Bypass mode, nothing else: a Through Tunnel
+                    // or Block domain must not be excluded from the proxy here.
+                    var splitPlan = SplitRoutingPlanner.Build(s);
+
+                    // --- Proxy mode split enforcement -------------------------------
+                    // Without a TUN adapter the catch-all cannot decide anything, so:
+                    //   Block  -> WFP filters (same router as the TUN path)
+                    //   Direct -> kept out of the system proxy below
+                    //   Proxy  -> the system proxy itself
+                    ApplyProxyModeSplitEnforcement(splitPlan);
+
+                    var domains = splitPlan.BypassDomains;
+                    var ipCidrs = splitPlan.DirectIpCidrs;
                     bypassList = new List<string>();
                     foreach (var d in domains)
                     {
@@ -862,6 +881,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
             if (state is ConnectionState.Disconnected or ConnectionState.Error
                 || !s.SetSystemProxy || isTunActive)
             {
+                // Leaving proxy mode must remove the WFP filters that belonged to it,
+                // otherwise a Block rule would survive a disconnect.
+                DisarmProxyModeSplitEnforcement();
                 ClearSystemProxyIfApplied();
             }
         }
@@ -869,6 +891,130 @@ public sealed class ConnectionManager : ITunnelCoreManager
         {
             _logger.LogWarning(ex, "Failed to update the Windows system proxy");
         }
+    }
+
+    // ------------------------------------------------------------------ proxy-mode split
+    //
+    // When system-wide tunnelling is off, the app's traffic reaches the proxy through the
+    // Windows system proxy setting instead of a TUN adapter. Split Tunnel still has to
+    // work there, so this applies the same three modes by the only means available:
+    //
+    //   Block  -> WFP BLOCK filters on ALE_AUTH_CONNECT and DATAGRAM_DATA, exactly the
+    //             filters the TUN path installs. A blocked app cannot reach the proxy or
+    //             the network directly.
+    //   Direct -> the app's domains/CIDRs are added to the proxy bypass list, so it
+    //             resolves and connects on the physical interface. Its own image is also
+    //             blocked at ALE_CONNECT_REDIRECT so a proxy-aware app cannot opt in.
+    //   Proxy  -> nothing; the system proxy carries it.
+    //
+    // Re-applied only when the effective filter set changes.
+    private void ApplyProxyModeSplitEnforcement(SplitRoutingPlan plan)
+    {
+        try
+        {
+            if (!plan.Enabled)
+            {
+                DisarmProxyModeSplitEnforcement();
+                return;
+            }
+
+            var blocked = SplitRuleResolver.ResolvePaths(plan, SplitRuleCategory.Block, ResolveProcessPathByName);
+            var direct = SplitRuleResolver.ResolvePaths(plan, SplitRuleCategory.Direct, ResolveProcessPathByName);
+
+            // Proxy mode has no engine rule list either, so default = Block needs the same
+            // WFP catch-all the TUN path uses: allowed apps keep their filters and
+            // everything else is denied.
+            IReadOnlyList<string>? allowedWhenDefaultBlock = null;
+            if (plan.DefaultCategory == SplitRuleCategory.Block)
+            {
+                allowedWhenDefaultBlock = direct
+                    .Concat(SplitRuleResolver.ResolvePaths(plan, SplitRuleCategory.Proxy, ResolveProcessPathByName))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+            else if (blocked.Count == 0 && direct.Count == 0)
+            {
+                DisarmProxyModeSplitEnforcement();
+                return;
+            }
+
+            var blockedCidrs = plan.BlockedIpCidrs
+                .OrderBy(static c => c, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var signature = string.Join("|",
+                plan.ProfileId,
+                allowedWhenDefaultBlock is null ? "-" : "defaultblock",
+                string.Join(";", blocked.OrderBy(static p => p, StringComparer.OrdinalIgnoreCase)),
+                string.Join(";", direct.OrderBy(static p => p, StringComparer.OrdinalIgnoreCase)),
+                string.Join(";", blockedCidrs));
+
+            if (string.Equals(signature, _proxyModeSplitSignature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _proxyModeSplitRouter ??= new WfpSplitRouter();
+            if (_proxyModeSplitRouter.Apply(blocked, direct, signature, allowedWhenDefaultBlock, blockedCidrs))
+            {
+                _proxyModeSplitSignature = signature;
+                OnEngineLogLineAppended(_active,
+                    $"Split Tunnel (proxy mode): {blocked.Count} blocked, {direct.Count} direct. "
+                  + "WFP filters are in force; Direct apps are kept out of the system proxy.");
+            }
+            else
+            {
+                _proxyModeSplitSignature = "";
+                OnEngineLogLineAppended(_active,
+                    $"Split Tunnel (proxy mode): WFP filters not installed — {_proxyModeSplitRouter.LastError}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Proxy-mode split enforcement failed");
+        }
+    }
+
+    private void DisarmProxyModeSplitEnforcement()
+    {
+        if (_proxyModeSplitRouter is null) return;
+        try { _proxyModeSplitRouter.Disarm(); } catch { }
+        _proxyModeSplitSignature = "";
+    }
+
+    private string? ResolveProcessPathByName(string processName)
+    {
+        if (string.IsNullOrEmpty(processName)) return null;
+
+        try
+        {
+            var stem = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                ? processName[..^4]
+                : processName;
+
+            foreach (var running in System.Diagnostics.Process.GetProcessesByName(stem))
+            {
+                using (running)
+                {
+                    try
+                    {
+                        var path = running.MainModule?.FileName;
+                        if (!string.IsNullOrEmpty(path)) return path;
+                    }
+                    catch
+                    {
+                        // Protected process; try the next one.
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Process enumeration can fail while the session is changing; a null here
+            // just means this name cannot be pinned this round.
+        }
+
+        return null;
     }
 
     private void ClearSystemProxyIfApplied()
@@ -880,9 +1026,9 @@ public sealed class ConnectionManager : ITunnelCoreManager
         catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear the Windows system proxy"); }
     }
 
-    
 
-        private ConnectionMethod ResolveMethod()
+
+    private ConnectionMethod ResolveMethod()
     {
         AetherEngine.MethodOverride = null;
         return ConnectionMethodExtensions.ParseConnectionMethod(_settings.Settings.ConnectionMethod);
@@ -929,19 +1075,19 @@ public sealed class ConnectionManager : ITunnelCoreManager
     {
         if (ReferenceEquals(_active, engine)) return;
 
-        
-        
+
+
         ClearSystemProxyIfApplied();
 
         Detach(_active);
         _active = engine;
         Attach(_active);
 
-        
+
         lock (_sync) _recentLog.Clear();
         LogCleared?.Invoke(this, EventArgs.Empty);
 
-        
+
         if (Volatile.Read(ref _reconnectInProgress) == 0)
         {
             StateChanged?.Invoke(this, _active.State);
@@ -977,8 +1123,8 @@ public sealed class ConnectionManager : ITunnelCoreManager
         ConnectProgressChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    
-    
+
+
     private void OnEngineStateChanged(object? sender, ConnectionState state)
     {
         if (!ReferenceEquals(sender, _active)) return;

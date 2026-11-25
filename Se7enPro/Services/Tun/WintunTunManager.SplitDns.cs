@@ -27,22 +27,29 @@ public sealed partial class WintunTunManager
         return set;
     }
 
-        private SocksDnsForwarder.SplitPolicy BuildSplitPolicy()
+    private SocksDnsForwarder.SplitPolicy BuildSplitPolicy()
     {
-        var s = _settings.Settings;
-        if (!s.SplitTunnelEnabled)
+        var plan = BuildSplitPlan();
+
+        // The local resolver is used for Bypass domains only: those answers are then pinned
+        // to the real gateway. Through Tunnel domains must resolve through the tunnel so
+        // the destination IP follows the proxy path. Block domains are different again:
+        // they are intercepted so the query can be answered with an empty result instead
+        // of leaking a resolution the app should not have been able to make.
+        var hasBlockDomains = plan.Enabled && plan.BlockedDomains.Count > 0;
+
+        if (!plan.Enabled || (plan.BypassDomains.Count == 0 && !hasBlockDomains))
         {
             return new SocksDnsForwarder.SplitPolicy
             {
                 ExcludeMode = true,
                 Domains = new List<string>(),
+                BlockedDomains = WidenDomainMatchSet(plan.BlockedDomains),
                 LocalDnsIp = null,
                 AddressSeen = null,
             };
         }
 
-        SplitRules.ClassifySplitEntries(s, out var domains, out _, out _, out _);
-        var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
         static bool IsPublicTunnelDns(string ip) =>
             ip is "1.1.1.1" or "1.0.0.1" or "8.8.8.8" or "8.8.4.4"
                or "9.9.9.9" or "149.112.112.112"
@@ -55,33 +62,27 @@ public sealed partial class WintunTunManager
                 ?? (_realRouteKnown && !_realGateway.Equals(IPAddress.Any) ? _realGateway.ToString() : null);
         }
 
-        if (domains.Count > 0 && localDns is null)
-        {
-            WriteDiag("NOTE: no underlying DNS server detected — bypass domains will resolve "
-                      + "through the tunnel and may still surface the VPN IP.");
-        }
-
         return new SocksDnsForwarder.SplitPolicy
         {
-            ExcludeMode = !include,
-            Domains = WidenDomainMatchSet(domains),
+            ExcludeMode = true,
+            Domains = WidenDomainMatchSet(plan.BypassDomains),
+            BlockedDomains = WidenDomainMatchSet(plan.BlockedDomains),
             LocalDnsIp = localDns,
             AddressSeen = OnSplitAddressSeen,
         };
     }
 
-        private void OnSplitAddressSeen(IPAddress ip, string queriedName, bool viaTunnel)
+    // A domain rule resolves through the local resolver and the answer is pinned direct,
+    // so a bypassed domain never even reveals the tunnel IP. Domain rules are "bypass
+    // domains" by design; a blocked domain is rejected by WFP/mihomo before it is dialled.
+    private void OnSplitAddressSeen(IPAddress ip, string queriedName, bool viaTunnel)
     {
         if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return;
 
-        var s = _settings.Settings;
-        if (!s.SplitTunnelEnabled) return;
-
-        var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-        if (viaTunnel != include) return;
-        if (include && UsesMihomoNativeSplitRules()) return;
-        if (!include && !_realRouteKnown) return;
-        if (include && IsProtectedEngineIp(ip)) return;
+        var plan = BuildSplitPlan();
+        if (!plan.Enabled || plan.BypassDomains.Count == 0) return;
+        if (plan.BlockedDomains.Contains(queriedName)) return;
+        if (!_realRouteKnown) return;
 
         try
         {
@@ -95,9 +96,7 @@ public sealed partial class WintunTunManager
                 }
             }
 
-            var entry = include
-                ? WintunRouteApi.AddRoute(_tunIfIndex, ip, 32, TunAddressV4)
-                : WintunRouteApi.AddRoute(_realIfIndex, ip, 32, _realGateway);
+            var entry = WintunRouteApi.AddRoute(_realIfIndex, ip, 32, _realGateway);
 
             var added = false;
             WintunRouteApi.RouteEntry? replaced = null;
@@ -131,8 +130,7 @@ public sealed partial class WintunTunManager
             }
             if (added)
             {
-                WriteDiag($"split dns: '{queriedName}' → {ip}; host route pinned "
-                          + $"{(include ? "via tunnel" : "direct (real gw)")}");
+                WriteDiag($"split dns: '{queriedName}' → {ip}; host route pinned direct (real gw)");
                 PersistRouteJournal();
                 WintunRouteApi.TryCloseTcpConnectionsTo(ip);
             }
@@ -191,11 +189,10 @@ public sealed partial class WintunTunManager
         {
             try
             {
-                var s = _settings.Settings;
-                if (s.SplitTunnelEnabled && _dnsForwarder is not null)
+                var plan = BuildSplitPlan();
+                if (plan.Enabled && _dnsForwarder is not null && plan.BypassDomains.Count > 0)
                 {
-                    SplitRules.ClassifySplitEntries(s, out var domains, out _, out _, out _);
-                    foreach (var d in WidenDomainMatchSet(domains))
+                    foreach (var d in WidenDomainMatchSet(plan.BypassDomains))
                     {
                         if (ct.IsCancellationRequested) return;
                         if (!d.Contains('.')) continue;
