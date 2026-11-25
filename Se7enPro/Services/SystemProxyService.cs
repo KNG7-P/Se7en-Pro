@@ -215,7 +215,7 @@ public sealed class SystemProxyService : ISystemProxyService
 
     private static string BackupPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Se7en",
+        BuildIdentity.AppFolderName,
         "proxy-backup.json");
 
     private static string LegacyBackupPath => Path.Combine(

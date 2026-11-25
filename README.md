@@ -71,8 +71,8 @@ The repository follows strict security decoupling: **no private credentials, ser
 
 #### ⚡ 2. High-Performance Multi-Core Wintun TUN & Routing
 * **Multi-Core TUN Routing**: Seamless system-wide capture using `wintun.dll` powered by **`Zeptun`**, **`Mihomo`**, or **`tun2socks`** with zero DNS leaks.
-* **Application Split Tunneling**: Route only specific applications or bypass selected Windows software directly.
-* **Domain-Based Split Routing**: Real-time split-aware DNS interception for custom whitelist and blacklist rules.
+* **Profile-Based Split Tunneling**: Every profile owns three fully independent lists — **Bypass** (direct), **Through Tunnel** (proxy) and **Block** (no network) — plus a default outbound for everything unmatched. Apps, domains and IP ranges are assigned to exactly one mode; moving one is always an explicit remove-and-add, so nothing is ever dragged between modes. Switching profiles switches the whole routing set.
+* **Enforced per Mode**: Through Tunnel is owned by the TUN catch-all, Bypass cancels the redirect (or is route-pinned when WFP redirect is unavailable), and Block is dropped at the WFP connect **and datagram** layers so an open UDP socket cannot keep talking. mihomo TUN mode emits the same three lists as native process/domain/IP rules.
 * **Kill Switch & Route Isolation**: Prevents IP leakage upon unexpected connection termination.
 * **LAN Sharing**: Optional local network proxy sharing with customizable authentication.
 
@@ -236,7 +236,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-all.ps1 -Arch all -AllVar
 
 #### ⚡ 2. Высокопроизводительный Wintun TUN (Multi-Core)
 * **Захват трафика на уровне ядра**: Полная изоляция через `wintun.dll` с выбором движка (**`Zeptun`**, **`Mihomo`** или **`tun2socks`**) без утечек DNS.
-* **Раздельное туннелирование**: Маршрутизация по приложениям или по доменным именам (Split Tunneling).
+* **Раздельное туннелирование по профилям**: В каждом профиле три независимых списка — **в обход** (напрямую), **через туннель** (прокси) и **блокировка** (без сети) — плюс маршрут по умолчанию для остального трафика. Приложения, домены и IP-диапазоны принадлежат ровно одному режиму; перенос — это всегда явное удаление и добавление, поэтому правила не перетаскиваются между режимами.
 * **Kill Switch и LAN**: Мгновенная блокировка утечки IP при сбое и возможность раздачи прокси в локальную сеть.
 
 ---
@@ -287,7 +287,7 @@ Se7en Pro 集成了多项尖端网络抗封锁协议：包括 **WireGuard Warp �
 
 #### ⚡ 2. 高性能多内核 Wintun TUN 驱动与分流
 * **多内核接管网络**：通过 `wintun.dll` 搭配 **`Zeptun`**、**`Mihomo`** 或 **`tun2socks`** 内核实现全系统零 DNS 泄漏代理。
-* **应用级与域名级分流 (Split Tunneling)**：按需指定软件或域名走直连/代理。
+* **基于配置的分流 (Split Tunneling)**：每个配置包含三个完全独立的列表——**绕过**（直连）、**走隧道**（代理）、**阻断**（无网络），以及其余流量的默认出口。应用、域名与 IP 段只属于一个模式；移动规则始终是显式删除再添加，因此规则不会在模式之间被拖动。
 * **Kill Switch 与局域网共享**：断网自动阻断流量防止 IP 泄漏，支持将节点共享至局域网（LAN）。
 
 ---

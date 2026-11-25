@@ -159,4 +159,36 @@
     <None Update="Resources\**" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
+  <!-- ==================================================================================
+       Isolated "split debug" configuration.
+
+       Build it with the SplitDebug configuration for win-x64 (see BUILDING.md for the
+       exact command lines).
+
+       It exists so the split-tunnel work can be installed and tested next to a normal
+       installation of Se7en Pro without touching it. Everything that identifies the
+       installation is separated:
+           * AssemblyName      -> Se7enPro.SplitDebug   (own exe, own process name)
+           * Product           -> Se7en Pro (Split Debug)
+           * ISOLATED_DEBUG    -> own %LocalAppData% folder, own single-instance identity,
+                                  own autostart registry value, own WFP sublayer GUIDs
+           * Version           -> 1.0.8.1 so Windows shows it as a different build
+       The runtime behaviour of the split tunnel is identical to Release.
+       ================================================================================== -->
+  <PropertyGroup Condition="'$(Configuration)' == 'SplitDebug'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>portable</DebugType>
+    <Optimize>false</Optimize>
+    <DefineConstants>$(DefineConstants);ISOLATED_DEBUG;DEBUG</DefineConstants>
+    <AssemblyName>Se7enPro.SplitDebug</AssemblyName>
+    <Product>Se7en Pro (Split Debug)</Product>
+    <Description>Se7en Pro - isolated split-tunnel debug build</Description>
+    <AssemblyTitle>Se7en Pro (Split Debug)</AssemblyTitle>
+    <Version>1.0.8.1</Version>
+    <AssemblyVersion>1.0.8.1</AssemblyVersion>
+    <FileVersion>1.0.8.1</FileVersion>
+    <InformationalVersion>1.0.8.1-splitdebug</InformationalVersion>
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
+
 </Project>

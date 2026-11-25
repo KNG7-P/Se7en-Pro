@@ -1220,5 +1220,29 @@
     <sys:String x:Key="Loc_foxyProxyChainedDisabledWarning">Внешний прокси Foxy работает только в обычном режиме Foxy и отключён в режимах Foxy over WARP / Foxy over V2Ray.</sys:String>
     <sys:String x:Key="Loc_upstreamProxyEnableDescFoxy">Направлять соединения Foxy через промежуточный прокси SOCKS5 или HTTP</sys:String>
     <sys:String x:Key="Loc_configListRemoveTimedOut">Удалить конфиги с таймаутом</sys:String>
+
+    <!-- Split Tunnel -->
+    <sys:String x:Key="Loc_Delete">Удалить</sys:String>
+    <sys:String x:Key="Loc_Rename">Переименовать</sys:String>
+    <sys:String x:Key="Loc_splitAddToMode">Добавить в этот режим</sys:String>
+    <sys:String x:Key="Loc_splitApplications">Приложения</sys:String>
+    <sys:String x:Key="Loc_splitBlock">Блокировать</sys:String>
+    <sys:String x:Key="Loc_splitBypass">Напрямую</sys:String>
+    <sys:String x:Key="Loc_splitDefaultOutbound">Маршрут по умолчанию</sys:String>
+    <sys:String x:Key="Loc_splitDomain">Домен</sys:String>
+    <sys:String x:Key="Loc_splitIpCidrShort">IP</sys:String>
+    <sys:String x:Key="Loc_splitModeEmpty">Здесь пока пусто</sys:String>
+    <sys:String x:Key="Loc_splitMoveNext">Переместить в следующий режим</sys:String>
+    <sys:String x:Key="Loc_splitProcess">Процесс</sys:String>
+    <sys:String x:Key="Loc_splitProfileCreate">Создать профиль</sys:String>
+    <sys:String x:Key="Loc_splitProfileNew">Имя нового профиля</sys:String>
+    <sys:String x:Key="Loc_splitRefresh">Обновить</sys:String>
+    <sys:String x:Key="Loc_splitRemoveAssignment">Убрать из этого профиля</sys:String>
+    <sys:String x:Key="Loc_splitThroughTunnel">Прокси</sys:String>
+    <sys:String x:Key="Loc_ApplyNewRouting">Применить новый маршрут?</sys:String>
+    <sys:String x:Key="Loc_ApplyNewRoutingBody">Переключиться на «{0}» и переподключиться, чтобы новый маршрут вступил в силу?
+
+Туннель на мгновение прервётся.</sys:String>
+    <sys:String x:Key="Loc_Thisprofileisfull">Этот профиль заполнен.</sys:String>
 </ResourceDictionary>
 

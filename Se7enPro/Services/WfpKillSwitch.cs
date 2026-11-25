@@ -37,7 +37,7 @@ internal sealed class WfpKillSwitch : IDisposable
         new("b235ae9a-1d64-49b8-a44c-5ff3d9095045");
 
     private static readonly Guid SublayerKey =
-        new("6f2c4b1a-9d38-4f6e-8a1b-3c5d7e9f0a2b");
+        new(BuildIdentity.KillSwitchSublayerGuid);
 
     private static readonly (string Address, string Mask)[] V4Permits =
     {

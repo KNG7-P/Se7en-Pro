@@ -30,6 +30,10 @@ public sealed class SettingsService : ISettingsService
 
     private JsonObject? _foreignKeys;
 
+    // Test hooks: let the offline suite drive the real persistence path against a temp
+    // directory instead of the user profile.
+    internal static string? DirectoryOverride { get; set; }
+
     public UserSettings Settings { get; private set; } = new();
 
     public event EventHandler? SettingsChanged;
@@ -39,7 +43,7 @@ public sealed class SettingsService : ISettingsService
         _logger = logger;
         ProtectedSecret.Warning ??= message => _logger.LogWarning("{SecretWarning}", message);
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var dir = Path.Combine(localAppData, "Se7en");
+        var dir = DirectoryOverride ?? Path.Combine(localAppData, BuildIdentity.AppFolderName);
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "settings.json");
         _backupPath = Path.Combine(dir, "settings.json.last-good");
@@ -125,16 +129,19 @@ public sealed class SettingsService : ISettingsService
             {
                 Settings = new UserSettings { SettingsSchemaVersion = CurrentSettingsSchema };
                 _foreignKeys = null;
+                SplitTunnelProfileStore.NormalizeAll(Settings);
                 Save();
                 return;
             }
 
             var json = File.ReadAllText(_path);
-            Settings = JsonSerializer.Deserialize<UserSettings>(UnprotectSecrets(json), JsonOpts)
+            var plain = UnprotectSecrets(json);
+            Settings = JsonSerializer.Deserialize<UserSettings>(plain, JsonOpts)
                        ?? new UserSettings();
             CaptureForeignKeys(json);
             MigrateRemovedAutoMethod();
             MigrateAetherDefaults();
+            MigrateSplitTunnelProfiles(plain);
         }
         catch (Exception ex)
         {
@@ -146,11 +153,13 @@ public sealed class SettingsService : ISettingsService
             try
             {
                 var rescue = File.ReadAllText(_backupPath);
-                Settings = JsonSerializer.Deserialize<UserSettings>(UnprotectSecrets(rescue), JsonOpts)
+                var plainRescue = UnprotectSecrets(rescue);
+                Settings = JsonSerializer.Deserialize<UserSettings>(plainRescue, JsonOpts)
                            ?? new UserSettings();
                 CaptureForeignKeys(rescue);
                 MigrateRemovedAutoMethod();
                 MigrateAetherDefaults();
+                MigrateSplitTunnelProfiles(plainRescue);
                 return;
             }
             catch (Exception rescueEx)
@@ -181,6 +190,25 @@ public sealed class SettingsService : ISettingsService
         if (!_foreignKeys.Remove("autoLastSuccessfulMethod")) return;
 
         _logger?.LogInformation("Dropped the removed autoLastSuccessfulMethod setting");
+        Save();
+    }
+
+    // One-time upgrade of the old flat split-tunnel list into the profile model, plus a
+    // normalisation pass that keeps persisted profiles internally consistent.
+    private void MigrateSplitTunnelProfiles(string plainJson)
+    {
+        var migrated = SplitTunnelMigration.Migrate(Settings, plainJson);
+        SplitTunnelProfileStore.NormalizeAll(Settings);
+        if (!migrated) return;
+
+        // The legacy keys must not be carried forward into every later save.
+        if (_foreignKeys is not null)
+        {
+            _foreignKeys.Remove("splitTunnelMode");
+            _foreignKeys.Remove("splitTunnelEntries");
+            if (_foreignKeys.Count == 0) _foreignKeys = null;
+        }
+
         Save();
     }
 

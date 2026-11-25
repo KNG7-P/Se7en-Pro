@@ -324,6 +324,18 @@ internal sealed partial class SocksDnsForwarder : IDisposable
                 }
             }
 
+            // A blocked name is answered empty before anything is dialled: this is what
+            // makes a Block domain rule hold even though the app still asks for it.
+            if (parsed is { } blocked
+                && split is not null
+                && split.BlockedDomains.Count > 0
+                && blocked.Name is not null
+                && MatchDomain(blocked.Name, split.BlockedDomains) is not null)
+            {
+                Interlocked.Increment(ref _handled);
+                return BuildEmptyResponse(query, blocked.QuestionLength);
+            }
+
             if (parsed is { } q && split is not null && split.Domains.Count > 0)
             {
                 var matched = MatchDomain(q.Name, split.Domains);

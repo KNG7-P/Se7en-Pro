@@ -1220,5 +1220,29 @@
     <sys:String x:Key="Loc_foxyProxyChainedDisabledWarning">Foxy 上游代理仅适用于纯 Foxy 模式，在 Foxy over WARP / Foxy over V2Ray 模式下已禁用。</sys:String>
     <sys:String x:Key="Loc_upstreamProxyEnableDescFoxy">通过中间 SOCKS5 或 HTTP 代理连接纯 Foxy 隧道</sys:String>
     <sys:String x:Key="Loc_configListRemoveTimedOut">移除超时配置</sys:String>
+
+    <!-- Split Tunnel -->
+    <sys:String x:Key="Loc_Delete">删除</sys:String>
+    <sys:String x:Key="Loc_Rename">重命名</sys:String>
+    <sys:String x:Key="Loc_splitAddToMode">添加到该模式</sys:String>
+    <sys:String x:Key="Loc_splitApplications">应用程序</sys:String>
+    <sys:String x:Key="Loc_splitBlock">阻止</sys:String>
+    <sys:String x:Key="Loc_splitBypass">直连</sys:String>
+    <sys:String x:Key="Loc_splitDefaultOutbound">默认出口</sys:String>
+    <sys:String x:Key="Loc_splitDomain">域名</sys:String>
+    <sys:String x:Key="Loc_splitIpCidrShort">IP</sys:String>
+    <sys:String x:Key="Loc_splitModeEmpty">这里还没有内容</sys:String>
+    <sys:String x:Key="Loc_splitMoveNext">移到下一个模式</sys:String>
+    <sys:String x:Key="Loc_splitProcess">进程</sys:String>
+    <sys:String x:Key="Loc_splitProfileCreate">创建配置</sys:String>
+    <sys:String x:Key="Loc_splitProfileNew">新配置名称</sys:String>
+    <sys:String x:Key="Loc_splitRefresh">刷新</sys:String>
+    <sys:String x:Key="Loc_splitRemoveAssignment">从该配置中移除</sys:String>
+    <sys:String x:Key="Loc_splitThroughTunnel">代理</sys:String>
+    <sys:String x:Key="Loc_ApplyNewRouting">应用新路由？</sys:String>
+    <sys:String x:Key="Loc_ApplyNewRoutingBody">切换到“{0}”并重新连接以使新路由生效？
+
+隧道会短暂中断。</sys:String>
+    <sys:String x:Key="Loc_Thisprofileisfull">此配置文件已满。</sys:String>
 </ResourceDictionary>
 

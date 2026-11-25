@@ -18,6 +18,9 @@
     <!-- The units under test. StartupReaper is included so its kill predicate can be
          exercised against the real running process table. -->
     <Compile Include="..\..\Se7enPro\Services\StartupReaper.cs" LinkBase="Units" />
+    <!-- BuildIdentity is the single source of the app folder / mutex / WFP sublayer
+         names that StartupReaper and the tests assert against. -->
+    <Compile Include="..\..\Se7enPro\Services\BuildIdentity.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\IStartupReaper.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\ConnectionMethod.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\LocalizedItem.cs" LinkBase="Units" />
@@ -78,6 +81,12 @@
     <Compile Include="..\..\Se7enPro\ViewModels\V2RayConfigItemViewModel.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\CountryHelper.Flags.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\Tun\MihomoConfigBuilder.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SplitRules.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SplitRoutingPlan.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SplitTunnelProfileStore.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\Tun\SplitTunnelMigration.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Services\SettingsService.cs" LinkBase="Units" />
+    <Compile Include="..\..\Se7enPro\Models\SplitTunnelProfiles.cs" LinkBase="Contracts" />
     <Compile Include="..\..\Se7enPro\Services\V2Ray\V2RayConfigBuilder.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Services\PsiphonServerListBootstrap.cs" LinkBase="Units" />
     <Compile Include="..\..\Se7enPro\Views\ModalWindowHelper.cs" LinkBase="Units" />

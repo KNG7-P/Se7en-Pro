@@ -260,9 +260,10 @@ public sealed partial class WintunTunManager
         try { await KillTunAsync().ConfigureAwait(false); } catch { }
         cts?.Dispose();
 
-        
-        
-        
+        // Dynamic WFP filters live in a session that dies with the engine handle, but the
+        // sublayer is persistent: remove the filters explicitly so nothing is left behind
+        // if this process is restarted quickly.
+        try { _splitRouter.Dispose(); } catch { }
     }
 
     private void SetState(TunState s, string? error)

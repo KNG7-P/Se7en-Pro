@@ -47,22 +47,16 @@ public sealed partial class WintunTunManager
     {
         var s = _settings.Settings;
         var realIfaceName = FindRealDefaultInterfaceName();
-        List<string>? splitDomains = null;
-        List<(string CleanCidr, AddressFamily Family)>? splitIpCidrs = null;
-        List<string>? splitProcNames = null;
-        List<string>? splitProcPaths = null;
+        var plan = BuildSplitPlan();
 
-        if (s.SplitTunnelEnabled)
+        if (string.IsNullOrEmpty(realIfaceName) && plan.Enabled
+            && (plan.HasDirectRules || plan.DefaultCategory == SplitRuleCategory.Direct))
         {
-            SplitRules.ClassifySplitEntries(s, out splitDomains, out var rawCidrs, out splitProcNames, out splitProcPaths);
-            splitIpCidrs = new List<(string, AddressFamily)>(rawCidrs.Count);
-            foreach (var cidr in rawCidrs)
-            {
-                var clean = SanitizeRuleAtom(cidr);
-                var parsed = SplitRules.ParseIpCidr(clean);
-                if (parsed is not null)
-                    splitIpCidrs.Add((clean, parsed.Value.Addr.AddressFamily));
-            }
+            // Without a physical default route the engine has no direct outbound to bind
+            // to, so Bypass rules cannot be honoured by the YAML. The route setup would
+            // have failed anyway; say so instead of silently proxying those apps.
+            WriteDiag("split: no physical default interface — Bypass rules cannot bind a direct "
+                      + "outbound; the tunnel will not start with this profile");
         }
 
         return MihomoConfigBuilder.BuildYaml(
@@ -78,10 +72,7 @@ public sealed partial class WintunTunManager
             s,
             realIfaceName,
             EngineProcessNames.All,
-            splitDomains,
-            splitIpCidrs,
-            splitProcNames,
-            splitProcPaths);
+            plan);
     }
 
     private async Task<bool> StartTunAndWaitForReadyAsync(int socksPort, CancellationToken ct)
@@ -102,7 +93,7 @@ public sealed partial class WintunTunManager
 
             _workDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Se7en", workSubDir);
+                BuildIdentity.AppFolderName, workSubDir);
             Directory.CreateDirectory(_workDir);
             CleanupLegacyTunWorkDirs();
             try { RecoverStaleRoutes(_logger); } catch { }
@@ -110,7 +101,7 @@ public sealed partial class WintunTunManager
 
             var diagDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Se7en", "logs");
+                BuildIdentity.AppFolderName, "logs");
             Directory.CreateDirectory(diagDir);
             _logPath = Path.Combine(diagDir, logFileName);
             OpenSessionLog();

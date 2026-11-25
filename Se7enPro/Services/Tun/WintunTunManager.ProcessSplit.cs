@@ -85,13 +85,8 @@ public sealed partial class WintunTunManager
             if (b[0] == 23 && b[1] == 235 && b[2] == 42) return true;
         }
         return false;
-    }      
+    }
 
-    
-    
-    
-    
-    
     private static readonly (byte[] Bytes, byte Prefix)[] NonRoutableV4Ranges =
     {
         (IPAddress.Parse("0.0.0.0").GetAddressBytes(), 8),
@@ -135,17 +130,12 @@ public sealed partial class WintunTunManager
         return true;
     }
 
-        private void SweepProcessConnectionsNow()
+    private void SweepProcessConnectionsNow()
     {
-        var s = _settings.Settings;
-        if (!s.SplitTunnelEnabled) return;
+        var plan = BuildSplitPlan();
+        if (!plan.Enabled) return;
 
-        SplitRules.ClassifySplitEntries(s, out _, out _, out var procNames, out var procPaths);
-        if (procNames.Count == 0 && procPaths.Count == 0) return;
-        if (UsesMihomoNativeSplitRules()) return;
-
-        var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-        ScanAndPinProcessConnections(procNames, procPaths, include);
+        ScanAndPinProcessConnections(plan);
     }
 
     private void SweepEngineBypassConnections()
@@ -240,27 +230,26 @@ public sealed partial class WintunTunManager
         }
     }
 
-        private async Task RunProcessSplitMonitorAsync(CancellationToken ct)
+    // The monitor only exists for what WFP cannot decide statically:
+    //  - Blocked applications that already hold connections (closed immediately);
+    //  - Bypass applications when the redirect layer refused our filters, or when the
+    //    active TUN core is not covered by WFP at all (route pinning fallback);
+    //  - name-only rules (an .exe without a known absolute path) resolved per process.
+    // Through-Tunnel applications are handled by the TUN catch-all and need no sweep.
+    private async Task RunProcessSplitMonitorAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
-            var hasAppRules = false;
+            var hasWork = false;
             try
             {
                 SweepEngineBypassConnections();
 
-                var s = _settings.Settings;
-                if (s.SplitTunnelEnabled)
+                var plan = BuildSplitPlan();
+                if (plan.Enabled && (plan.BlockValues.Count > 0 || plan.DirectValues.Count > 0))
                 {
-                    SplitRules.ClassifySplitEntries(s, out _, out _, out var procNames, out var procPaths);
-                    var hasProcessMonitorWork = (procNames.Count > 0 || procPaths.Count > 0)
-                        && !UsesMihomoNativeSplitRules();
-                    hasAppRules = hasProcessMonitorWork;
-                    if (hasProcessMonitorWork)
-                    {
-                        var include = string.Equals((s.SplitTunnelMode ?? "exclude").Trim(), "include", StringComparison.OrdinalIgnoreCase);
-                        ScanAndPinProcessConnections(procNames, procPaths, include);
-                    }
+                    hasWork = true;
+                    ScanAndPinProcessConnections(plan);
                 }
             }
             catch (Exception ex)
@@ -270,7 +259,7 @@ public sealed partial class WintunTunManager
 
             try
             {
-                await Task.Delay(hasAppRules ? 50 : 250, ct);
+                await Task.Delay(hasWork ? 250 : 1000, ct);
             }
             catch (OperationCanceledException)
             {
@@ -279,16 +268,16 @@ public sealed partial class WintunTunManager
         }
     }
 
-    private void ScanAndPinProcessConnections(
-        List<string> procNames,
-        List<string> procPaths,
-        bool include)
+    private void ScanAndPinProcessConnections(SplitRoutingPlan plan)
     {
-        if (!include && !_realRouteKnown) return;
-        if (include && _tunIfIndex == 0) return;
+        if (!_realRouteKnown) return;
 
         var connections = WintunRouteApi.GetActiveTcpConnections();
         if (connections.Count == 0) return;
+
+        var needDirectPinning = _splitRouter is null
+            || !_splitRouter.IsArmed
+            || _splitRouter.BypassNeedsRouteFallback;
 
         foreach (var conn in connections)
         {
@@ -297,34 +286,36 @@ public sealed partial class WintunTunManager
 
             if (string.IsNullOrEmpty(procInfo.Name)) continue;
 
-            var matchedName = MatchProcess(procInfo.Path, procInfo.Name, procNames, procPaths);
-            if (matchedName is null) continue;
+            var category = SplitRoutingPlan.ResolveCategory(
+                procInfo.Name, procInfo.Path, plan.DefaultCategory, plan.Rules);
 
-            var remoteIp = conn.RemoteIp;
-
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            if (!include && IPAddress.IsLoopback(remoteIp))
+            // The default category must NOT be skipped: when the default is Direct,
+            // every unlisted app belongs to Direct and has to be pinned to the physical
+            // gateway exactly like an explicitly-listed Direct app. Skipping it (the old
+            // behaviour) left the whole unlisted majority riding the TUN and being
+            // redirected back out by the engine instead of going direct.
+            //
+            // Only the Proxy default needs no work here: the TUN catch-all already owns
+            // that traffic, which is what the early return was originally written for.
+            if (category == SplitRuleCategory.Proxy
+                && plan.DefaultCategory == SplitRuleCategory.Proxy)
             {
-                var remotePort = (ushort)IPAddress.NetworkToHostOrder((short)conn.Raw.RemotePort);
-                if (IsLocalProxyPort(remotePort) &&
-                    !EngineProcessNames.All.Contains(procInfo.Name, StringComparer.OrdinalIgnoreCase))
-                {
-                    WintunRouteApi.TryCloseTcpConnection(conn.Raw);
-                }
                 continue;
             }
 
+            var remoteIp = conn.RemoteIp;
+
+            if (category == SplitRuleCategory.Block)
+            {
+                if (IPAddress.IsLoopback(remoteIp)) continue;
+                try { WintunRouteApi.TryCloseTcpConnection(conn.Raw); } catch { }
+                continue;
+            }
+
+            if (category != SplitRuleCategory.Direct) continue;
+            if (!needDirectPinning) continue;
+            if (IPAddress.IsLoopback(remoteIp)) continue;
             if (!IsValidPublicInternetIpv4(remoteIp)) continue;
-            if (include && IsProtectedEngineIp(remoteIp)) continue;
 
             var ipKey = remoteIp.ToString();
             var needsAdd = false;
@@ -340,9 +331,7 @@ public sealed partial class WintunTunManager
 
             try
             {
-                var entry = include
-                    ? WintunRouteApi.AddRoute(_tunIfIndex, remoteIp, 32, TunAddressV4)
-                    : WintunRouteApi.AddRoute(_realIfIndex, remoteIp, 32, _realGateway);
+                var entry = WintunRouteApi.AddRoute(_realIfIndex, remoteIp, 32, _realGateway);
 
                 var added = false;
                 lock (_routeLock)
@@ -350,7 +339,7 @@ public sealed partial class WintunTunManager
                     if (!_dynamicRoutes.ContainsKey(ipKey))
                     {
                         _appliedRoutes.Add(entry);
-                        _dynamicRoutes[ipKey] = (entry, $"app:{matchedName}");
+                        _dynamicRoutes[ipKey] = (entry, $"app:{procInfo.Name}");
                         added = true;
                     }
                 }
@@ -361,57 +350,21 @@ public sealed partial class WintunTunManager
                 }
                 else
                 {
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
                     var isCoreProcess = EngineProcessNames.All.Contains(
                         procInfo.Name, StringComparer.OrdinalIgnoreCase);
-                    if (!include || !isCoreProcess)
+                    if (!isCoreProcess)
                     {
                         WintunRouteApi.TryCloseTcpConnection(conn.Raw);
                     }
 
-                    WriteDiag($"split app: '{matchedName}' (pid {pid}) → {remoteIp}; host route pinned "
-                              + $"{(include ? "via tunnel" : "direct (real gw)")}");
+                    WriteDiag($"split bypass: '{procInfo.Name}' (pid {pid}) → {remoteIp}; host route pinned direct (real gw)");
                     PersistRouteJournal();
                 }
             }
             catch (Exception ex)
             {
-                WriteDiag($"split app: route for {remoteIp} ({matchedName}) not pinned: {ex.Message}");
+                WriteDiag($"split bypass: route for {remoteIp} ({procInfo.Name}) not pinned: {ex.Message}");
             }
         }
-    }
-
-    private static string? MatchProcess(
-        string? fullPath,
-        string fileName,
-        List<string> procNames,
-        List<string> procPaths)
-    {
-        foreach (var name in procNames)
-        {
-            if (string.Equals(name, fileName, StringComparison.OrdinalIgnoreCase))
-                return name;
-        }
-
-        if (!string.IsNullOrEmpty(fullPath))
-        {
-            foreach (var path in procPaths)
-            {
-                if (string.Equals(path, fullPath, StringComparison.OrdinalIgnoreCase))
-                    return Path.GetFileName(path);
-
-                if (string.Equals(Path.GetFileName(path), fileName, StringComparison.OrdinalIgnoreCase))
-                    return fileName;
-            }
-        }
-
-        return null;
     }
 }

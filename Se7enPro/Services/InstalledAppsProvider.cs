@@ -31,6 +31,67 @@ public static class InstalledAppsProvider
     private const int MaxResults = 600;
     private const int ShallowScanDepth = 3;
 
+    private static readonly object CacheLock = new();
+    private static List<InstalledAppInfo>? _cachedApps;
+    private static Dictionary<string, string>? _pathByFileName;
+
+    private static readonly TimeSpan CacheLifetime = TimeSpan.FromMinutes(10);
+    private static DateTime _cachedAtUtc = DateTime.MinValue;
+
+    // Path of an installed executable, matched on its file name. Used to turn a
+    // name-only routing rule into the absolute path WFP needs. Never triggers a scan on
+    // its own: it only reports what has already been discovered.
+    public static string? GetCachedPathForFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return null;
+
+        lock (CacheLock)
+        {
+            if (_pathByFileName is null) return null;
+            return _pathByFileName.TryGetValue(fileName.Trim(), out var path) ? path : null;
+        }
+    }
+
+    private static void Remember(List<InstalledAppInfo> apps)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var app in apps)
+        {
+            if (string.IsNullOrEmpty(app.FileName) || string.IsNullOrEmpty(app.ExePath)) continue;
+            if (!map.ContainsKey(app.FileName)) map[app.FileName] = app.ExePath;
+        }
+
+        lock (CacheLock)
+        {
+            _cachedApps = apps;
+            _pathByFileName = map;
+            _cachedAtUtc = DateTime.UtcNow;
+        }
+    }
+
+    public static IReadOnlyList<InstalledAppInfo> CachedApps
+    {
+        get
+        {
+            lock (CacheLock)
+            {
+                return _cachedApps is not null && DateTime.UtcNow - _cachedAtUtc < CacheLifetime
+                    ? _cachedApps
+                    : Array.Empty<InstalledAppInfo>();
+            }
+        }
+    }
+
+    public static void Invalidate()
+    {
+        lock (CacheLock)
+        {
+            _cachedApps = null;
+            _pathByFileName = null;
+            _cachedAtUtc = DateTime.MinValue;
+        }
+    }
+
         private static readonly string[] NoisePrefixes =
     {
         "unins", "setup", "install", "update", "vcredist", "vc_redist",
@@ -93,6 +154,7 @@ public static class InstalledAppsProvider
             .ToList();
 
         LoadIcons(list, ct);
+        Remember(list);
         return list;
     }
 

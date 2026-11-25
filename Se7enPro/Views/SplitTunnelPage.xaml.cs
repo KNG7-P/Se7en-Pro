@@ -1,5 +1,5 @@
-using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Se7enPro.ViewModels;
 
 namespace Se7enPro.Views;
@@ -11,16 +11,37 @@ public partial class SplitTunnelPage : UserControl
         InitializeComponent();
     }
 
-    
-    
-    
-    private void OnSplitTunnelTabChecked(object sender, RoutedEventArgs e)
+    private void OnRenameKeyDown(object sender, KeyEventArgs e)
     {
-        if (sender is not RadioButton { CommandParameter: string tab }) return;
         if (DataContext is not SplitTunnelViewModel vm) return;
 
-        var target = tab == "Apps" ? 1 : 0;
-        if (vm.ActiveTab == target) return;
-        vm.SetTab(target);
+        if (e.Key == Key.Enter)
+        {
+            vm.CommitRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            vm.CancelRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void OnNewProfileKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (DataContext is not SplitTunnelViewModel vm) return;
+
+        vm.CreateProfileCommand.Execute(null);
+        e.Handled = true;
+    }
+
+    private void OnCustomRuleKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (DataContext is not SplitTunnelViewModel vm) return;
+
+        vm.AddCustomRuleCommand.Execute(null);
+        e.Handled = true;
     }
 }

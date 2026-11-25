@@ -26,7 +26,7 @@ internal static class TunRouteJournal
 
     internal static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Se7en", "tun-routes.json");
+        BuildIdentity.AppFolderName, "tun-routes.json");
 
     internal static string? AdapterAlias(int ifIndex)
     {

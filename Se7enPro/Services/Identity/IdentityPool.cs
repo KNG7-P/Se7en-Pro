@@ -56,7 +56,7 @@ public sealed class IdentityPool
 
         var root = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Se7en");
+            BuildIdentity.AppFolderName);
         _path = Path.Combine(root, "identities", "pool.json");
     }
 

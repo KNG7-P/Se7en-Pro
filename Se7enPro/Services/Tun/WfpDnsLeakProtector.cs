@@ -40,7 +40,7 @@ internal sealed class WfpDnsLeakProtector : IDisposable
         new("c35a604d-d22b-4e1a-91b4-68f674ee674b");
 
     private static readonly Guid SublayerKey =
-        new("7b1e4c2a-8d39-4a7f-9b2c-4d6e8f0a1b3c");
+        new(BuildIdentity.DnsSublayerGuid);
 
     private readonly object _sync = new();
     private IntPtr _engine;

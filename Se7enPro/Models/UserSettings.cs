@@ -421,16 +421,22 @@ public sealed class UserSettings
     [JsonPropertyName("splitTunnelEnabled")]
     public bool SplitTunnelEnabled { get; set; }
 
-    
-    
-    
-    
-    
-    [JsonPropertyName("splitTunnelMode")]
-    public string SplitTunnelMode { get; set; } = "exclude";
+    // Profile-based routing. Every profile owns three completely separate rule lists
+    // (Bypass / Through Tunnel / Block) and one default outbound; nothing is shared.
+    [JsonPropertyName("splitTunnelProfiles")]
+    public List<SplitTunnelProfile> SplitTunnelProfiles { get; set; } = new();
 
-    [JsonPropertyName("splitTunnelEntries")]
-    public List<SplitTunnelEntry> SplitTunnelEntries { get; set; } = new();
+    [JsonPropertyName("activeSplitTunnelProfileId")]
+    public string ActiveSplitTunnelProfileId { get; set; } = "";
+
+    // The default outbound every brand-new profile starts with.
+    [JsonPropertyName("splitTunnelDefaultOutbound")]
+    public string SplitTunnelDefaultOutbound { get; set; } = "proxy";
+
+    // The rules that apply when split tunnelling is enabled but no single profile is
+    // pinned as active: the fallback bucket is the one the user last picked.
+    [JsonPropertyName("activeSplitTunnelProfile")]
+    public string ActiveSplitTunnelProfile { get; set; } = "tunnel";
 
     
     [JsonPropertyName("shardCustomCfIp")]
@@ -708,11 +714,12 @@ public sealed class V2RayConfigEntry
     };
 }
 
-public sealed class SplitTunnelEntry
+// The pre-profile split-tunnel payload. Only used to migrate an existing install once.
+internal sealed class LegacySplitTunnelEntry
 {
-    [JsonPropertyName("kind")]
+    [System.Text.Json.Serialization.JsonPropertyName("kind")]
     public string Kind { get; set; } = "domain";
 
-    [JsonPropertyName("value")]
+    [System.Text.Json.Serialization.JsonPropertyName("value")]
     public string Value { get; set; } = "";
 }

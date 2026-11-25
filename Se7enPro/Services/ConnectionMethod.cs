@@ -448,7 +448,7 @@ public static class EngineProcessNames
                  {
                      System.IO.Path.Combine(
                          Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                         "Se7en"),
+                         BuildIdentity.AppFolderName),
                      System.IO.Path.Combine(AppContext.BaseDirectory, "Resources"),
                  })
         {

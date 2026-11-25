@@ -220,7 +220,7 @@ public sealed class KillSwitchService : IKillSwitchService, IDisposable
                  {
                      Path.Combine(
                          Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                         "Se7en"),
+                         BuildIdentity.AppFolderName),
                      Path.Combine(AppContext.BaseDirectory, "Resources"),
                  })
         {
@@ -247,7 +247,7 @@ public sealed class KillSwitchService : IKillSwitchService, IDisposable
         try
         {
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var markerDir = Path.Combine(localAppData, "Se7en");
+            var markerDir = Path.Combine(localAppData, BuildIdentity.AppFolderName);
             var marker = Path.Combine(markerDir, ".legacy_fw_purged");
             if (File.Exists(marker)) return;
 

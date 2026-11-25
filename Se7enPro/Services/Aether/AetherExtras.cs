@@ -189,7 +189,7 @@ internal static class AetherExtras
         var source = Path.Combine(AppDir, "Resources", "aether", "aether.exe");
         var staged = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Se7en", "aether", EngineProcessNames.Aether);
+            BuildIdentity.AppFolderName, "aether", EngineProcessNames.Aether);
 
         if (!File.Exists(source) || !File.Exists(staged)) return;
 
@@ -469,7 +469,7 @@ internal static class AetherExtras
         var roots = new[]
         {
             Path.Combine(AppDir, "Resources", "aether"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Se7en", "aether"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), BuildIdentity.AppFolderName, "aether"),
         };
 
         foreach (var aetherDir in roots)

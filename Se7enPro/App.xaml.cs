@@ -32,8 +32,22 @@ public partial class App : Application
     
     
     
-    private const string SingleInstanceMutexName = @"Local\Se7enPro_SingleInstance";
-    private const string ShowWindowEventName = @"Local\Se7enPro_ShowWindowEvent";
+    // The mutex and the wake-up event are the process identity of this build. An isolated
+    // debug build uses its own names so it can run side by side with an installed copy
+    // instead of being folded into it (or taking its window over).
+    private const string SingleInstanceMutexName =
+#if ISOLATED_DEBUG
+        @"Local\Se7enPro_SplitDebug_SingleInstance";
+#else
+        @"Local\Se7enPro_SingleInstance";
+#endif
+
+    private const string ShowWindowEventName =
+#if ISOLATED_DEBUG
+        @"Local\Se7enPro_SplitDebug_ShowWindowEvent";
+#else
+        BuildIdentity.ShowWindowEventName;
+#endif
 
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _showWindowEvent;
@@ -656,7 +670,7 @@ public partial class App : Application
         {
             var logDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Se7en",
+                BuildIdentity.AppFolderName,
                 "logs");
             Directory.CreateDirectory(logDir);
             File.AppendAllText(
